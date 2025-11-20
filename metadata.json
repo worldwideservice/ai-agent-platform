@@ -1,0 +1,5 @@
+{
+  "name": "GPT Agent Platform",
+  "description": "A comprehensive AI Agent management platform with CRM integration, knowledge base, and analytics, replicating the specified design.",
+  "requestFramePermissions": []
+}
