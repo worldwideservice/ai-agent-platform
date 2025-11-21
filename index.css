@@ -30,3 +30,22 @@
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #6B7280;
 }
+
+/* Custom checkbox with visible checkmark */
+input[type="checkbox"].appearance-none {
+  position: relative;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"].appearance-none:checked::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -60%) rotate(45deg);
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  display: block;
+}

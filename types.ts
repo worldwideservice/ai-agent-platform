@@ -21,6 +21,7 @@ export interface Agent {
   name: string;
   isActive: boolean;
   model: string;
+  systemInstructions?: string;
   pipelineId?: string;
   stageId?: string;
   createdAt: string;

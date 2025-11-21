@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, LayoutGrid, X, Search, ChevronDown, Edit, Trash2 } from 'lucide-react';
+import { Filter, LayoutGrid, X, Search, ChevronDown, Edit, Trash2, Copy } from 'lucide-react';
 
 interface KbArticlesProps {
   onCreate: () => void;
@@ -13,19 +13,27 @@ interface KbArticlesProps {
     createdAt: string;
   }[];
   onEditArticle?: (id: number) => void;
+  onDeleteArticle?: (id: number) => void;
+  onCopyArticle?: (article: KbArticlesProps['articles'][0]) => void;
+  onToggleArticleStatus?: (id: number) => void;
 }
 
-export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEditArticle }) => {
-  const [activeFilters, setActiveFilters] = useState<string[]>(['Категория: Общее']);
+export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEditArticle, onDeleteArticle, onCopyArticle, onToggleArticleStatus }) => {
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  const [selectedArticles, setSelectedArticles] = useState<number[]>([]);
 
   const removeFilter = (filter: string) => {
     setActiveFilters(activeFilters.filter(f => f !== filter));
   };
 
-  const toggleArticleStatus = (id: number) => {
-    // TODO: implement toggle logic
-    console.log('Toggle article', id);
+  const toggleSelectArticle = (id: number) => {
+    setSelectedArticles(prev =>
+      prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
+    );
   };
+
+  const selectAll = () => setSelectedArticles(articles.map(a => a.id));
+  const deselectAll = () => setSelectedArticles([]);
 
   return (
     <div className="space-y-6">
@@ -93,6 +101,21 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
           </div>
         </div>
 
+        {/* Selection bar */}
+        {selectedArticles.length > 0 && (
+          <div className="px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-900/50 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-700 dark:text-gray-300">Выбрано {selectedArticles.length} записи,</span>
+              <button onClick={selectAll} className="text-[#0078D4] hover:underline">
+                Выбрать все {articles.length}
+              </button>
+              <button onClick={deselectAll} className="text-[#0078D4] hover:underline">
+                Убрать выделение со всех
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content: Table or Empty State */}
         {articles.length > 0 ? (
           <>
@@ -102,6 +125,8 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
                   <th className="w-12 p-4">
                     <input
                       type="checkbox"
+                      checked={selectedArticles.length === articles.length && articles.length > 0}
+                      onChange={() => (selectedArticles.length === articles.length ? deselectAll() : selectAll())}
                       className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                     />
                   </th>
@@ -132,17 +157,21 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
                     <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
+                        checked={selectedArticles.includes(article.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectArticle(article.id);
+                        }}
                         className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22white%22%3E%3Cpath d=%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C/svg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
-                        onChange={(e) => e.stopPropagation()}
                       />
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>{article.id}</td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>{article.title}</td>
+                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{article.id}</td>
+                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{article.title}</td>
                     <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleArticleStatus(article.id);
+                          if (typeof onToggleArticleStatus === 'function') onToggleArticleStatus(article.id);
                         }}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${article.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
                       >
@@ -151,15 +180,40 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
                         />
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-4 text-sm">
                       <button className="text-[#0078D4] hover:underline" onClick={(e) => e.stopPropagation()}>{article.categories.join(', ')}</button>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300" onClick={(e) => e.stopPropagation()}>{article.relatedArticles.length > 0 ? article.relatedArticles.join(', ') : ''}</td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>{article.createdAt}</td>
+                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{article.relatedArticles.length > 0 ? article.relatedArticles.join(', ') : ''}</td>
+                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{article.createdAt}</td>
                     <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
-                        <button className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" onClick={(e) => { e.stopPropagation(); if (typeof onEditArticle === 'function') onEditArticle(article.id); }}><Edit size={16} /></button>
-                        <button className="hover:text-red-600 dark:hover:text-red-400 transition-colors" onClick={(e) => e.stopPropagation()}><Trash2 size={16} /></button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (typeof onEditArticle === 'function') onEditArticle(article.id);
+                          }}
+                          className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (typeof onCopyArticle === 'function') onCopyArticle(article);
+                          }}
+                          className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        >
+                          <Copy size={16} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (typeof onDeleteArticle === 'function') onDeleteArticle(article.id);
+                          }}
+                          className="hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>

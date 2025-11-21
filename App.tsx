@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './pages/Dashboard';
@@ -16,21 +16,52 @@ import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
 
-const INITIAL_AGENTS: Agent[] = [
-  { id: '1', name: 'АИ ассистент', isActive: false, model: 'OpenAI GPT-4.1', createdAt: '2025-01-01' },
-  { id: '2', name: 'Менеджер по продажам', isActive: false, model: 'OpenAI GPT-5', createdAt: '2025-02-15' },
-  { id: '3', name: 'Test Agent для тестирования UI', isActive: true, model: 'OpenAI GPT-5', createdAt: '2025-03-10' },
+const INITIAL_AGENTS: Agent[] = [];
+const INITIAL_KB_CATEGORIES = [
+  { id: 'general', name: 'Общее', parentId: null },
 ];
 
 const App: React.FC = () => {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    const saved = localStorage.getItem('currentPage');
+    return (saved as Page) || 'dashboard';
+  });
+  const [agents, setAgents] = useState<Agent[]>(() => {
+    const saved = localStorage.getItem('agents');
+    return saved ? JSON.parse(saved) : INITIAL_AGENTS;
+  });
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
   // KB Categories state
-  const [kbCategories, setKbCategories] = useState<{ id: string; name: string }[]>([
-    { id: 'general', name: 'Общее' }
-  ]);
+  const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
+    const saved = localStorage.getItem('kbCategories');
+    return saved ? JSON.parse(saved) : INITIAL_KB_CATEGORIES;
+  });
+  const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; parentId: string | null } | null>(null);
+  const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('currentCategoryId');
+    return saved ? (saved === 'null' ? null : saved) : null;
+  }); // для навигации внутрь категорий
+
+  // Save currentPage to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('currentPage', currentPage);
+  }, [currentPage]);
+
+  // Save currentCategoryId to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
+  }, [currentCategoryId]);
+
+  // Save agents to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('agents', JSON.stringify(agents));
+  }, [agents]);
+
+  // Save kbCategories to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
+  }, [kbCategories]);
 
   // KB Articles state
   const [kbArticles, setKbArticles] = useState<{
@@ -41,7 +72,16 @@ const App: React.FC = () => {
     relatedArticles: string[];
     content: string;
     createdAt: string;
-  }[]>([]);
+  }[]>(() => {
+    const saved = localStorage.getItem('kbArticles');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
+
+  // Save kbArticles to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
+  }, [kbArticles]);
 
   // Confirmation Modal State
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -132,6 +172,124 @@ const App: React.FC = () => {
     setCurrentPage('agents');
   };
 
+  const handleDeleteCategory = (id: string) => {
+    const category = kbCategories.find(c => c.id === id);
+    if (!category) return;
+
+    showConfirmation(`Удалить ${category.name}`, () => {
+      setKbCategories(prev => prev.filter(cat => cat.id !== id));
+      hideConfirmation();
+      showToast('success', 'Удалено');
+    });
+  };
+
+  const handleCopyCategory = (category: { id: string; name: string; parentId: string | null }) => {
+    const copiedCategory = {
+      ...category,
+      id: Math.random().toString(36).substr(2, 9),
+      name: `${category.name} (копия)`,
+    };
+
+    setKbCategories(prev => [...prev, copiedCategory]);
+    showToast('success', `Создана копия: ${copiedCategory.name}`);
+  };
+
+  const handleDeleteArticle = (id: number) => {
+    const article = kbArticles.find(a => a.id === id);
+    if (!article) return;
+
+    showConfirmation(`Удалить ${article.title}`, () => {
+      setKbArticles(prev => prev.filter(art => art.id !== id));
+      hideConfirmation();
+      showToast('success', 'Удалено');
+    });
+  };
+
+  const handleCopyArticle = (article: typeof kbArticles[0]) => {
+    const copiedArticle = {
+      ...article,
+      id: Math.floor(1000 + Math.random() * 9000),
+      title: `${article.title} (копия)`,
+      isActive: false,
+      createdAt: new Date().toLocaleString('ru-RU', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }).replace(',', '')
+    };
+
+    setKbArticles(prev => [...prev, copiedArticle]);
+    showToast('success', `Создана копия: ${copiedArticle.title}`);
+  };
+
+  const handleToggleArticleStatus = (id: number) => {
+    setKbArticles(prevArticles =>
+      prevArticles.map(article =>
+        article.id === id ? { ...article, isActive: !article.isActive } : article
+      )
+    );
+  };
+
+  const handleEditCategory = (id: string) => {
+    const category = kbCategories.find(c => c.id === id);
+    if (category) {
+      setEditingCategory(category);
+      setCurrentPage('kb-category-create');
+    }
+  };
+
+  const handleEditArticle = (id: number) => {
+    const article = kbArticles.find(a => a.id === id);
+    if (article) {
+      setEditingArticle(article);
+      setCurrentPage('kb-article-create');
+    }
+  };
+
+  const handleSaveCategory = (updatedCategory: { id: string; name: string; parentId: string | null }) => {
+    setKbCategories(prev => prev.map(cat =>
+      cat.id === updatedCategory.id ? updatedCategory : cat
+    ));
+    showToast('success', 'Изменения сохранены');
+    setEditingCategory(null);
+    setCurrentPage('kb-categories');
+  };
+
+  const handleOpenCategory = (categoryId: string | null) => {
+    setCurrentCategoryId(categoryId);
+  };
+
+  const handleAddCategory = (category: { name: string; parentId: string | null }) => {
+    const newCategory = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...category,
+    };
+    setKbCategories(prev => [...prev, newCategory]);
+    showToast('success', 'Категория создана');
+    setCurrentCategoryId(null); // Reset to root categories view
+    setCurrentPage('kb-categories');
+  };
+
+  const handleSaveArticle = (updatedArticle: typeof kbArticles[0]) => {
+    setKbArticles(prev => prev.map(art =>
+      art.id === updatedArticle.id ? updatedArticle : art
+    ));
+    showToast('success', 'Изменения сохранены');
+    setEditingArticle(null);
+    setCurrentPage('kb-articles');
+  };
+
+  const handleNavigate = (page: Page) => {
+    // Reset navigation states when switching to main pages from sidebar
+    if (page === 'kb-categories') {
+      setCurrentCategoryId(null); // Reset to root categories
+    }
+    setCurrentPage(page);
+  };
+
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard />;
@@ -141,17 +299,17 @@ const App: React.FC = () => {
       case 'chat': return <Chat />;
       case 'billing': return <Billing />;
       case 'settings': return <Settings />;
-      case 'kb-categories': return <KbCategories onCreate={() => setCurrentPage('kb-category-create')} categories={kbCategories} />;
-      case 'kb-category-create': return <KbCategoryCreate onCancel={() => setCurrentPage('kb-categories')} />;
-      case 'kb-articles': return <KbArticles onCreate={() => setCurrentPage('kb-article-create')} articles={kbArticles} />;
-      case 'kb-article-create': return <KbArticleCreate onCancel={() => setCurrentPage('kb-articles')} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} />;
+      case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
+      case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
+      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
+      case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} />;
       default: return <Dashboard />;
     }
   };
 
   return (
     <div className="flex h-screen bg-[#F9FAFB] dark:bg-gray-900 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
-      <Sidebar currentPage={currentPage} onNavigate={setCurrentPage} />
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

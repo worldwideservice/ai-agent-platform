@@ -383,19 +383,6 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
 
                 </div>
             </div>
-
-            {/* Footer Actions */}
-            <div className="flex items-center gap-4 pt-4">
-                <button className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm">
-                    Сохранить
-                </button>
-                <button
-                    onClick={onCancel}
-                    className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                >
-                    Отмена
-                </button>
-            </div>
         </div>
     );
 });

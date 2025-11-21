@@ -134,7 +134,7 @@ export const Agents: React.FC<AgentsProps> = ({
                         className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22white%22%3E%3Cpath d=%22M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z%22/%3E%3C/svg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                       />
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>{agent.name}</td>
+                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.name}</td>
                     <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={(e) => {
@@ -148,7 +148,7 @@ export const Agents: React.FC<AgentsProps> = ({
                         />
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white" onClick={(e) => e.stopPropagation()}>{agent.createdAt}</td>
+                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.createdAt}</td>
                     <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
                         <button onClick={(e) => { e.stopPropagation(); onEditAgent(agent.id); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -183,13 +183,12 @@ export const Agents: React.FC<AgentsProps> = ({
             </div>
           </>
         ) : (
-          {/* Empty state */ }
-          < div className="flex flex-col items-center justify-center text-center py-16">
-        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
-          <X size={32} strokeWidth={1.5} />
-        </div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Не найдено Агенты ИИ</h3>
-      </div>
+          <div className="flex flex-col items-center justify-center text-center py-16">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
+              <X size={32} strokeWidth={1.5} />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Не найдено Агенты ИИ</h3>
+          </div>
         )}
     </div>
     </div >

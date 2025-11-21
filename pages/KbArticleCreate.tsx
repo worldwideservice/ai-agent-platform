@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
 interface KbArticleCreateProps {
@@ -6,15 +6,45 @@ interface KbArticleCreateProps {
   onAddArticle: (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => void;
   onCreate: () => void;
   availableArticles: { id: number; title: string }[];
+  article?: {
+    id: number;
+    title: string;
+    isActive: boolean;
+    categories: string[];
+    relatedArticles: string[];
+    content: string;
+    createdAt: string;
+  } | null;
+  onSave?: (article: {
+    id: number;
+    title: string;
+    isActive: boolean;
+    categories: string[];
+    relatedArticles: string[];
+    content: string;
+    createdAt: string;
+  }) => void;
 }
 
-export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAddArticle, onCreate, availableArticles }) => {
+export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAddArticle, onCreate, availableArticles, article, onSave }) => {
   const [title, setTitle] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState(['Общее']);
   const [relatedArticles, setRelatedArticles] = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [showRelatedDropdown, setShowRelatedDropdown] = useState(false);
+
+  const isEditMode = !!article;
+
+  useEffect(() => {
+    if (article) {
+      setTitle(article.title);
+      setIsActive(article.isActive);
+      setSelectedCategories(article.categories);
+      setRelatedArticles(article.relatedArticles);
+      setContent(article.content);
+    }
+  }, [article]);
 
   const removeCategory = (cat: string) => {
     setSelectedCategories(selectedCategories.filter(c => c !== cat));
@@ -36,14 +66,25 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
     if (!title || !content || selectedCategories.length === 0) {
       return;
     }
-    onAddArticle({
-      title,
-      isActive,
-      categories: selectedCategories,
-      relatedArticles,
-      content
-    });
-    onCreate();
+    if (isEditMode && onSave && article) {
+      onSave({
+        ...article,
+        title,
+        isActive,
+        categories: selectedCategories,
+        relatedArticles,
+        content
+      });
+    } else {
+      onAddArticle({
+        title,
+        isActive,
+        categories: selectedCategories,
+        relatedArticles,
+        content
+      });
+      onCreate();
+    }
   };
 
   const handleCreateAndNew = () => {
@@ -72,9 +113,11 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
           <span>Статьи</span>
           <span>/</span>
-          <span>Создать</span>
+          <span>{isEditMode ? 'Редактировать' : 'Создать'}</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Создать Статья</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {isEditMode ? 'Редактировать Статью' : 'Создать Статью'}
+        </h1>
       </div>
 
       {/* Form Container */}
@@ -246,14 +289,16 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
           onClick={handleCreate}
           className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
         >
-          Создать
+          {isEditMode ? 'Сохранить' : 'Создать'}
         </button>
-        <button
-          onClick={handleCreateAndNew}
-          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-        >
-          Создать и Создать еще
-        </button>
+        {!isEditMode && (
+          <button
+            onClick={handleCreateAndNew}
+            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+          >
+            Создать и Создать еще
+          </button>
+        )}
         <button
           onClick={onCancel}
           className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-4 py-2 text-sm font-medium transition-colors"

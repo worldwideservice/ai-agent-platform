@@ -789,14 +789,29 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       {/* Content for Main/Deals/Triggers preserved by React state rendering but code structure implies they are peers */}
       {activeTab === 'main' && (
-        <AgentBasicSettings
-          ref={basicSettingsRef}
-          agent={agent}
-          onCancel={onCancel}
-          crmConnected={kommoConnected}
-          kbCategories={kbCategories}
-          onNavigateToKbArticles={() => onNavigate('kb-articles')}
-        />
+        <div>
+          <AgentBasicSettings
+            ref={basicSettingsRef}
+            agent={agent}
+            onCancel={onCancel}
+            crmConnected={kommoConnected}
+            kbCategories={kbCategories}
+            onNavigateToKbArticles={() => onNavigate('kb-articles')}
+          />
+
+          {/* Footer Actions */}
+          <div className="flex items-center gap-4 pt-4 mt-6">
+            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
+              Сохранить
+            </button>
+            <button
+              onClick={onCancel}
+              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
       )}
 
       {activeTab === 'deals' && (
