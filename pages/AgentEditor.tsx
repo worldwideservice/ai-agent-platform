@@ -1,45 +1,25 @@
-import React, { useState } from 'react';
-import { 
-  User, 
-  RefreshCw, 
-  MessageSquare, 
-  Book, 
-  Settings, 
-  Share2, 
-  Zap, 
-  Link as LinkIcon, 
-  MoreHorizontal, 
-  ChevronDown, 
-  ChevronUp, 
-  X, 
-  Clock, 
-  Puzzle, 
-  FilePenLine, 
-  Users, 
-  Eye, 
-  Briefcase, 
-  PenSquare, 
-  GripVertical, 
-  Trash2, 
-  Plus,
-  Search,
-  LayoutGrid,
-  Edit,
-  ArrowUp,
-  ArrowDown,
-  CheckCircle,
-  XCircle,
-  Settings2,
-  Cpu,
-  Languages,
-  SlidersHorizontal,
-  Sparkles,
-  Check
+import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import {
+  User, RefreshCw, MessageSquare, Book, Settings, Share2, Zap, Link as LinkIcon, MoreHorizontal,
+  ChevronDown, ChevronUp, X, Clock, Puzzle, FilePenLine, Users, Eye, Briefcase, PenSquare,
+  GripVertical, Trash2, Plus, Search, LayoutGrid, Edit, ArrowUp, ArrowDown, CheckCircle,
+  XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
 } from 'lucide-react';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS } from '../services/crmData';
+import { AgentDealsContacts } from '../components/AgentDealsContacts';
+import { AgentBasicSettings } from '../components/AgentBasicSettings';
+import { Agent } from '../types';
+import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
+// import Toggle from '../components/Toggle'; // Removed: Defined internally
+import { ConfirmationModal } from '../components/ConfirmationModal';
+// import Toast, { ToastRef } from '../components/Toast'; // Removed: Not used or incorrect
 
 interface AgentEditorProps {
+  agent: Agent | null;
   onCancel: () => void;
+  onSave: (agent: Agent) => void;
+  kbCategories: { id: string; name: string }[];
+  onNavigate: (page: string) => void;
 }
 
 type Tab = 'main' | 'deals' | 'triggers' | 'chains' | 'integrations' | 'advanced';
@@ -54,35 +34,32 @@ interface UpdateRule {
   overwrite: boolean;
 }
 
+interface TriggerAction {
+  id: string;
+  action: string;
+}
+
 interface Trigger {
   id: string;
   name: string;
   isActive: boolean;
   condition: string;
+  actions: TriggerAction[];
+  cancelMessage?: string;
+  runLimit?: number;
 }
 
-interface TriggerAction {
+interface ChainAction {
   id: string;
-  actionId: string;
-}
-
-interface Chain {
-  id: string;
-  name: string;
-  isActive: boolean;
-  stepsCount: number;
-  steps: ChainStep[];
-  allStages: boolean;
-  stopCondition: string;
-  workingHours: WorkingDay[];
-  runLimit: number;
+  type: string;
+  instruction: string;
 }
 
 interface ChainStep {
   id: string;
   delayValue: number;
   delayUnit: string;
-  actions: { id: string; type: string; instruction: string }[];
+  actions: ChainAction[];
 }
 
 interface WorkingDay {
@@ -92,30 +69,45 @@ interface WorkingDay {
   end: string;
 }
 
-// --- Constants ---
+interface Chain {
+  id: string;
+  name: string;
+  isActive: boolean;
+  conditionType: 'all' | 'specific';
+  conditionStages: string[];
+  conditionExclude?: string;
+  steps: ChainStep[];
+  schedule: WorkingDay[];
+  runLimit?: number;
+}
+
+// --- UI Components ---
 const DAYS_OF_WEEK = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const DEFAULT_WORKING_HOURS: WorkingDay[] = DAYS_OF_WEEK.map(day => ({ day, enabled: true, start: '08:00', end: '22:00' }));
 
 const GoogleIcon = () => (
   <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-    <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
-    <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
-    <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
-    <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+    <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4" />
+    <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853" />
+    <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05" />
+    <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335" />
   </svg>
 );
 
-export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('advanced');
-  
+export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
+  const [activeTab, setActiveTab] = useState<Tab>('main');
+  const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
+
   // --- Modal States ---
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
   const [isChainModalOpen, setIsChainModalOpen] = useState(false);
-  const [editingChainId, setEditingChainId] = useState<string | null>(null);
 
   // --- Integrations State ---
   const [integrationView, setIntegrationView] = useState<IntegrationView>('list');
   const [kommoActive, setKommoActive] = useState(true);
+  const [kommoConnected, setKommoConnected] = useState(false);
+  const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
+  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
 
   // --- Advanced Tab State ---
   const [advancedModel, setAdvancedModel] = useState('OpenAI GPT-4.1');
@@ -126,65 +118,49 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
   const [responseDelay, setResponseDelay] = useState(45);
 
   // --- Triggers Data ---
-  const [triggers, setTriggers] = useState<Trigger[]>([
-    { id: '1', name: 'Тип услуги "AGENT PARTNERSHIP"', isActive: true, condition: 'Когда ты понял, что это клиент по продукту AGENT PARTNERSHIP...' },
-    { id: '2', name: 'Тип услуги "WORK VISA IN POLAND"', isActive: true, condition: 'Когда ты понял что это клиент по продукту WORK VISA IN POLAND...' },
-    { id: '3', name: 'Тип услуги "SEASONAL VISA IN POLAND"', isActive: true, condition: 'Когда ты понял что это клиент по продукту SEASONAL VISA IN POLAND...' },
-  ]);
+  const [triggers, setTriggers] = useState<Trigger[]>([]);
+
+
+  // --- Save Handler ---
+  const handleSave = () => {
+    if (!agent) return;
+
+    // Get data from basic settings
+    const basicData = basicSettingsRef.current?.getData() || {};
+
+    // Merge with existing agent data
+    const updatedAgent: Agent = {
+      ...agent,
+      ...basicData
+    };
+
+    onSave(updatedAgent);
+  };
 
   // --- Chains Data ---
-  const [chains, setChains] = useState<Chain[]>([
-    { 
-      id: '1', 
-      name: '12', 
-      isActive: true, 
-      stepsCount: 3,
-      steps: [
-        { 
-          id: 's1', 
-          delayValue: 20, 
-          delayUnit: 'Минуты', 
-          actions: [{ id: 'a1', type: 'generate_message', instruction: '234' }] 
-        },
-        { 
-          id: 's2', 
-          delayValue: 20, 
-          delayUnit: 'Минуты', 
-          actions: [{ id: 'a2', type: 'generate_message', instruction: '234' }] 
-        },
-        { 
-          id: 's3', 
-          delayValue: 20, 
-          delayUnit: 'Минуты', 
-          actions: [{ id: 'a3', type: 'generate_message', instruction: '234' }] 
-        }
-      ],
-      allStages: false,
-      stopCondition: '123',
-      workingHours: DEFAULT_WORKING_HOURS,
-      runLimit: 0
-    }
-  ]);
+  const [chains, setChains] = useState<Chain[]>([]);
+  const [editingChainId, setEditingChainId] = useState<string | null>(null);
 
   // --- Chain Modal Form State ---
   const [chainName, setChainName] = useState('');
   const [chainActive, setChainActive] = useState(true);
-  
+
   // Chain Modal Accordions
   const [isChainConditionsOpen, setIsChainConditionsOpen] = useState(true);
   const [isChainStepsOpen, setIsChainStepsOpen] = useState(true);
-  const [isChainHoursOpen, setIsChainHoursOpen] = useState(true);
+  const [isChainScheduleOpen, setIsChainScheduleOpen] = useState(true);
   const [isChainSettingsOpen, setIsChainSettingsOpen] = useState(true);
 
   // Chain Conditions
   const [chainAllStages, setChainAllStages] = useState(false);
-  const [chainStopCondition, setChainStopCondition] = useState('');
+  const [chainStages, setChainStages] = useState<string[]>([]);
+  const [chainExcludeCondition, setChainExcludeCondition] = useState('');
 
   // Chain Steps
   const [chainSteps, setChainSteps] = useState<ChainStep[]>([]);
 
   // Working Hours & Limits
-  const [workingHours, setWorkingHours] = useState<WorkingDay[]>(DEFAULT_WORKING_HOURS);
+  const [chainSchedule, setChainSchedule] = useState<WorkingDay[]>(DEFAULT_WORKING_HOURS);
   const [chainRunLimit, setChainRunLimit] = useState(0);
 
   // --- General State ---
@@ -194,7 +170,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
     `ОТВЕЧАЙ ТОЛЬКО НА АНГЛИЙСКОМ ЯЗЫКЕ - ВСЕГДА !!`
   );
   const [checkBeforeSend, setCheckBeforeSend] = useState(false);
-  
+
   // Pipelines State
   const [activePipelines, setActivePipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
   const [expandedPipelines, setExpandedPipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
@@ -235,11 +211,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
 
   // Chain Helpers
   const addChainStep = () => {
-    setChainSteps(prev => [...prev, { 
-      id: Math.random().toString(36).substr(2, 9), 
-      delayValue: 20, 
-      delayUnit: 'Минуты', 
-      actions: [{ id: Math.random().toString(36).substr(2, 9), type: 'generate_message', instruction: '' }] 
+    setChainSteps(prev => [...prev, {
+      id: Math.random().toString(36).substr(2, 9),
+      delayValue: 20,
+      delayUnit: 'Минуты',
+      actions: [{ id: Math.random().toString(36).substr(2, 9), type: 'generate_message', instruction: '' }]
     }]);
   };
 
@@ -266,7 +242,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
   };
 
   const toggleWorkingDay = (day: string) => {
-    setWorkingHours(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
+    setChainSchedule(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
   };
 
   const toggleChainStatus = (id: string) => {
@@ -278,14 +254,15 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
     setChainName('');
     setChainActive(true);
     setChainAllStages(false);
-    setChainStopCondition('');
-    setChainSteps([{ 
-      id: Math.random().toString(36).substr(2, 9), 
-      delayValue: 20, 
-      delayUnit: 'Минуты', 
-      actions: [{ id: Math.random().toString(36).substr(2, 9), type: 'generate_message', instruction: '' }] 
+    setChainStages([]);
+    setChainExcludeCondition('');
+    setChainSteps([{
+      id: Math.random().toString(36).substr(2, 9),
+      delayValue: 20,
+      delayUnit: 'Минуты',
+      actions: [{ id: Math.random().toString(36).substr(2, 9), type: 'generate_message', instruction: '' }]
     }]);
-    setWorkingHours(DEFAULT_WORKING_HOURS);
+    setChainSchedule(DEFAULT_WORKING_HOURS);
     setChainRunLimit(0);
     setIsChainModalOpen(true);
   };
@@ -294,11 +271,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
     setEditingChainId(chain.id);
     setChainName(chain.name);
     setChainActive(chain.isActive);
-    setChainAllStages(chain.allStages);
-    setChainStopCondition(chain.stopCondition);
+    setChainAllStages(chain.conditionType === 'all');
+    setChainStages(chain.conditionStages || []);
+    setChainExcludeCondition(chain.conditionExclude || '');
     setChainSteps(chain.steps);
-    setWorkingHours(chain.workingHours);
-    setChainRunLimit(chain.runLimit);
+    setChainSchedule(chain.schedule);
+    setChainRunLimit(chain.runLimit || 0);
     setIsChainModalOpen(true);
   };
 
@@ -307,11 +285,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
       id: editingChainId || Math.random().toString(36).substr(2, 9),
       name: chainName,
       isActive: chainActive,
+      conditionType: chainAllStages ? 'all' : 'specific',
+      conditionStages: chainStages,
+      conditionExclude: chainExcludeCondition,
       steps: chainSteps,
-      stepsCount: chainSteps.length,
-      allStages: chainAllStages,
-      stopCondition: chainStopCondition,
-      workingHours: workingHours,
+      schedule: chainSchedule,
       runLimit: chainRunLimit
     };
 
@@ -329,26 +307,68 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
     }
   };
 
-  // Trigger Helpers
+  // --- Trigger Modal Form State ---
   const [triggerName, setTriggerName] = useState('');
   const [triggerActive, setTriggerActive] = useState(true);
   const [triggerCondition, setTriggerCondition] = useState('');
-  const [triggerResponse, setTriggerResponse] = useState('');
+  const [triggerActions, setTriggerActions] = useState<Array<{ id: string, action: string }>>([{ id: '1', action: '' }]);
+  const [triggerCancelMessage, setTriggerCancelMessage] = useState('');
+  const [triggerRunLimit, setTriggerRunLimit] = useState(0);
+  const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
   const [triggerLimit, setTriggerLimit] = useState(0);
-  const [triggerActions, setTriggerActions] = useState<TriggerAction[]>([{ id: '1', actionId: '' }]);
-  const addTriggerAction = () => setTriggerActions(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), actionId: '' }]);
+  const addTriggerAction = () => setTriggerActions(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), action: '' }]);
   const removeTriggerAction = (id: string) => setTriggerActions(prev => prev.filter(a => a.id !== id));
-  const updateTriggerAction = (id: string, val: string) => setTriggerActions(prev => prev.map(a => a.id === id ? { ...a, actionId: val } : a));
+  const updateTriggerAction = (id: string, val: string) => setTriggerActions(prev => prev.map(a => a.id === id ? { ...a, action: val } : a));
   const toggleTriggerStatus = (id: string) => setTriggers(prev => prev.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t));
 
+  const handleCreateTrigger = () => {
+    setEditingTriggerId(null);
+    setTriggerName('');
+    setTriggerActive(true);
+    setTriggerCondition('');
+    setIsTriggerModalOpen(true);
+  };
+
+  const handleEditTrigger = (trigger: Trigger) => {
+    setEditingTriggerId(trigger.id);
+    setTriggerName(trigger.name);
+    setTriggerActive(trigger.isActive);
+    setTriggerCondition(trigger.condition);
+    setIsTriggerModalOpen(true);
+  };
+
+  const handleDeleteTrigger = (id: string) => {
+    if (confirm('Вы уверены, что хотите удалить этот триггер?')) {
+      setTriggers(prev => prev.filter(t => t.id !== id));
+    }
+  };
+
+  const handleSaveTrigger = () => {
+    const triggerData: Trigger = {
+      id: editingTriggerId || Math.random().toString(36).substr(2, 9),
+      name: triggerName,
+      isActive: triggerActive,
+      condition: triggerCondition,
+      actions: triggerActions,
+      cancelMessage: triggerCancelMessage,
+      runLimit: triggerRunLimit
+    };
+
+    if (editingTriggerId) {
+      setTriggers(prev => prev.map(t => t.id === editingTriggerId ? triggerData : t));
+    } else {
+      setTriggers(prev => [...prev, triggerData]);
+    }
+    setIsTriggerModalOpen(false);
+  };
+
   const TabButton = ({ id, label, icon: Icon }: { id: Tab, label: string, icon: any }) => (
-    <button 
+    <button
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-        activeTab === id 
-          ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400' 
-          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-      }`}
+      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === id
+        ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+        }`}
     >
       <Icon size={16} />
       {label}
@@ -356,7 +376,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
   );
 
   const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
-    <button 
+    <button
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
     >
@@ -392,7 +412,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
         </div>
       );
     }
-    
+
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
         <span>Агенты ИИ</span>
@@ -400,12 +420,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
         <span>{name}</span>
         <span>/</span>
         <span>{
-          activeTab === 'main' ? 'Основные' : 
-          activeTab === 'deals' ? 'Сделки и контакты' : 
-          activeTab === 'triggers' ? 'Триггеры' : 
-          activeTab === 'chains' ? 'Цепочки' : 
-          activeTab === 'integrations' ? 'Интеграции' : 
-          activeTab === 'advanced' ? 'Расширенные настройки' : 'Редактирование'
+          activeTab === 'main' ? 'Основные' :
+            activeTab === 'deals' ? 'Сделки и контакты' :
+              activeTab === 'triggers' ? 'Триггеры' :
+                activeTab === 'chains' ? 'Цепочки' :
+                  activeTab === 'integrations' ? 'Интеграции' :
+                    activeTab === 'advanced' ? 'Расширенные настройки' : 'Редактирование'
         }</span>
       </div>
     );
@@ -415,12 +435,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
     if (activeTab === 'integrations' && integrationView !== 'list') {
       return integrationView === 'kommo' ? 'Kommo' : 'Google Calendar';
     }
-    
-    return activeTab === 'chains' ? 'Цепочки' : 
-           activeTab === 'triggers' ? 'Триггеры' : 
-           activeTab === 'deals' ? 'Сделки и контакты' : 
-           activeTab === 'integrations' ? 'Интеграции' : 
-           activeTab === 'advanced' ? 'Расширенные настройки' : `Редактирование ${name}`;
+
+    return activeTab === 'chains' ? 'Цепочки' :
+      activeTab === 'triggers' ? 'Триггеры' :
+        activeTab === 'deals' ? 'Сделки и контакты' :
+          activeTab === 'integrations' ? 'Интеграции' :
+            activeTab === 'advanced' ? 'Расширенные настройки' : `Редактирование ${name}`;
   };
 
   return (
@@ -453,7 +473,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
       {/* Tab Content: Advanced */}
       {activeTab === 'advanced' && (
         <div className="space-y-6 mt-6">
-          
+
           {/* Model Card */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
@@ -462,20 +482,20 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Выберите модель ИИ<span className="text-red-500">*</span></label>
-                 <div className="relative">
-                    <select 
-                      value={advancedModel}
-                      onChange={(e) => setAdvancedModel(e.target.value)}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
-                    >
-                       <option value="OpenAI GPT-4.1">OpenAI GPT-4.1 - Строго следует инструкциям</option>
-                       <option value="OpenAI GPT-4o">OpenAI GPT-4o</option>
-                       <option value="Gemini 1.5 Pro">Gemini 1.5 Pro</option>
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                 </div>
-                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Выберите, насколько умным вы хотите сделать ИИ. Более продвинутые модели стоят дороже.</p>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Выберите модель ИИ<span className="text-red-500">*</span></label>
+                <div className="relative">
+                  <select
+                    value={advancedModel}
+                    onChange={(e) => setAdvancedModel(e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="OpenAI GPT-4.1">OpenAI GPT-4.1 - Строго следует инструкциям</option>
+                    <option value="OpenAI GPT-4o">OpenAI GPT-4o</option>
+                    <option value="Gemini 1.5 Pro">Gemini 1.5 Pro</option>
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Выберите, насколько умным вы хотите сделать ИИ. Более продвинутые модели стоят дороже.</p>
               </div>
             </div>
           </div>
@@ -487,21 +507,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
               <h2 className="text-base font-medium text-gray-900 dark:text-white">Язык</h2>
             </div>
             <div className="p-6 space-y-6">
-               <div className="flex items-center gap-3">
-                  <Toggle checked={autoLanguage} onChange={setAutoLanguage} />
-                  <span className="text-sm text-gray-900 dark:text-white">Автоматически определять язык пользователя</span>
-               </div>
-               <div>
-                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Язык ответа</label>
-                 <input 
-                   type="text" 
-                   value={responseLanguage}
-                   onChange={(e) => setResponseLanguage(e.target.value)}
-                   placeholder="например, Английский"
-                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                 />
-                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Язык, который агент будет использовать для ответов пользователям</p>
-               </div>
+              <div className="flex items-center gap-3">
+                <Toggle checked={autoLanguage} onChange={setAutoLanguage} />
+                <span className="text-sm text-gray-900 dark:text-white">Автоматически определять язык пользователя</span>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Язык ответа</label>
+                <input
+                  type="text"
+                  value={responseLanguage}
+                  onChange={(e) => setResponseLanguage(e.target.value)}
+                  placeholder="например, Английский"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Язык, который агент будет использовать для ответов пользователям</p>
+              </div>
             </div>
           </div>
 
@@ -512,87 +532,84 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
               <h2 className="text-base font-medium text-gray-900 dark:text-white">Расписание</h2>
             </div>
             <div className="p-6 space-y-4">
-               <p className="text-sm text-gray-600 dark:text-gray-300">Если включено, агент будет активен только в выбранные часы</p>
-               <div className="flex items-center gap-3">
-                  <Toggle checked={scheduleEnabled} onChange={setScheduleEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Включить расписание</span>
-               </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Если включено, агент будет активен только в выбранные часы</p>
+              <div className="flex items-center gap-3">
+                <Toggle checked={scheduleEnabled} onChange={setScheduleEnabled} />
+                <span className="text-sm font-medium text-gray-900 dark:text-white">Включить расписание</span>
+              </div>
             </div>
           </div>
 
           {/* Response Settings Card */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
               <Clock size={20} className="text-gray-400" />
               <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки ответа</h2>
             </div>
             <div className="p-6 space-y-6">
-               <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">Креативность</label>
-                  <div className="flex gap-2">
-                     <button 
-                       onClick={() => setCreativity('precise')}
-                       className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${
-                         creativity === 'precise' 
-                           ? 'border-[#0078D4] bg-[#0078D4] text-white' 
-                           : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                       }`}
-                     >
-                       <CheckCircle size={16} />
-                       Точный
-                     </button>
-                     <button 
-                       onClick={() => setCreativity('balanced')}
-                       className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${
-                         creativity === 'balanced' 
-                           ? 'border-[#0078D4] bg-[#0078D4] text-white' 
-                           : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                       }`}
-                     >
-                       <SlidersHorizontal size={16} />
-                       Сбалансированный
-                     </button>
-                     <button 
-                       onClick={() => setCreativity('creative')}
-                       className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${
-                         creativity === 'creative' 
-                           ? 'border-[#0078D4] bg-[#0078D4] text-white' 
-                           : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                       }`}
-                     >
-                       <Sparkles size={16} />
-                       Креативный
-                     </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Управляйте стилем ответов агента. Точный: последовательный и предсказуемый, может звучать сухо. Сбалансированный: естественный и легко читаемый. Креативный: выразительный и разнообразный.
-                  </p>
-               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">Креативность</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCreativity('precise')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'precise'
+                      ? 'border-[#0078D4] bg-[#0078D4] text-white'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                  >
+                    <CheckCircle size={16} />
+                    Точный
+                  </button>
+                  <button
+                    onClick={() => setCreativity('balanced')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'balanced'
+                      ? 'border-[#0078D4] bg-[#0078D4] text-white'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                  >
+                    <SlidersHorizontal size={16} />
+                    Сбалансированный
+                  </button>
+                  <button
+                    onClick={() => setCreativity('creative')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'creative'
+                      ? 'border-[#0078D4] bg-[#0078D4] text-white'
+                      : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      }`}
+                  >
+                    <Sparkles size={16} />
+                    Креативный
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  Управляйте стилем ответов агента. Точный: последовательный и предсказуемый, может звучать сухо. Сбалансированный: естественный и легко читаемый. Креативный: выразительный и разнообразный.
+                </p>
+              </div>
 
-               <div>
-                 <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Задержка ответа (секунд)</label>
-                 <input 
-                   type="number" 
-                   value={responseDelay}
-                   onChange={(e) => setResponseDelay(Number(e.target.value))}
-                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                 />
-                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Сколько секунд ждать перед ответом. Рекомендуем установить задержку не менее 30 секунд, чтобы избежать дублирования ответов, если клиент отправит другое сообщение, пока агент отвечает.</p>
-               </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Задержка ответа (секунд)</label>
+                <input
+                  type="number"
+                  value={responseDelay}
+                  onChange={(e) => setResponseDelay(Number(e.target.value))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Сколько секунд ждать перед ответом. Рекомендуем установить задержку не менее 30 секунд, чтобы избежать дублирования ответов, если клиент отправит другое сообщение, пока агент отвечает.</p>
+              </div>
             </div>
           </div>
 
           {/* Footer Actions (Advanced) */}
           <div className="flex items-center gap-4 pt-4">
-             <button className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm">
-                Сохранить
-             </button>
-             <button 
-               onClick={onCancel}
-               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-             >
-                Отмена
-             </button>
+            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
+              Сохранить
+            </button>
+            <button
+              onClick={onCancel}
+              className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+            >
+              Отмена
+            </button>
           </div>
 
         </div>
@@ -607,63 +624,79 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
               {/* Toolbar */}
               <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-end gap-2">
                 <div className="relative">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                   <input 
-                     type="text" 
-                     placeholder="Поиск" 
-                     className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64 transition-shadow bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                   />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Поиск"
+                    className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64 transition-shadow bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                  />
                 </div>
               </div>
 
               {/* Table */}
               <table className="w-full">
-               <thead className="bg-gray-50 dark:bg-gray-750">
-                 <tr>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Интеграция</th>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Установлено</th>
-                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Активно</th>
-                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
-                 </tr>
-               </thead>
-               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-750">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Интеграция</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Установлено</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Активно</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {/* Google Calendar Row */}
                   <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">Google Calendar</td>
-                     <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">Google Calendar</td>
+                    <td className="px-6 py-4">
+                      {googleCalendarConnected ? (
                         <CheckCircle size={20} className="text-green-500" />
-                     </td>
-                     <td className="px-6 py-4">
+                      ) : (
+                        <Minus size={20} className="text-gray-300 dark:text-gray-600" />
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {googleCalendarActive ? (
+                        <CheckCircle size={20} className="text-green-500" />
+                      ) : (
                         <XCircle size={20} className="text-gray-300 dark:text-gray-500" />
-                     </td>
-                     <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => setIntegrationView('google_calendar')}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
-                        >
-                           <Settings size={16} /> Настройки
-                        </button>
-                     </td>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setIntegrationView('google_calendar')}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
+                      >
+                        <Settings size={16} /> Настройки
+                      </button>
+                    </td>
                   </tr>
                   {/* Kommo Row */}
                   <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">Kommo</td>
-                     <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">Kommo</td>
+                    <td className="px-6 py-4">
+                      {kommoConnected ? (
                         <CheckCircle size={20} className="text-green-500" />
-                     </td>
-                     <td className="px-6 py-4">
+                      ) : (
+                        <Minus size={20} className="text-gray-300 dark:text-gray-600" />
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {kommoActive ? (
                         <CheckCircle size={20} className="text-green-500" />
-                     </td>
-                     <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => setIntegrationView('kommo')}
-                          className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
-                        >
-                           <Settings size={16} /> Настройки
-                        </button>
-                     </td>
+                      ) : (
+                        <XCircle size={20} className="text-gray-300 dark:text-gray-500" />
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setIntegrationView('kommo')}
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
+                      >
+                        <Settings size={16} /> Настройки
+                      </button>
+                    </td>
                   </tr>
-               </tbody>
+                </tbody>
               </table>
             </div>
           )}
@@ -672,34 +705,37 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
           {integrationView === 'kommo' && (
             <>
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                 <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Общие настройки</h3>
-                 
-                 <div className="space-y-6">
-                   <div className="flex items-center gap-3">
-                      <Toggle checked={kommoActive} onChange={setKommoActive} />
-                      <span className="text-sm text-gray-900 dark:text-white">Активно</span>
-                   </div>
-                   <p className="text-sm text-gray-500 dark:text-gray-400">Включить или отключить эту интеграцию</p>
-                   
-                   <button className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit">
-                      <RefreshCw size={16} />
-                      Синхронизировать настройки CRM
-                   </button>
-                 </div>
+                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Общие настройки</h3>
+
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3">
+                    <Toggle checked={kommoActive} onChange={setKommoActive} />
+                    <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Включить или отключить эту интеграцию</p>
+
+                  <button
+                    onClick={() => setKommoConnected(true)}
+                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit"
+                  >
+                    <RefreshCw size={16} />
+                    Синхронизировать настройки CRM
+                  </button>
+                </div>
               </div>
-              
+
               <div className="flex items-center gap-4 pt-2">
-                <button 
-                   className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                   onClick={() => setIntegrationView('list')}
+                <button
+                  className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                  onClick={() => setIntegrationView('list')}
                 >
-                   Сохранить изменения
+                  Сохранить изменения
                 </button>
-                <button 
-                   onClick={() => setIntegrationView('list')}
-                   className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                <button
+                  onClick={() => setIntegrationView('list')}
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
-                   Отменить
+                  Отменить
                 </button>
               </div>
             </>
@@ -707,159 +743,688 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ onCancel }) => {
 
           {/* Google Calendar Settings View */}
           {integrationView === 'google_calendar' && (
-             <>
-               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Подключение</h3>
-                  
-                  <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 mb-4">
-                     <button className="flex items-center gap-3 border border-gray-300 dark:border-gray-500 rounded-md px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-white dark:bg-gray-600 text-gray-700 dark:text-white font-medium text-sm shadow-sm">
-                        <GoogleIcon />
-                        Войти через Google
-                     </button>
-                  </div>
-                  
-                  <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    Подключая аккаунт Google, вы предоставляете доступ к своим календарям для бронирования. Вы можете отозвать доступ в любое время в настройках аккаунта Google. <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Политика конфиденциальности</a>.
-                  </div>
-               </div>
+            <>
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
+                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Подключение</h3>
 
-               <div className="flex items-center gap-4 pt-2">
-                <button 
-                   className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
-                   onClick={() => setIntegrationView('list')}
+                <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 mb-4">
+                  <button
+                    onClick={() => {
+                      setGoogleCalendarConnected(true);
+                      setGoogleCalendarActive(true);
+                    }}
+                    className="flex items-center gap-3 border border-gray-300 dark:border-gray-500 rounded-md px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-white dark:bg-gray-600 text-gray-700 dark:text-white font-medium text-sm shadow-sm"
+                  >
+                    <GoogleIcon />
+                    Войти через Google
+                  </button>
+                </div>
+
+                <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                  Подключая аккаунт Google, вы предоставляете доступ к своим календарям для бронирования. Вы можете отозвать доступ в любое время в настройках аккаунта Google. <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Политика конфиденциальности</a>.
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pt-2">
+                <button
+                  className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                  onClick={() => setIntegrationView('list')}
                 >
-                   Сохранить изменения
+                  Сохранить изменения
                 </button>
-                <button 
-                   onClick={() => setIntegrationView('list')}
-                   className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                <button
+                  onClick={() => setIntegrationView('list')}
+                  className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
-                   Отменить
+                  Отменить
                 </button>
               </div>
-             </>
+            </>
           )}
         </div>
       )}
 
       {/* Main Content based on Tab (Main, Deals, Triggers covered above) */}
       {/* ... (Previous tab content remains, Chains tab rendered above) ... */}
-      
+
       {/* Content for Main/Deals/Triggers preserved by React state rendering but code structure implies they are peers */}
-       {activeTab === 'main' && (
-          // ... (Main tab content code - shortened for brevity as it was provided in previous turn)
-          <div className="space-y-6 mt-6">
-            {/* Profile */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-               {/* ... (Existing Main Tab Implementation) ... */}
-               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                  <User size={20} className="text-gray-400" strokeWidth={1.5} />
-                  <h2 className="text-base font-medium text-gray-900 dark:text-white">Профиль агента</h2>
-               </div>
-               <div className="p-6 space-y-6">
-                 {/* ... Name, Active, Instructions ... */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
-                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
-                  </div>
-                  <div className="flex items-center gap-3"><Toggle checked={isActive} onChange={setIsActive} /><span className="text-sm text-gray-900 dark:text-white">Активно</span></div>
-                  <div>
-                     <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Инструкции для агента<span className="text-red-500">*</span></label>
-                     <textarea value={systemInstructions} onChange={(e) => setSystemInstructions(e.target.value)} className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[320px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono" />
-                  </div>
-               </div>
-            </div>
-            {/* Footer */}
-            <div className="flex items-center gap-4 pt-4"><button className="bg-[#0078D4] text-white px-6 py-2.5 rounded-md text-sm font-medium">Сохранить</button><button onClick={onCancel} className="bg-white border border-gray-300 text-gray-700 px-6 py-2.5 rounded-md text-sm font-medium">Отмена</button></div>
+      {activeTab === 'main' && (
+        <AgentBasicSettings
+          ref={basicSettingsRef}
+          agent={agent}
+          onCancel={onCancel}
+          crmConnected={kommoConnected}
+          kbCategories={kbCategories}
+          onNavigateToKbArticles={() => onNavigate('kb-articles')}
+        />
+      )}
+
+      {activeTab === 'deals' && (
+        <AgentDealsContacts onCancel={onCancel} crmConnected={kommoConnected} />
+      )}
+
+      {activeTab === 'triggers' && (
+        // ... (Triggers tab content code - reused from previous turn)
+        <div className="space-y-6 mt-6">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between">
+            <div><h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Триггеры</h2><p className="text-sm text-gray-500">Выполняйте мгновенные действия...</p></div>
+            <button onClick={handleCreateTrigger} className="bg-[#0078D4] text-white px-4 py-2 rounded-md text-sm font-medium">Создать</button>
           </div>
-       )}
-
-       {activeTab === 'deals' && (
-         // ... (Deals tab content code - reused from previous turn)
-         <div className="space-y-6 mt-6">
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-               {/* ... Data Access ... */}
-               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                  <div className="flex items-center gap-3"><Eye size={20} className="text-gray-400" /><h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки доступа к данным</h2></div>
-               </div>
-               {/* ... (Implementation matches previous turn) ... */}
-               <div className="p-6 text-center text-gray-500 text-sm">Content loaded...</div> 
-            </div>
-            <div className="flex items-center gap-4 pt-4"><button className="bg-[#0078D4] text-white px-6 py-2.5 rounded-md text-sm font-medium">Сохранить</button><button onClick={onCancel} className="bg-white border border-gray-300 text-gray-700 px-6 py-2.5 rounded-md text-sm font-medium">Отмена</button></div>
-         </div>
-       )}
-
-       {activeTab === 'triggers' && (
-          // ... (Triggers tab content code - reused from previous turn)
-         <div className="space-y-6 mt-6">
-             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between">
-               <div><h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Триггеры</h2><p className="text-sm text-gray-500">Выполняйте мгновенные действия...</p></div>
-               <button onClick={() => setIsTriggerModalOpen(true)} className="bg-[#0078D4] text-white px-4 py-2 rounded-md text-sm font-medium">Создать</button>
-             </div>
-             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
-                {/* ... Table ... */}
-                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th><th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th><th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Условие</th></tr></thead><tbody className="divide-y divide-gray-200 dark:divide-gray-700">{triggers.map(t => <tr key={t.id}><td className="p-4 text-sm text-gray-900 dark:text-white">{t.name}</td><td className="p-4"><Toggle checked={t.isActive} onChange={() => toggleTriggerStatus(t.id)} /></td><td className="p-4 text-sm text-gray-600 dark:text-gray-300">{t.condition}</td></tr>)}</tbody></table>
-             </div>
-             {/* Trigger Modal (hidden logic reused) */}
-             {isTriggerModalOpen && <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center"><div className="bg-white p-8 rounded-xl"><h2 className="text-xl font-bold mb-4">Создать Триггер</h2><button onClick={() => setIsTriggerModalOpen(false)}>Close</button></div></div>}
-         </div>
-       )}
-       
-       {activeTab === 'chains' && (
-          // ... (Chains tab content code - reused from previous turn)
-         <div className="space-y-6 mt-6">
-           {/* ... (Chains implementation) ... */}
-           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between transition-colors">
-             <div>
-                <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Цепочки</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Автоматизируйте отправку последующих сообщений и выполнение действий по расписанию.</p>
-             </div>
-             <button onClick={handleCreateChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors">Создать</button>
-           </div>
-           {/* ... Table ... */}
-           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
-               <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Шаги</th><th className="px-4 py-3 text-right"></th></tr></thead>
-               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {chains.map(chain => (
-                    <tr key={chain.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                       <td className="p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></td>
-                       <td className="px-4 py-4 text-sm font-medium"><button onClick={() => handleEditChain(chain)} className="text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">{chain.name}</button></td>
-                       <td className="px-4 py-4"><Toggle checked={chain.isActive} onChange={() => toggleChainStatus(chain.id)} /></td>
-                       <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{chain.steps.length}</td>
-                       <td className="px-4 py-4 text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-4">
-                             <button onClick={() => handleEditChain(chain)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
-                             <button onClick={() => handleDeleteChain(chain.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> Удалить</button>
-                          </div>
-                       </td>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
+            {triggers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">Не найдено Триггеры</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Создать Триггер для старта</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-750">
+                  <tr>
+                    <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th>
+                    <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th>
+                    <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Условие</th>
+                    <th className="p-4 text-right"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {triggers.map(t => (
+                    <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      <td className="p-4 text-sm text-gray-900 dark:text-white font-medium">
+                        <button onClick={() => handleEditTrigger(t)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">
+                          {t.name}
+                        </button>
+                      </td>
+                      <td className="p-4"><Toggle checked={t.isActive} onChange={() => toggleTriggerStatus(t.id)} /></td>
+                      <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{t.condition}</td>
+                      <td className="p-4 text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-4">
+                          <button onClick={() => handleEditTrigger(t)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
+                          <button onClick={() => handleDeleteTrigger(t.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> Удалить</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
-               </tbody>
-               </table>
-               {/* Pagination Mock */}
-               <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between sm:px-6"><div className="text-sm text-gray-700 dark:text-gray-300">Показано с 1 по {chains.length} из {chains.length}</div></div>
-           </div>
-           {/* Chain Modal (Reused) */}
-           {isChainModalOpen && (
-             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsChainModalOpen(false)} />
-               <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col transition-colors animate-fadeIn">
-                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0"><h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingChainId ? 'Редактировать Цепочку' : 'Создать Цепочку'}</h2><button onClick={() => setIsChainModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24} /></button></div>
-                 <div className="p-8 overflow-y-auto custom-scrollbar space-y-6 flex-1">
-                   {/* Name */}
-                   <div className="space-y-1"><label className="block text-sm font-medium text-gray-900 dark:text-white">Название<span className="text-red-500">*</span></label><input type="text" value={chainName} onChange={(e) => setChainName(e.target.value)} className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white" /><div className="flex items-center gap-3 mt-3"><Toggle checked={chainActive} onChange={setChainActive} /><span className="text-sm text-gray-900 dark:text-white">Активно</span></div></div>
-                   {/* Conditions Accordion */}
-                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"><button onClick={() => setIsChainConditionsOpen(!isChainConditionsOpen)} className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><div className="flex items-center gap-2"><Settings size={18} className="text-gray-500 dark:text-gray-400" /><div className="text-left"><div className="text-sm font-medium text-gray-900 dark:text-white">Условия</div></div></div>{isChainConditionsOpen ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}</button>{isChainConditionsOpen && <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4 bg-white dark:bg-gray-800"><div className="flex items-center gap-3"><Toggle checked={chainAllStages} onChange={setChainAllStages} /><span className="text-sm text-gray-900 dark:text-white">Любой этап сделки</span></div>{!chainAllStages && <div><label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Этапы сделки</label><div className="relative"><select className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"><option>GENERATION LEAD</option></select><ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" /></div></div>}</div>}</div>
-                   {/* Steps Accordion (Simplified View for brevity in this update) */}
-                   <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"><button onClick={() => setIsChainStepsOpen(!isChainStepsOpen)} className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"><div className="flex items-center gap-2"><LinkIcon size={18} className="text-gray-500 dark:text-gray-400" /><div className="text-left"><div className="text-sm font-medium text-gray-900 dark:text-white">Шаги</div></div></div>{isChainStepsOpen ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}</button>{isChainStepsOpen && <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"><p className="text-sm text-gray-500">Конфигурация шагов...</p></div>}</div>
-                 </div>
-                 <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-4 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0"><button onClick={handleSaveChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">{editingChainId ? 'Сохранить' : 'Создать'}</button><button onClick={() => setIsChainModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">Отменить</button></div>
-               </div>
-             </div>
-           )}
-         </div>
-       )}
+                </tbody>
+              </table>
+            )}
+          </div>
+          {/* Trigger Modal */}
+          {isTriggerModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsTriggerModalOpen(false)} />
+              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transition-colors animate-fadeIn">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingTriggerId ? 'Редактировать Триггер' : 'Создать Триггер'}</h2>
+                  <button onClick={() => setIsTriggerModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24} /></button>
+                </div>
+                <div className="p-6 space-y-6 overflow-y-auto flex-1">
+                  {/* Название */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={triggerName}
+                      onChange={(e) => setTriggerName(e.target.value)}
+                      placeholder="Например, запрос оплаты"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                    />
+                  </div>
+
+                  {/* Активно */}
+                  <div className="flex items-center gap-3">
+                    <Toggle checked={triggerActive} onChange={setTriggerActive} />
+                    <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                  </div>
+
+                  {/* Условие */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Условие<span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={triggerCondition}
+                      onChange={(e) => setTriggerCondition(e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                      placeholder="Например, если клиент просит оплатить"
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Укажите, когда этот триггер должен срабатывать</p>
+                  </div>
+
+                  {/* Действия */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Действия<span className="text-red-500">*</span></label>
+                    <div className="space-y-4">
+                      {triggerActions.map((action, index) => (
+                        <div key={action.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="text-gray-400 cursor-move">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M7 15l5 5 5-5" />
+                                <path d="M7 9l5-5 5 5" />
+                              </svg>
+                            </div>
+                            {triggerActions.length > 1 && (
+                              <button
+                                onClick={() => setTriggerActions(triggerActions.filter((_, i) => i !== index))}
+                                className="text-red-500 hover:text-red-700 transition-colors"
+                                type="button"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Выберите действие<span className="text-red-500">*</span></label>
+                            <select
+                              value={action.action}
+                              onChange={(e) => {
+                                const newActions = [...triggerActions];
+                                newActions[index].action = e.target.value;
+                                setTriggerActions(newActions);
+                              }}
+                              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                              style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                            >
+                              <option value="">Выбрать вариант</option>
+                              <option value="send_message">Отправить сообщение</option>
+                              <option value="generate_message">Сгенерировать ответ</option>
+                              <option value="assign_tag">Назначить тег</option>
+                              <option value="change_stage">Изменить этап</option>
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-center mt-4">
+                      <button
+                        onClick={() => setTriggerActions([...triggerActions, { id: Math.random().toString(), action: '' }])}
+                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                        type="button"
+                      >
+                        Добавить действие
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ответное сообщение */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Ответное сообщение</label>
+                    <input
+                      type="text"
+                      value={triggerCancelMessage}
+                      onChange={(e) => setTriggerCancelMessage(e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                      placeholder="Например, я обработал ваш запрос и создал задачу для нашей финансовой команды."
+                    />
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Сообщение, возвращаемое при выполнении триггера</p>
+                  </div>
+
+                  {/* Лимит запусков в чате */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Лимит запусков в чате</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={triggerRunLimit}
+                        onChange={(e) => setTriggerRunLimit(parseInt(e.target.value) || 0)}
+                        min="0"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">раз</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Максимальное количество запусков этого триггера в одном чате. Установите 0 для неограниченного количества.</p>
+                  </div>
+                </div>
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
+                  <button onClick={handleSaveTrigger} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    {editingTriggerId ? 'Сохранить' : 'Создать'}
+                  </button>
+                  <button onClick={() => {
+                    handleSaveTrigger();
+                    // Reset form for creating another
+                    setTriggerName('');
+                    setTriggerCondition('');
+                    setTriggerActions([{ id: '1', action: '' }]);
+                    setTriggerCancelMessage('');
+                    setTriggerRunLimit(0);
+                  }} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    Создать и создать еще один
+                  </button>
+                  <button onClick={() => setIsTriggerModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    Отменить
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'chains' && (
+        // ... (Chains tab content code - reused from previous turn)
+        <div className="space-y-6 mt-6">
+          {/* ... (Chains implementation) ... */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between transition-colors">
+            <div>
+              <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Цепочки</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Автоматизируйте отправку последующих сообщений и выполнение действий по расписанию.</p>
+            </div>
+            <button onClick={handleCreateChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors">Создать</button>
+          </div>
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
+            {chains.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-6">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4">
+                  <svg className="w-8 h-8 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">Не найдено Цепочки</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Создать Цепочки для старта</p>
+              </div>
+            ) : (
+              <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Шаги</th><th className="px-4 py-3 text-right"></th></tr></thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {chains.map(chain => (
+                    <tr key={chain.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                      <td className="p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></td>
+                      <td className="px-4 py-4 text-sm font-medium"><button onClick={() => handleEditChain(chain)} className="text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">{chain.name}</button></td>
+                      <td className="px-4 py-4"><Toggle checked={chain.isActive} onChange={() => toggleChainStatus(chain.id)} /></td>
+                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{chain.steps.length}</td>
+                      <td className="px-4 py-4 text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-4">
+                          <button onClick={() => handleEditChain(chain)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
+                          <button onClick={() => handleDeleteChain(chain.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> Удалить</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {/* Pagination Mock */}
+            {chains.length > 0 && (
+              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between sm:px-6"><div className="text-sm text-gray-700 dark:text-gray-300">Показано с 1 по {chains.length} из {chains.length}</div></div>
+            )}
+          </div>
+          {/* Chain Modal */}
+          {isChainModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsChainModalOpen(false)} />
+              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col transition-colors animate-fadeIn">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingChainId ? 'Редактировать Цепочку' : 'Создать Цепочку'}</h2>
+                  <button onClick={() => setIsChainModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
+                    <input
+                      type="text"
+                      value={chainName}
+                      onChange={(e) => setChainName(e.target.value)}
+                      placeholder="Например, Follow-up"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                    />
+                  </div>
+
+                  {/* Active */}
+                  <div className="flex items-center gap-3">
+                    <Toggle checked={chainActive} onChange={setChainActive} />
+                    <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                  </div>
+
+                  {/* Conditions Accordion */}
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setIsChainConditionsOpen(!isChainConditionsOpen)}
+                      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
+                          <Settings size={18} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">Условия</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Выберите, когда запускать эту цепочку</div>
+                        </div>
+                      </div>
+                      {isChainConditionsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+
+                    {isChainConditionsOpen && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-5 bg-white dark:bg-gray-800">
+                        <div className="flex items-center gap-3">
+                          <Toggle checked={chainAllStages} onChange={setChainAllStages} />
+                          <span className="text-sm text-gray-900 dark:text-white">Любой этап сделки, разрешённый для этого агента ИИ</span>
+                        </div>
+
+                        {!chainAllStages && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Этапы сделки<span className="text-red-500">*</span></label>
+                            <div className="relative">
+                              <select
+                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none focus:ring-2 focus:ring-blue-500"
+                                value={chainStages[0] || ''}
+                                onChange={(e) => setChainStages([e.target.value])}
+                              >
+                                <option value="">Выберите этапы сделки...</option>
+                                {MOCK_PIPELINES[0].stages.map(stage => (
+                                  <option key={stage.id} value={stage.id}>{stage.name}</option>
+                                ))}
+                              </select>
+                              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Если выбранный этап не разрешён в настройках воронки агента ИИ, цепочка не запустится и дальнейшие шаги не будут выполнены.</p>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Не запускать цепочку, когда</label>
+                          <textarea
+                            value={chainExcludeCondition}
+                            onChange={(e) => setChainExcludeCondition(e.target.value)}
+                            rows={3}
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                            placeholder="например, клиент попросил не писать или клиенту больше не нужна помощь и т. д."
+                          />
+                          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Пропускать цепочку, когда это правило истинно (оставьте пустым, если это не требуется).</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Steps Accordion */}
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setIsChainStepsOpen(!isChainStepsOpen)}
+                      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
+                          <List size={18} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">Шаги</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Добавьте действия для этой цепочки</div>
+                        </div>
+                      </div>
+                      {isChainStepsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+
+                    {isChainStepsOpen && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-4">
+                        {chainSteps.map((step, stepIndex) => (
+                          <div key={step.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
+                            {/* Step Header */}
+                            <div className="flex items-center justify-between p-3 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                              <div className="flex items-center gap-3">
+                                <div className="text-gray-300 cursor-move">
+                                  <ArrowUp size={14} className="mb-0.5" />
+                                  <ArrowDown size={14} />
+                                </div>
+                                <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
+                                  <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
+                                    {stepIndex + 1}
+                                  </div>
+                                  Шаг
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => removeChainStep(step.id)} className="text-red-500 hover:text-red-700 p-1">
+                                  <Trash2 size={16} />
+                                </button>
+                                <ChevronUp size={16} className="text-gray-400" />
+                              </div>
+                            </div>
+
+                            <div className="p-4 space-y-4">
+                              {/* Time Delay */}
+                              <div className="bg-gray-50 dark:bg-gray-700/30 rounded-md p-3 border border-gray-100 dark:border-gray-700">
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Время ожидания после предыдущего сообщения</label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="number"
+                                    value={step.delayValue}
+                                    onChange={(e) => {
+                                      const newSteps = [...chainSteps];
+                                      newSteps[stepIndex].delayValue = parseInt(e.target.value) || 0;
+                                      setChainSteps(newSteps);
+                                    }}
+                                    className="w-20 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                  />
+                                  <div className="relative flex-1">
+                                    <select
+                                      value={step.delayUnit}
+                                      onChange={(e) => {
+                                        const newSteps = [...chainSteps];
+                                        newSteps[stepIndex].delayUnit = e.target.value;
+                                        setChainSteps(newSteps);
+                                      }}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                    >
+                                      <option value="Минуты">Минуты</option>
+                                      <option value="Часы">Часы</option>
+                                      <option value="Дни">Дни</option>
+                                    </select>
+                                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Actions List */}
+                              <div>
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Действия<span className="text-red-500">*</span></label>
+                                <div className="space-y-3">
+                                  {step.actions.map((action, actionIndex) => (
+                                    <div key={action.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800 relative group">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <div className="text-gray-300 cursor-move">
+                                            <ArrowUp size={12} className="mb-0.5" />
+                                            <ArrowDown size={12} />
+                                          </div>
+                                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            {action.type === 'generate_message' ? 'Сгенерировать сообщение' : 'Действие'}
+                                          </span>
+                                        </div>
+                                        <button
+                                          onClick={() => removeChainAction(step.id, action.id)}
+                                          className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+
+                                      <div className="space-y-3">
+                                        <div>
+                                          <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Выберите действие<span className="text-red-500">*</span></label>
+                                          <div className="relative">
+                                            <select
+                                              value={action.type}
+                                              onChange={(e) => {
+                                                const newSteps = [...chainSteps];
+                                                newSteps[stepIndex].actions[actionIndex].type = e.target.value;
+                                                setChainSteps(newSteps);
+                                              }}
+                                              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                            >
+                                              <option value="generate_message">Сгенерировать сообщение</option>
+                                              <option value="send_message">Отправить сообщение</option>
+                                            </select>
+                                            <X size={14} className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                          </div>
+                                        </div>
+
+                                        <div>
+                                          <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Инструкция<span className="text-red-500">*</span></label>
+                                          <textarea
+                                            value={action.instruction}
+                                            onChange={(e) => {
+                                              const newSteps = [...chainSteps];
+                                              newSteps[stepIndex].actions[actionIndex].instruction = e.target.value;
+                                              setChainSteps(newSteps);
+                                            }}
+                                            rows={3}
+                                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                            placeholder="например: попросите клиента подтвердить заказ"
+                                          />
+                                          <p className="mt-1 text-[10px] text-gray-400">ИИ создаст персонализированное сообщение на основе этой инструкции и контекста разговора.</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-3 flex justify-center">
+                                  <button
+                                    onClick={() => addChainAction(step.id)}
+                                    className="px-4 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                                  >
+                                    Добавить действие
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="flex justify-center pt-2">
+                          <button
+                            onClick={addChainStep}
+                            className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
+                          >
+                            Добавить шаг
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Schedule Accordion */}
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setIsChainScheduleOpen(!isChainScheduleOpen)}
+                      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
+                          <Clock size={18} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">Рабочие часы</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Цепочка выполняется только в указанные часы. В остальное время она переносит выполнение на следующий рабочий день.</div>
+                        </div>
+                      </div>
+                      {isChainScheduleOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+
+                    {isChainScheduleOpen && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4 bg-white dark:bg-gray-800">
+                        {chainSchedule.map((day) => (
+                          <div key={day.day} className="flex items-center justify-between py-1">
+                            <div className="flex items-center gap-3 w-40">
+                              <Toggle checked={day.enabled} onChange={() => toggleWorkingDay(day.day)} />
+                              <span className={`text-sm ${day.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{day.day}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="relative">
+                                <input
+                                  type="time"
+                                  value={day.start}
+                                  disabled={!day.enabled}
+                                  onChange={(e) => {
+                                    const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
+                                    setChainSchedule(newSchedule);
+                                  }}
+                                  className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              </div>
+                              <div className="relative">
+                                <input
+                                  type="time"
+                                  value={day.end}
+                                  disabled={!day.enabled}
+                                  onChange={(e) => {
+                                    const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
+                                    setChainSchedule(newSchedule);
+                                  }}
+                                  className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Settings Accordion */}
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setIsChainSettingsOpen(!isChainSettingsOpen)}
+                      className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
+                          <Settings2 size={18} />
+                        </div>
+                        <div className="text-left">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">Дополнительные настройки</div>
+                        </div>
+                      </div>
+                      {isChainSettingsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+
+                    {isChainSettingsOpen && (
+                      <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4 bg-white dark:bg-gray-800">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Лимит запусков в чате</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              value={chainRunLimit}
+                              onChange={(e) => setChainRunLimit(parseInt(e.target.value) || 0)}
+                              min="0"
+                              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">раз</span>
+                          </div>
+                          <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Максимальное количество запусков этой цепочки в одном чате. Установите 0 для неограниченного количества.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
+                  <button onClick={handleSaveChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    {editingChainId ? 'Сохранить' : 'Создать'}
+                  </button>
+                  <button onClick={() => setIsChainModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    Отменить
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   );
 };
+
+export default AgentEditor;

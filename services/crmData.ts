@@ -1,52 +1,41 @@
 import { CrmPipeline, CrmField } from '../types';
 
-// Simulating data fetched from a connected CRM (e.g., HubSpot, AmoCRM, Bitrix24)
+// Default pipelines shown before CRM synchronization
 export const MOCK_PIPELINES: CrmPipeline[] = [
   {
-    id: 'sales_funnel_1',
-    name: 'GENERATION LEAD',
+    id: 'default_sales',
+    name: 'Продажи',
     stages: [
-      { id: 'new_lead', name: 'Сделка не распределена' },
-      { id: 'qualification', name: 'Сделка распределена' },
-      { id: 'social_media', name: 'Social media' },
-      { id: 'presentation', name: 'Презентация' },
-      { id: 'contract', name: 'Договор' },
+      { id: 'new', name: 'Новый' },
+      { id: 'contact', name: 'Первичный контакт' },
+      { id: 'qualification', name: 'Квалификация' },
+      { id: 'proposal', name: 'Предложение' },
+      { id: 'negotiation', name: 'Переговоры' },
+      { id: 'closed_won', name: 'Успешно завершено' },
+      { id: 'closed_lost', name: 'Отказ' }
     ]
   },
   {
-    id: 'work_visa_poland',
-    name: 'WORK VISA IN POLAND',
+    id: 'default_support',
+    name: 'Поддержка',
     stages: [
-      { id: 'docs_collection', name: 'Сбор документов' },
-      { id: 'submission', name: 'Подача' },
-      { id: 'visa_received', name: 'Виза получена' },
+      { id: 'new_request', name: 'Новый запрос' },
+      { id: 'in_progress', name: 'В работе' },
+      { id: 'waiting_response', name: 'Ожидание ответа' },
+      { id: 'resolved', name: 'Решено' },
+      { id: 'closed', name: 'Закрыто' }
     ]
   },
   {
-    id: 'seasonal_visa',
-    name: 'SEASONAL VISA IN POLAND',
+    id: 'default_onboarding',
+    name: 'Онбординг',
     stages: [
-      { id: 'stage_1', name: 'Этап 1' },
-      { id: 'stage_2', name: 'Этап 2' },
+      { id: 'new_client', name: 'Новый клиент' },
+      { id: 'documentation', name: 'Документы' },
+      { id: 'setup', name: 'Настройка' },
+      { id: 'training', name: 'Обучение' },
+      { id: 'active', name: 'Активен' }
     ]
-  },
-  {
-    id: 'study_georgia',
-    name: 'STUDY VISA IN GEORGIA',
-    stages: [
-      { id: 'consultation', name: 'Консультация' },
-      { id: 'enrollment', name: 'Зачисление' }
-    ]
-  },
-  {
-    id: 'agent_partners',
-    name: 'AGENT PARTNERSHIP',
-    stages: []
-  },
-  {
-    id: 'product_vendors',
-    name: 'PRODUCT VENDORS (PARTNERSHIP)',
-    stages: []
   }
 ];
 
