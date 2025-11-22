@@ -1,7 +1,21 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(cat:*)",
+      "Bash([ -f .env ])",
+      "Bash([ -f \"/Users/maksimgolovaty/Library/Mobile Documents/com~apple~CloudDocs/Development/ai-agent-platform/backend/.env\" ])",
+      "Bash([ -d \"/Users/maksimgolovaty/Library/Mobile Documents/com~apple~CloudDocs/Development/ai-agent-platform/backend/node_modules\" ])",
+      "Bash(cp:*)",
+      "Bash([ -f \"/Users/maksimgolovaty/Library/Mobile Documents/com~apple~CloudDocs/Development/ai-agent-platform/.env.local\" ])",
+      "Bash(npm install:*)",
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(curl:*)",
+      "Bash(cd:*)",
+      "Bash(git add .claude/settings.local.json backend/prisma/schema.prisma src/contexts/AuthContext.tsx src/pages/Auth.tsx src/services/api/apiClient.ts src/services/api/auth.service.ts tsconfig.json vite-env.d.ts)"
     ],
     "deny": [],
     "ask": []

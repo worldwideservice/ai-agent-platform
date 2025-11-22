@@ -33,12 +33,16 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     // Если 401 - токен невалиден, очищаем localStorage
-    if (error.response?.status === 401) {
+    // НО не делаем этого для запросов на /auth/login и /auth/register
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
+                           error.config?.url?.includes('/auth/register');
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
 
-      // Можно добавить редирект на страницу логина
-      window.location.href = '/login';
+      // В SPA не нужен hard redirect - React сам покажет страницу входа
+      // window.location.href = '/login';
     }
 
     // Логируем ошибку в консоль для отладки

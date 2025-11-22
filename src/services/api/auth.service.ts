@@ -26,12 +26,15 @@ class AuthService {
    * Вход в систему
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
+    console.log('🔐 authService.login - sending request to API');
     const response = await apiClient.post<AuthResponse>('/auth/login', data);
+    console.log('✅ API response received:', response.data);
 
     // Сохраняем токен и пользователя в localStorage
     if (response.data.token) {
       localStorage.setItem('auth_token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      console.log('✅ Token and user saved to localStorage');
     }
 
     return response.data;

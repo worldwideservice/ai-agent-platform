@@ -17,7 +17,7 @@ model User {
   email     String   @unique
   password  String
   name      String?
-  role      UserRole @default(USER)
+  role      String   @default("USER") // USER или ADMIN
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -29,28 +29,23 @@ model User {
   @@map("users")
 }
 
-enum UserRole {
-  USER
-  ADMIN
-}
-
 // Модель AI агента
 model Agent {
   id                 String   @id @default(cuid())
   name               String
   isActive           Boolean  @default(false)
   model              String   @default("Google Gemini 2.5 Flash")
-  systemInstructions String?  @db.Text
+  systemInstructions String?
 
-  // Настройки воронок и каналов (JSON для гибкости)
-  pipelineSettings   Json?
-  channelSettings    Json?
-  kbSettings         Json?
+  // Настройки воронок и каналов (JSON как STRING для SQLite)
+  pipelineSettings   String?  // JSON as string
+  channelSettings    String?  // JSON as string
+  kbSettings         String?  // JSON as string
 
   // CRM интеграция
   crmType            String?  // 'kommo', 'bitrix24', etc
   crmConnected       Boolean  @default(false)
-  crmData            Json?    // Храним данные из CRM
+  crmData            String?  // JSON as string
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -89,11 +84,11 @@ model KbCategory {
 model KbArticle {
   id               Int      @id @default(autoincrement())
   title            String
-  content          String   @db.Text
+  content          String
   isActive         Boolean  @default(true)
 
-  // Связи со статьями (many-to-many)
-  relatedArticles  String[] // Массив ID связанных статей
+  // Связанные статьи как строка с разделителями
+  relatedArticles  String?  // Comma-separated IDs: "1,2,3"
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -141,8 +136,8 @@ model UserSettings {
 model ChatLog {
   id        String   @id @default(cuid())
   agentId   String
-  message   String   @db.Text
-  response  String   @db.Text
+  message   String
+  response  String
   model     String
   userId    String
 

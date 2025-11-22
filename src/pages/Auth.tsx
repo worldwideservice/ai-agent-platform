@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Auth: React.FC = () => {
@@ -6,27 +6,86 @@ export const Auth: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Автоматически скрывать success toast через 3 секунды
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔐 Form submitted:', { isLogin, email });
     setError('');
+    setSuccess('');
     setIsLoading(true);
 
     try {
       if (isLogin) {
+        // ВХОД
+        console.log('🔐 Calling login...');
         await login({ email, password });
+        console.log('✅ Login successful!');
+        setSuccess('Вход выполнен успешно!');
       } else {
-        await register({ email, password, name: name || undefined });
+        // РЕГИСТРАЦИЯ
+        // Валидация
+        if (!organizationName.trim()) {
+          setError('Введите название организации');
+          setIsLoading(false);
+          return;
+        }
+
+        if (password.length < 6) {
+          setError('Пароль должен содержать минимум 6 символов');
+          setIsLoading(false);
+          return;
+        }
+
+        if (password !== confirmPassword) {
+          setError('Пароли не совпадают');
+          setIsLoading(false);
+          return;
+        }
+
+        console.log('🔐 Calling register...');
+        await register({ email, password, name: organizationName.trim() });
+        console.log('✅ Register successful!');
+
+        // Показываем успешное сообщение
+        setSuccess('Регистрация успешна! Теперь войдите в систему.');
+
+        // Очищаем форму
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setOrganizationName('');
+
+        // Через 2 секунды переключаем на форму входа
+        setTimeout(() => {
+          setIsLogin(true);
+          setSuccess('');
+        }, 2000);
       }
     } catch (err: any) {
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Произошла ошибка. Проверьте данные и попробуйте снова.'
-      );
+      console.error('❌ Auth error:', err);
+      const errorMessage = err.response?.data?.message || err.message;
+
+      // Переводим ошибки на русский
+      if (errorMessage?.includes('already exists')) {
+        setError('Пользователь с таким email уже существует');
+      } else if (errorMessage?.includes('Invalid email or password')) {
+        setError('Неверный email или пароль');
+      } else {
+        setError(errorMessage || 'Произошла ошибка. Проверьте данные и попробуйте снова.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -76,13 +135,14 @@ export const Auth: React.FC = () => {
                 fontSize: '14px',
                 fontWeight: '500',
               }}>
-                Имя
+                Название организации *
               </label>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ваше имя"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                placeholder="ООО Ваша Компания"
+                required
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -104,7 +164,7 @@ export const Auth: React.FC = () => {
               fontSize: '14px',
               fontWeight: '500',
             }}>
-              Email
+              Email *
             </label>
             <input
               type="email"
@@ -124,7 +184,7 @@ export const Auth: React.FC = () => {
             />
           </div>
 
-          <div style={{ marginBottom: '24px' }}>
+          <div style={{ marginBottom: isLogin ? '24px' : '16px' }}>
             <label style={{
               display: 'block',
               marginBottom: '8px',
@@ -132,7 +192,7 @@ export const Auth: React.FC = () => {
               fontSize: '14px',
               fontWeight: '500',
             }}>
-              Пароль
+              Пароль *
             </label>
             <input
               type="password"
@@ -153,6 +213,56 @@ export const Auth: React.FC = () => {
             />
           </div>
 
+          {!isLogin && (
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '8px',
+                color: '#4a5568',
+                fontSize: '14px',
+                fontWeight: '500',
+              }}>
+                Подтвердите пароль *
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #e2e8f0',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+              />
+            </div>
+          )}
+
+          {/* Success Toast */}
+          {success && (
+            <div style={{
+              background: '#c6f6d5',
+              color: '#22543d',
+              padding: '12px',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <span>✓</span>
+              {success}
+            </div>
+          )}
+
+          {/* Error Toast */}
           {error && (
             <div style={{
               background: '#fed7d7',
@@ -161,7 +271,11 @@ export const Auth: React.FC = () => {
               borderRadius: '8px',
               marginBottom: '16px',
               fontSize: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
             }}>
+              <span>✕</span>
               {error}
             </div>
           )}
@@ -198,6 +312,12 @@ export const Auth: React.FC = () => {
             onClick={() => {
               setIsLogin(!isLogin);
               setError('');
+              setSuccess('');
+              // Очищаем поля при переключении
+              setEmail('');
+              setPassword('');
+              setConfirmPassword('');
+              setOrganizationName('');
             }}
             style={{
               background: 'none',
