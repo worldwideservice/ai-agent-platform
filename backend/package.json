@@ -13,12 +13,19 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts"
   },
-  "keywords": ["ai", "agent", "crm", "api"],
+  "keywords": [
+    "ai",
+    "agent",
+    "crm",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/better-sqlite3": "^7.6.13",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
