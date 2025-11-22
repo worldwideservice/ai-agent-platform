@@ -36,16 +36,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const token = authService.getToken();
       const savedUser = authService.getUser();
 
+      console.log('🔄 Initializing auth:', { hasToken: !!token, hasUser: !!savedUser });
+
       if (token && savedUser) {
-        try {
-          // Проверяем валидность токена, получая текущего пользователя с сервера
-          const { user: currentUser } = await authService.getCurrentUser();
-          setUser(currentUser);
-        } catch (error) {
-          // Токен невалиден, очищаем данные
-          authService.logout();
-          setUser(null);
-        }
+        // Используем сохраненного пользователя из localStorage
+        // Валидность токена проверим при первом API запросе
+        setUser(savedUser);
+        console.log('✅ User loaded from localStorage:', savedUser);
       }
 
       setIsLoading(false);

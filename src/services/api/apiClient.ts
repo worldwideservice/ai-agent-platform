@@ -19,6 +19,8 @@ apiClient.interceptors.request.use(
 
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('⚠️ No auth token found for request:', config.url);
     }
 
     return config;
@@ -32,25 +34,16 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    // Если 401 - токен невалиден, очищаем localStorage
-    // НО не делаем этого для запросов на /auth/login и /auth/register
-    const isAuthEndpoint = error.config?.url?.includes('/auth/login') ||
-                           error.config?.url?.includes('/auth/register');
-
-    if (error.response?.status === 401 && !isAuthEndpoint) {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
-
-      // В SPA не нужен hard redirect - React сам покажет страницу входа
-      // window.location.href = '/login';
-    }
-
     // Логируем ошибку в консоль для отладки
     console.error('API Error:', {
+      url: error.config?.url,
       message: error.message,
       status: error.response?.status,
       data: error.response?.data,
     });
+
+    // НЕ очищаем токен автоматически - пусть AuthContext сам решает
+    // Это предотвратит случайное разлогинивание при временных ошибках
 
     return Promise.reject(error);
   }
