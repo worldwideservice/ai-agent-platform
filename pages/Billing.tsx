@@ -104,7 +104,7 @@ export const Billing: React.FC = () => {
        {/* Current Plan Card - Polished to match screenshot */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm">
          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
-            <div className="w-full space-y-5">
+            <div className="w-full md:flex-1 space-y-5">
                <div className="flex flex-wrap items-baseline gap-2">
                  <span className="text-xl font-bold text-gray-900 dark:text-white">Ваш текущий план:</span>
                  <span className="text-xl font-bold text-gray-500 dark:text-gray-400">Пробный период</span>
