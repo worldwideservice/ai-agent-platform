@@ -15,8 +15,9 @@ import { KbArticleCreate } from './pages/KbArticleCreate';
 import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
-import { useAuth } from './contexts/AuthContext';
-import { Auth } from './pages/Auth';
+import { useAuth } from './src/contexts/AuthContext';
+import { Auth } from './src/pages/Auth';
+import { agentService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
 const INITIAL_KB_CATEGORIES = [
@@ -24,10 +25,11 @@ const INITIAL_KB_CATEGORIES = [
 ];
 
 const App: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
 
   // Показываем загрузку пока проверяем аутентификацию
-  if (isLoading) {
+  if (authLoading) {
     return (
       <div style={{
         height: '100vh',
@@ -51,11 +53,28 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('currentPage');
     return (saved as Page) || 'dashboard';
   });
-  const [agents, setAgents] = useState<Agent[]>(() => {
-    const saved = localStorage.getItem('agents');
-    return saved ? JSON.parse(saved) : INITIAL_AGENTS;
-  });
+  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+
+  // Загрузка агентов из API при авторизации
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAgents();
+    }
+  }, [isAuthenticated]);
+
+  const loadAgents = async () => {
+    try {
+      setIsLoadingAgents(true);
+      const agentsData = await agentService.getAllAgents();
+      setAgents(agentsData as unknown as Agent[]);
+    } catch (error: any) {
+      console.error('Failed to load agents:', error);
+      showToast('error', 'Не удалось загрузить агентов');
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  };
 
   // KB Categories state
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
@@ -77,11 +96,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
   }, [currentCategoryId]);
-
-  // Save agents to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('agents', JSON.stringify(agents));
-  }, [agents]);
 
   // Save kbCategories to localStorage whenever they change
   useEffect(() => {
@@ -135,8 +149,25 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  const handleAddAgent = (agent: Agent) => {
-    setAgents(prev => [...prev, agent]);
+  const handleAddAgent = async (agentData: Omit<Agent, 'id' | 'createdAt'>) => {
+    try {
+      const newAgent = await agentService.createAgent({
+        name: agentData.name,
+        model: agentData.model,
+        systemInstructions: agentData.systemInstructions,
+        isActive: agentData.isActive,
+        pipelineSettings: agentData.pipelineSettings,
+        channelSettings: agentData.channelSettings,
+        kbSettings: agentData.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список агентов
+      showToast('success', 'Агент создан');
+      return newAgent;
+    } catch (error: any) {
+      console.error('Failed to create agent:', error);
+      showToast('error', error.response?.data?.message || 'Не удалось создать агента');
+      throw error;
+    }
   };
 
   const handleAddArticle = (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => {
@@ -156,45 +187,73 @@ const App: React.FC = () => {
     showToast('success', 'Статья создана');
   };
 
-  const handleToggleAgentStatus = (id: string) => {
-    setAgents(prevAgents =>
-      prevAgents.map(agent =>
-        agent.id === id ? { ...agent, isActive: !agent.isActive } : agent
-      )
-    );
+  const handleToggleAgentStatus = async (id: string) => {
+    try {
+      await agentService.toggleAgentStatus(id);
+      await loadAgents(); // Перезагрузить список
+      showToast('success', 'Статус изменен');
+    } catch (error: any) {
+      console.error('Failed to toggle agent status:', error);
+      showToast('error', 'Не удалось изменить статус');
+    }
   };
 
   const handleDeleteAgent = (id: string) => {
     const agent = agents.find(a => a.id === id);
     if (!agent) return;
 
-    showConfirmation(`Удалить ${agent.name}`, () => {
-      setAgents(prev => prev.filter(agent => agent.id !== id));
-      hideConfirmation();
-      showToast('success', 'Удалено');
+    showConfirmation(`Удалить ${agent.name}`, async () => {
+      try {
+        await agentService.deleteAgent(id);
+        await loadAgents(); // Перезагрузить список
+        hideConfirmation();
+        showToast('success', 'Удалено');
+      } catch (error: any) {
+        console.error('Failed to delete agent:', error);
+        showToast('error', 'Не удалось удалить агента');
+        hideConfirmation();
+      }
     });
   };
 
-  const handleCopyAgent = (agent: Agent) => {
-    const copiedAgent: Agent = {
-      ...agent,
-      id: Math.random().toString(36).substr(2, 9),
-      name: `${agent.name} (копия)`,
-      isActive: false,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setAgents(prev => [...prev, copiedAgent]);
-    showToast('success', `Создана копия: ${copiedAgent.name}`);
+  const handleCopyAgent = async (agent: Agent) => {
+    try {
+      const newAgent = await agentService.createAgent({
+        name: `${agent.name} (копия)`,
+        model: agent.model,
+        systemInstructions: agent.systemInstructions,
+        isActive: false,
+        pipelineSettings: agent.pipelineSettings,
+        channelSettings: agent.channelSettings,
+        kbSettings: agent.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список
+      showToast('success', `Создана копия: ${newAgent.name}`);
+    } catch (error: any) {
+      console.error('Failed to copy agent:', error);
+      showToast('error', 'Не удалось создать копию');
+    }
   };
 
-  const handleSaveAgent = (updatedAgent: Agent) => {
-    setAgents(prev => prev.map(agent =>
-      agent.id === updatedAgent.id ? updatedAgent : agent
-    ));
-    showToast('success', 'Изменения сохранены');
-    setEditingAgent(null);
-    setCurrentPage('agents');
+  const handleSaveAgent = async (updatedAgent: Agent) => {
+    try {
+      await agentService.updateAgent(updatedAgent.id, {
+        name: updatedAgent.name,
+        model: updatedAgent.model,
+        systemInstructions: updatedAgent.systemInstructions,
+        isActive: updatedAgent.isActive,
+        pipelineSettings: updatedAgent.pipelineSettings,
+        channelSettings: updatedAgent.channelSettings,
+        kbSettings: updatedAgent.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список
+      showToast('success', 'Изменения сохранены');
+      setEditingAgent(null);
+      setCurrentPage('agents');
+    } catch (error: any) {
+      console.error('Failed to save agent:', error);
+      showToast('error', error.response?.data?.message || 'Не удалось сохранить изменения');
+    }
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -318,7 +377,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard />;
-      case 'agents': return <Agents agents={agents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
+      case 'agents': return <Agents agents={agents} isLoading={isLoadingAgents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
       case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
       case 'chat': return <Chat agents={agents} />;

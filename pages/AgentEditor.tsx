@@ -17,7 +17,7 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 interface AgentEditorProps {
   agent: Agent | null;
   onCancel: () => void;
-  onSave: (agent: Agent) => void;
+  onSave: (agent: Agent) => Promise<void>;
   kbCategories: { id: string; name: string }[];
   onNavigate: (page: string) => void;
 }
@@ -98,6 +98,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [activeTab, setActiveTab] = useState<Tab>('main');
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
 
+  // --- Loading and Error States ---
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   // --- Modal States ---
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
   const [isChainModalOpen, setIsChainModalOpen] = useState(false);
@@ -122,19 +126,29 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
 
   // --- Save Handler ---
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!agent) return;
 
-    // Get data from basic settings
-    const basicData = basicSettingsRef.current?.getData() || {};
+    try {
+      setIsSaving(true);
+      setSaveError('');
 
-    // Merge with existing agent data
-    const updatedAgent: Agent = {
-      ...agent,
-      ...basicData
-    };
+      // Get data from basic settings
+      const basicData = basicSettingsRef.current?.getData() || {};
 
-    onSave(updatedAgent);
+      // Merge with existing agent data
+      const updatedAgent: Agent = {
+        ...agent,
+        ...basicData
+      };
+
+      await onSave(updatedAgent);
+    } catch (error: any) {
+      setSaveError(error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.');
+      console.error('Failed to save agent:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // --- Chains Data ---
@@ -601,9 +615,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
           {/* Footer Actions (Advanced) */}
           <div className="flex items-center gap-4 pt-4">
-            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
-              Сохранить
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить'}
             </button>
+            {saveError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+            )}
             <button
               onClick={onCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
@@ -801,9 +822,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
           {/* Footer Actions */}
           <div className="flex items-center gap-4 pt-4 mt-6">
-            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
-              Сохранить
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить'}
             </button>
+            {saveError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+            )}
             <button
               onClick={onCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"

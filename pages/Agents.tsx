@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Edit, Copy, Trash2, Search, LayoutGrid, X, ChevronDown } from 'lucide-react';
+import { Edit, Copy, Trash2, Search, LayoutGrid, X, ChevronDown, Loader2 } from 'lucide-react';
 import { Agent } from '../types';
 
 interface AgentsProps {
   agents: Agent[];
+  isLoading?: boolean;
   onToggleAgentStatus: (id: string) => void;
   onDeleteAgent: (id: string) => void;
   onCopyAgent: (agent: Agent) => void;
@@ -13,6 +14,7 @@ interface AgentsProps {
 
 export const Agents: React.FC<AgentsProps> = ({
   agents,
+  isLoading = false,
   onToggleAgentStatus,
   onDeleteAgent,
   onCopyAgent,
@@ -88,7 +90,12 @@ export const Agents: React.FC<AgentsProps> = ({
         )}
 
         {/* Content */}
-        {agents.length > 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center text-center py-16">
+            <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Загрузка агентов...</h3>
+          </div>
+        ) : agents.length > 0 ? (
           <>
             {/* Table */}
             <table className="w-full">
