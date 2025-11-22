@@ -12,7 +12,7 @@ import {
     ArrowUp,
     ArrowDown
 } from 'lucide-react';
-import { MOCK_CRM_FIELDS } from '../services/crmData';
+import { DEAL_FIELDS, CONTACT_FIELDS } from '../services/crmData';
 
 interface UpdateRule {
     id: string;
@@ -29,8 +29,8 @@ interface AgentDealsContactsProps {
 export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel, crmConnected }) => {
     // --- State ---
     // Data Access
-    const [readDealFields, setReadDealFields] = useState<string[]>(['stage_id']);
-    const [readContactFields, setReadContactFields] = useState<string[]>(['f_name']);
+    const [readDealFields, setReadDealFields] = useState<string[]>(['deal_stage']);
+    const [readContactFields, setReadContactFields] = useState<string[]>(['contact_name']);
     const [isDealAccessOpen, setIsDealAccessOpen] = useState(true);
     const [isContactAccessOpen, setIsContactAccessOpen] = useState(true);
 
@@ -51,7 +51,9 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
     };
 
     const getFieldName = (fieldId: string) => {
-        return MOCK_CRM_FIELDS.find(f => f.id === fieldId)?.label || fieldId;
+        const dealField = DEAL_FIELDS.find(f => f.id === fieldId);
+        const contactField = CONTACT_FIELDS.find(f => f.id === fieldId);
+        return dealField?.label || contactField?.label || fieldId;
     };
 
     // Dynamic List Helpers
@@ -101,7 +103,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
         selectedIds: string[],
         onChange: (id: string) => void,
         placeholder: string,
-        availableFields: typeof MOCK_CRM_FIELDS
+        availableFields: typeof DEAL_FIELDS | typeof CONTACT_FIELDS
     }) => (
         <div className="bg-gray-50 dark:bg-gray-750/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">{label}</label>
@@ -148,7 +150,8 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
         </div>
     );
 
-    const availableCrmFields = crmConnected ? MOCK_CRM_FIELDS : [];
+    const availableDealFields = crmConnected ? DEAL_FIELDS : [];
+    const availableContactFields = crmConnected ? CONTACT_FIELDS : [];
 
     return (
         <div className="space-y-6 mt-6">
@@ -191,7 +194,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                     selectedIds={readDealFields}
                                     onChange={(id) => toggleSelection(id, readDealFields, setReadDealFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
-                                    availableFields={availableCrmFields}
+                                    availableFields={availableDealFields}
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Дополнительные поля добавляют лишний контекст и могут снизить точность ответов</p>
                             </div>
@@ -221,7 +224,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                     selectedIds={readContactFields}
                                     onChange={(id) => toggleSelection(id, readContactFields, setReadContactFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
-                                    availableFields={availableCrmFields}
+                                    availableFields={availableContactFields}
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Большее количество полей добавляет дополнительный контекст и может снизить точность ответов.</p>
                             </div>
@@ -285,7 +288,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
                                                             <option value="">Выберите поле для обновления</option>
-                                                            {availableCrmFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                                                            {availableDealFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>
@@ -366,7 +369,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
                                                             <option value="">Выберите поле для обновления</option>
-                                                            {availableCrmFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                                                            {availableContactFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>
