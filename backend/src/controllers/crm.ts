@@ -2,6 +2,68 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
 
+// Mock data - в будущем заменим на реальные данные из Kommo API
+const MOCK_PIPELINES = [
+  {
+    id: 'default_sales',
+    name: 'Продажи',
+    stages: [
+      { id: 'new', name: 'Новый' },
+      { id: 'contact', name: 'Первичный контакт' },
+      { id: 'qualification', name: 'Квалификация' },
+      { id: 'proposal', name: 'Предложение' },
+      { id: 'negotiation', name: 'Переговоры' },
+      { id: 'closed_won', name: 'Успешно завершено' },
+      { id: 'closed_lost', name: 'Отказ' }
+    ]
+  },
+  {
+    id: 'default_support',
+    name: 'Поддержка',
+    stages: [
+      { id: 'new_request', name: 'Новый запрос' },
+      { id: 'in_progress', name: 'В работе' },
+      { id: 'waiting_response', name: 'Ожидание ответа' },
+      { id: 'resolved', name: 'Решено' },
+      { id: 'closed', name: 'Закрыто' }
+    ]
+  },
+  {
+    id: 'default_onboarding',
+    name: 'Онбординг',
+    stages: [
+      { id: 'new_client', name: 'Новый клиент' },
+      { id: 'documentation', name: 'Документы' },
+      { id: 'setup', name: 'Настройка' },
+      { id: 'training', name: 'Обучение' },
+      { id: 'active', name: 'Активен' }
+    ]
+  }
+];
+
+const MOCK_CHANNELS = [
+  { id: 'whatsapp', name: 'WhatsApp' },
+  { id: 'telegram', name: 'Telegram' },
+  { id: 'instagram', name: 'Instagram' },
+  { id: 'facebook', name: 'Facebook Messenger' },
+  { id: 'email', name: 'Email' },
+  { id: 'viber', name: 'Viber' },
+];
+
+const DEAL_FIELDS = [
+  { id: 'deal_stage', key: 'stage_id', label: 'Этап сделки', type: 'select' },
+  { id: 'deal_name', key: 'name', label: 'Название сделки', type: 'text' },
+  { id: 'deal_budget', key: 'price', label: 'Бюджет', type: 'number' },
+  { id: 'deal_responsible', key: 'responsible_user_id', label: 'Ответственный пользователь', type: 'select' },
+];
+
+const CONTACT_FIELDS = [
+  { id: 'contact_name', key: 'name', label: 'Имя Контакта', type: 'text' },
+  { id: 'contact_phone', key: 'phone', label: 'Телефон', type: 'phone' },
+  { id: 'contact_email', key: 'email', label: 'Email', type: 'email' },
+  { id: 'contact_company', key: 'company', label: 'Компания', type: 'text' },
+];
+
 // POST /api/crm/sync - Синхронизировать CRM и создать тестовые данные
 export async function syncCRM(req: AuthRequest, res: Response) {
   try {
@@ -22,16 +84,23 @@ export async function syncCRM(req: AuthRequest, res: Response) {
       return;
     }
 
+    // Подготавливаем данные CRM для сохранения
+    const crmData = {
+      syncedAt: new Date().toISOString(),
+      status: 'active',
+      pipelines: MOCK_PIPELINES,
+      channels: MOCK_CHANNELS,
+      dealFields: DEAL_FIELDS,
+      contactFields: CONTACT_FIELDS,
+    };
+
     // Обновляем агента - помечаем CRM как подключенную
     await prisma.agent.update({
       where: { id: agentId },
       data: {
         crmType: crmType || 'Kommo',
         crmConnected: true,
-        crmData: JSON.stringify({
-          syncedAt: new Date().toISOString(),
-          status: 'active'
-        }),
+        crmData: JSON.stringify(crmData),
       },
     });
 
@@ -152,7 +221,10 @@ export async function syncCRM(req: AuthRequest, res: Response) {
       message: 'CRM синхронизирована успешно',
       contacts: createdContacts.length,
       deals: createdDeals.length,
+      pipelines: MOCK_PIPELINES.length,
+      channels: MOCK_CHANNELS.length,
       crmType: crmType || 'Kommo',
+      crmData: crmData,
     });
   } catch (error) {
     console.error('Error syncing CRM:', error);

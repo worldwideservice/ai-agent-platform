@@ -161,7 +161,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const result = await crmService.syncCRM(agent.id, 'Kommo');
       setKommoConnected(true);
       console.log('CRM синхронизирована:', result);
-      alert(`CRM успешно синхронизирована!\nКонтактов: ${result.contacts}\nСделок: ${result.deals}`);
+
+      alert(`CRM успешно синхронизирована!\nВоронок: ${result.pipelines || 0}\nКаналов: ${result.channels || 0}\nКонтактов: ${result.contacts}\nСделок: ${result.deals}`);
+
+      // Reload page to update agent with new crmData
+      window.location.reload();
     } catch (error: any) {
       console.error('Failed to sync CRM:', error);
       alert('Не удалось синхронизировать CRM. Попробуйте еще раз.');
@@ -838,6 +842,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             crmConnected={kommoConnected}
             kbCategories={kbCategories}
             onNavigateToKbArticles={() => onNavigate('kb-articles')}
+            onSyncCRM={handleSyncCRM}
           />
 
           {/* Footer Actions */}

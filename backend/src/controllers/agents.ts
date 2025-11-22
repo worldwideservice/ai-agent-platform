@@ -91,6 +91,7 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     if (data.model !== undefined) updateData.model = data.model;
     if (data.systemInstructions !== undefined) updateData.systemInstructions = data.systemInstructions;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+    if (data.checkBeforeSend !== undefined) updateData.checkBeforeSend = data.checkBeforeSend;
     if (data.pipelineSettings !== undefined) updateData.pipelineSettings = data.pipelineSettings;
     if (data.channelSettings !== undefined) updateData.channelSettings = data.channelSettings;
     if (data.kbSettings !== undefined) updateData.kbSettings = data.kbSettings;

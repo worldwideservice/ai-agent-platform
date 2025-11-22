@@ -22,9 +22,18 @@ export interface Agent {
   isActive: boolean;
   model: string;
   systemInstructions?: string;
+  checkBeforeSend?: boolean;
   pipelineId?: string;
   stageId?: string;
+  pipelineSettings?: string;
+  channelSettings?: string;
+  kbSettings?: string;
+  crmType?: string;
+  crmConnected?: boolean;
+  crmData?: string;
   createdAt: string;
+  updatedAt?: string;
+  userId?: string;
 }
 
 export interface KnowledgeCategory {

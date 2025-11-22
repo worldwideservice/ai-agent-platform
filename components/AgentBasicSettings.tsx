@@ -20,29 +20,39 @@ interface AgentBasicSettingsProps {
     crmConnected: boolean;
     kbCategories: { id: string; name: string }[];
     onNavigateToKbArticles: () => void;
+    onSyncCRM: () => Promise<void>;
 }
 
 export interface AgentBasicSettingsRef {
     getData: () => Partial<Agent>;
 }
 
-export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSettingsProps>(({ agent, onCancel, crmConnected, kbCategories, onNavigateToKbArticles }, ref) => {
+export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSettingsProps>(({ agent, onCancel, crmConnected, kbCategories, onNavigateToKbArticles, onSyncCRM }, ref) => {
+    // Parse CRM data from agent
+    const parseCrmData = () => {
+        if (!agent?.crmData) return null;
+        try {
+            return JSON.parse(agent.crmData);
+        } catch {
+            return null;
+        }
+    };
+
+    const crmData = parseCrmData();
+    const availablePipelines = crmData?.pipelines || MOCK_PIPELINES;
+    const availableChannels = crmData?.channels || MOCK_CHANNELS;
+
     // --- State ---
     // Profile
     const [name, setName] = useState(agent?.name || 'АИ ассистент');
     const [isActive, setIsActive] = useState(agent?.isActive || false);
     const [systemInstructions, setSystemInstructions] = useState(agent?.systemInstructions || 'Вы — полезный помощник.');
 
-    // Expose getData method via ref
-    useImperativeHandle(ref, () => ({
-        getData: () => ({
-            name,
-            isActive,
-            systemInstructions
-        })
-    }));
     // Interactions
-    const [checkBeforeSend, setCheckBeforeSend] = useState(false);
+    const [checkBeforeSend, setCheckBeforeSend] = useState(agent?.checkBeforeSend || false);
+
+    // Sync status
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Pipelines
     const [expandedPipelines, setExpandedPipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
@@ -62,6 +72,46 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     const [selectedKbCategories, setSelectedKbCategories] = useState<string[]>([]);
     const [kbCreateTask, setKbCreateTask] = useState(false);
     const [kbNoAnswerMessage, setKbNoAnswerMessage] = useState('Ответ на этот вопрос предоставит ваш персональный immigration advisor, когда свяжется с вами напрямую.');
+
+    // Expose getData method via ref
+    useImperativeHandle(ref, () => ({
+        getData: () => ({
+            name,
+            isActive,
+            systemInstructions,
+            checkBeforeSend,
+            pipelineSettings: JSON.stringify({
+                pipelines: Object.keys(activePipelines).filter(id => activePipelines[id]).reduce((acc, id) => {
+                    acc[id] = {
+                        name: availablePipelines.find(p => p.id === id)?.name || '',
+                        active: true,
+                        stages: pipelineStages[id] || []
+                    };
+                    return acc;
+                }, {} as Record<string, any>)
+            }),
+            channelSettings: JSON.stringify({
+                allChannels: channelsAll,
+                selected: selectedChannels
+            }),
+            kbSettings: JSON.stringify({
+                allCategories: kbAllCategories,
+                selectedCategories: selectedKbCategories,
+                createTaskIfNotFound: kbCreateTask,
+                noAnswerMessage: kbNoAnswerMessage
+            })
+        })
+    }));
+
+    // --- Handlers ---
+    const handleSyncCRM = async () => {
+        setIsSyncing(true);
+        try {
+            await onSyncCRM();
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     // --- Helpers ---
     const togglePipelineExpand = (id: string) => {
@@ -142,8 +192,6 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
         </div>
     );
 
-    const availableChannels = crmConnected ? MOCK_CHANNELS : [];
-
     return (
         <div className="space-y-6 mt-6">
 
@@ -207,16 +255,20 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         <Briefcase size={20} className="text-gray-400" />
                         <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки воронок</h2>
                     </div>
-                    <button className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors">
-                        <span className="w-3 h-3 rounded-full border-2 border-gray-400 border-t-transparent animate-spin hidden"></span>
-                        Синхронизировать настройки CRM
+                    <button
+                        onClick={handleSyncCRM}
+                        disabled={isSyncing}
+                        className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span className={`w-3 h-3 rounded-full border-2 border-gray-400 border-t-transparent ${isSyncing ? 'animate-spin' : 'hidden'}`}></span>
+                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
                     </button>
                 </div>
                 <div className="p-6">
                     <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Выберите воронки и этапы сделок, в которых этот агент должен работать</p>
 
                     <div className="space-y-4">
-                        {MOCK_PIPELINES.map(pipeline => (
+                        {availablePipelines.map(pipeline => (
                             <div key={pipeline.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                                 <div
                                     className="bg-gray-50 dark:bg-gray-750 px-4 py-3 flex items-center justify-between cursor-pointer"
