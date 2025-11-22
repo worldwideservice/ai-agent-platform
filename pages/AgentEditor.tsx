@@ -10,6 +10,7 @@ import { AgentDealsContacts } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
 import { Agent } from '../types';
 import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
+import { crmService } from '../src/services/api';
 // import Toggle from '../components/Toggle'; // Removed: Defined internally
 import { ConfirmationModal } from '../components/ConfirmationModal';
 // import Toast, { ToastRef } from '../components/Toast'; // Removed: Not used or incorrect
@@ -146,6 +147,24 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     } catch (error: any) {
       setSaveError(error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.');
       console.error('Failed to save agent:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- CRM Sync Handler ---
+  const handleSyncCRM = async () => {
+    if (!agent) return;
+
+    try {
+      setIsSaving(true);
+      const result = await crmService.syncCRM(agent.id, 'Kommo');
+      setKommoConnected(true);
+      console.log('CRM синхронизирована:', result);
+      alert(`CRM успешно синхронизирована!\nКонтактов: ${result.contacts}\nСделок: ${result.deals}`);
+    } catch (error: any) {
+      console.error('Failed to sync CRM:', error);
+      alert('Не удалось синхронизировать CRM. Попробуйте еще раз.');
     } finally {
       setIsSaving(false);
     }
@@ -736,11 +755,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <p className="text-sm text-gray-500 dark:text-gray-400">Включить или отключить эту интеграцию</p>
 
                   <button
-                    onClick={() => setKommoConnected(true)}
-                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit"
+                    onClick={handleSyncCRM}
+                    disabled={isSaving}
+                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw size={16} />
-                    Синхронизировать настройки CRM
+                    <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
+                    {isSaving ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
                   </button>
                 </div>
               </div>
