@@ -103,13 +103,13 @@ export const Billing: React.FC = () => {
           
        {/* Current Plan Card - Polished to match screenshot */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm">
-         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
-            <div className="w-full md:w-2/3 space-y-5">
+         <div className="flex flex-col md:flex-row items-start justify-between gap-6">
+            <div className="w-full space-y-5">
                <div className="flex flex-wrap items-baseline gap-2">
                  <span className="text-xl font-bold text-gray-900 dark:text-white">Ваш текущий план:</span>
                  <span className="text-xl font-bold text-gray-500 dark:text-gray-400">Пробный период</span>
                </div>
-               
+
                <div className="flex flex-wrap items-center gap-8">
                  <div className={`flex items-center gap-2 font-medium ${
                    subscription?.isActive ? 'text-[#22C55E]' : 'text-red-500'
@@ -138,9 +138,9 @@ export const Billing: React.FC = () => {
                   </div>
                </div>
             </div>
-            
-            <div className="w-full md:w-auto flex justify-end self-center md:self-auto">
-                <button className="bg-[#B91C1C] hover:bg-[#991B1B] text-white px-8 py-3 rounded-lg font-bold transition-colors shadow-sm whitespace-nowrap text-base">
+
+            <div className="w-full md:w-auto flex justify-end md:justify-start md:self-start md:mt-0">
+                <button className="bg-[#B91C1C] hover:bg-[#991B1B] text-white px-5 py-2 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap text-sm">
                   Управление подпиской
                 </button>
             </div>
@@ -196,7 +196,7 @@ export const Billing: React.FC = () => {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-stretch">
 
         {/* Trial Plan */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col transition-colors hover:border-gray-300 dark:hover:border-gray-600">
@@ -278,7 +278,7 @@ export const Billing: React.FC = () => {
         </div>
 
         {/* Scale Plan (Highlighted) */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-[#0078D4] dark:border-[#0078D4] p-6 flex flex-col relative shadow-xl transform md:-translate-y-4 transition-colors z-10">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-[#0078D4] dark:border-[#0078D4] p-6 flex flex-col relative shadow-xl transition-colors">
            <div className="absolute -top-3 right-4 bg-[#0078D4] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide shadow-sm">
              Самый популярный
            </div>
