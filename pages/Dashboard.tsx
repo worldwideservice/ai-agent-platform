@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -9,20 +9,69 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { TrendingUp, Bot, MessageSquare, Users } from 'lucide-react';
-
-// Chart data - empty until real data is collected
-const messagesData: { name: string; value: number }[] = [];
-const conversionsData: { name: string; value: number }[] = [];
-
-// Statistics - all zeros until real data is available
-const stats = [
-  { label: 'Активные агенты', value: '0', icon: Bot, change: '+0%', trend: 'up' as const },
-  { label: 'Всего сообщений', value: '0', icon: MessageSquare, change: '+0%', trend: 'up' as const },
-  { label: 'Новых лидов', value: '0', icon: Users, change: '+0%', trend: 'up' as const },
-  { label: 'Уровень отклика', value: '0%', icon: TrendingUp, change: '+0%', trend: 'up' as const }
-];
+import { analyticsService } from '../src/services/api';
 
 export const Dashboard: React.FC = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState([
+    { label: 'Активные агенты', value: '0', icon: Bot, change: '+0%', trend: 'up' as const },
+    { label: 'Всего сообщений', value: '0', icon: MessageSquare, change: '+0%', trend: 'up' as const },
+    { label: 'Новых лидов', value: '0', icon: Users, change: '+0%', trend: 'up' as const },
+    { label: 'Уровень отклика', value: '0%', icon: TrendingUp, change: '+0%', trend: 'up' as const }
+  ]);
+  const [messagesData, setMessagesData] = useState<{ name: string; value: number }[]>([]);
+  const [conversionsData, setConversionsData] = useState<{ name: string; value: number }[]>([]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, []);
+
+  const loadAnalytics = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const analytics = await analyticsService.getDashboardAnalytics();
+
+      // Обновляем статистику
+      setStats([
+        { label: 'Активные агенты', value: analytics.stats.activeAgents.toString(), icon: Bot, change: '+0%', trend: 'up' as const },
+        { label: 'Всего сообщений', value: analytics.stats.totalMessages.toString(), icon: MessageSquare, change: '+0%', trend: 'up' as const },
+        { label: 'Новых лидов', value: analytics.stats.newLeads.toString(), icon: Users, change: '+0%', trend: 'up' as const },
+        { label: 'Уровень отклика', value: analytics.stats.responseRate, icon: TrendingUp, change: '+0%', trend: 'up' as const }
+      ]);
+
+      // Обновляем данные графиков
+      setMessagesData(analytics.charts.messagesData);
+      setConversionsData(analytics.charts.conversionsData);
+    } catch (err: any) {
+      console.error('Failed to load analytics:', err);
+      setError('Не удалось загрузить аналитику');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center text-gray-500 dark:text-gray-400 py-12">
+          Загрузка аналитики...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Top Stats Row */}

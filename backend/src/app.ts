@@ -10,6 +10,8 @@ import kbArticleRoutes from './routes/kb-articles';
 import contactRoutes from './routes/contacts';
 import dealRoutes from './routes/deals';
 import crmRoutes from './routes/crm';
+import settingsRoutes from './routes/settings';
+import analyticsRoutes from './routes/analytics';
 
 const app: Express = express();
 
@@ -40,6 +42,8 @@ app.use('/api/kb/articles', kbArticleRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
