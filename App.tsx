@@ -296,7 +296,7 @@ const App: React.FC = () => {
       case 'agents': return <Agents agents={agents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
       case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
-      case 'chat': return <Chat />;
+      case 'chat': return <Chat agents={agents} />;
       case 'billing': return <Billing />;
       case 'settings': return <Settings />;
       case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
