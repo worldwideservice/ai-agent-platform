@@ -74,21 +74,6 @@ export const Agents: React.FC<AgentsProps> = ({
           </div>
         </div>
 
-        {/* Selection bar */}
-        {selectedAgents.length > 0 && (
-          <div className="px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-900/50 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-700 dark:text-gray-300">Выбрано {selectedAgents.length} записи,</span>
-              <button onClick={selectAll} className="text-[#0078D4] hover:underline">
-                Выбрать все {agents.length}
-              </button>
-              <button onClick={deselectAll} className="text-[#0078D4] hover:underline">
-                Убрать выделение со всех
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Content */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center text-center py-16">

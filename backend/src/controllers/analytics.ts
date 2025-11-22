@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
 
 /**
  * GET /api/analytics/dashboard
  * Получить аналитику для Dashboard
  */
-export const getDashboardAnalytics = async (req: Request, res: Response) => {
+export const getDashboardAnalytics = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });

@@ -1,0 +1,12 @@
+{
+  "general": {
+    "previewFeatures": true,
+    "vimMode": true,
+    "disableAutoUpdate": true,
+    "sessionRetention": {
+      "enabled": true
+    },
+    "debugKeystrokeLogging": true,
+    "enablePromptCompletion": true
+  }
+}

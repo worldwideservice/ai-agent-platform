@@ -1,20 +1,21 @@
-import React, { useState } from 'react';
-import { 
-  Check, 
-  Star, 
-  Crown, 
-  Zap, 
-  ChevronDown, 
-  Plus, 
-  Minus, 
-  ShieldCheck, 
-  ArrowRight, 
-  Info, 
-  User, 
-  Book, 
+import React, { useState, useEffect } from 'react';
+import {
+  Check,
+  Star,
+  Crown,
+  Zap,
+  ChevronDown,
+  Plus,
+  Minus,
+  ShieldCheck,
+  ArrowRight,
+  Info,
+  User,
+  Book,
   MessageSquare,
-  Calendar 
+  Calendar
 } from 'lucide-react';
+import { billingService, SubscriptionInfo } from '../src/services/api';
 
 // --- Types & Data ---
 
@@ -58,6 +59,24 @@ export const Billing: React.FC = () => {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [responseCount, setResponseCount] = useState<ResponseCount>(15000);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Загружаем информацию о подписке
+  useEffect(() => {
+    const loadSubscription = async () => {
+      try {
+        const data = await billingService.getSubscription();
+        setSubscription(data);
+      } catch (error) {
+        console.error('Failed to load subscription:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSubscription();
+  }, []);
 
   const prices = PRICING_DATA[responseCount];
   
@@ -91,23 +110,30 @@ export const Billing: React.FC = () => {
                </div>
                
                <div className="flex flex-wrap items-center gap-8">
-                 <div className="flex items-center gap-2 text-[#22C55E] font-medium">
-                   <div className="w-2 h-2 rounded-full bg-[#22C55E]" />
-                   <span>Статус: Активен</span>
+                 <div className={`flex items-center gap-2 font-medium ${
+                   subscription?.isActive ? 'text-[#22C55E]' : 'text-red-500'
+                 }`}>
+                   <div className={`w-2 h-2 rounded-full ${
+                     subscription?.isActive ? 'bg-[#22C55E]' : 'bg-red-500'
+                   }`} />
+                   <span>Статус: {subscription?.isActive ? 'Активен' : 'Неактивен'}</span>
                  </div>
                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-medium">
                    <Calendar size={18} className="text-gray-400" />
-                   <span>Осталось дней: 14</span>
+                   <span>Осталось дней: {subscription?.daysRemaining ?? 0}</span>
                  </div>
                </div>
 
                <div className="w-full pt-2">
                   <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium">
-                    <span>Использовано: 0 из 500</span>
-                    <span>0% использовано</span>
+                    <span>Использовано: {subscription?.responsesUsed ?? 0} из {formatNumber(subscription?.responsesLimit ?? 5000)}</span>
+                    <span>{subscription?.usagePercentage ?? 0}% использовано</span>
                   </div>
                   <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-gray-300 dark:bg-gray-500 w-[0%] rounded-full"></div>
+                      <div
+                        className="h-full bg-gray-300 dark:bg-gray-500 rounded-full transition-all"
+                        style={{ width: `${subscription?.usagePercentage ?? 0}%` }}
+                      ></div>
                   </div>
                </div>
             </div>

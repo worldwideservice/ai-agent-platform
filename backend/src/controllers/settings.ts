@@ -1,13 +1,14 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
 
 /**
  * GET /api/settings
  * Получить настройки текущего пользователя
  */
-export const getSettings = async (req: Request, res: Response) => {
+export const getSettings = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });
@@ -41,9 +42,9 @@ export const getSettings = async (req: Request, res: Response) => {
  * PUT /api/settings
  * Обновить настройки пользователя
  */
-export const updateSettings = async (req: Request, res: Response) => {
+export const updateSettings = async (req: AuthRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.userId;
 
     if (!userId) {
       return res.status(401).json({ message: 'Unauthorized' });

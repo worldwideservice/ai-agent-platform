@@ -154,21 +154,6 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
           </div>
         ) : (
           <>
-            {/* Selection bar */}
-            {selectedCategories.length > 0 && (
-              <div className="px-4 py-2 bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-900/50 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-700 dark:text-gray-300">Выбрано {selectedCategories.length} записи,</span>
-                  <button onClick={selectAll} className="text-[#0078D4] hover:underline">
-                    Выбрать все {displayedCategories.length}
-                  </button>
-                  <button onClick={deselectAll} className="text-[#0078D4] hover:underline">
-                    Убрать выделение со всех
-                  </button>
-                </div>
-              </div>
-            )}
-
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
                 <tr>

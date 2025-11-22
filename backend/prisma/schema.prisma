@@ -21,6 +21,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Тарифные планы и лимиты
+  currentPlan     String   @default("trial") // trial, launch, scale, max
+  trialEndsAt     DateTime?
+  responsesUsed   Int      @default(0)
+  responsesLimit  Int      @default(5000)
+
   // Связи
   agents      Agent[]
   kbCategories KbCategory[]

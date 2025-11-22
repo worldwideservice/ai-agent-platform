@@ -12,6 +12,7 @@ import dealRoutes from './routes/deals';
 import crmRoutes from './routes/crm';
 import settingsRoutes from './routes/settings';
 import analyticsRoutes from './routes/analytics';
+import billingRoutes from './routes/billing';
 
 const app: Express = express();
 
@@ -44,6 +45,7 @@ app.use('/api/deals', dealRoutes);
 app.use('/api/crm', crmRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/billing', billingRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

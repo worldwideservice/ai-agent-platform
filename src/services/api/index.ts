@@ -6,6 +6,7 @@ export { default as kbService } from './kb.service';
 export { crmService } from './crm.service';
 export { default as settingsService } from './settings.service';
 export { default as analyticsService } from './analytics.service';
+export { default as billingService } from './billing.service';
 
 // Re-export для удобства
 export * from './apiClient';
@@ -15,3 +16,4 @@ export * from './kb.service';
 export * from './crm.service';
 export * from './settings.service';
 export * from './analytics.service';
+export * from './billing.service';

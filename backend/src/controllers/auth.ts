@@ -44,12 +44,20 @@ export async function register(req: Request, res: Response): Promise<void> {
     // Хэшируем пароль
     const hashedPassword = await hashPassword(password);
 
+    // Устанавливаем дату окончания пробного периода (15 дней)
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 15);
+
     // Создаем пользователя
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
         password: hashedPassword,
         name: name?.trim() || null,
+        currentPlan: 'trial',
+        trialEndsAt,
+        responsesLimit: 5000,
+        responsesUsed: 0,
       },
       select: {
         id: true,
