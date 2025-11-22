@@ -8,8 +8,7 @@ try {
   });
   console.log('✅ Prisma Client initialized successfully');
 } catch (error) {
-  console.warn('⚠️ Prisma Client initialization failed, using mock client');
-  // Создаем mock клиент для минимальной функциональности
+  // Создаем mock клиент (не используется, все контроллеры используют better-sqlite3)
   prisma = {
     user: {},
     agent: {},

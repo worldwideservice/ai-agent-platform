@@ -670,14 +670,170 @@ export const deal = {
   },
 };
 
+// UserSettings model operations
+export const userSettings = {
+  findUnique({ where }: any) {
+    let query = 'SELECT * FROM user_settings WHERE ';
+    let param: any;
+
+    if (where.userId) {
+      query += 'userId = ?';
+      param = where.userId;
+    } else if (where.id) {
+      query += 'id = ?';
+      param = where.id;
+    }
+
+    const row = db.prepare(query).get(param);
+    return row ? convertBooleanFields(row, ['stopOnReply']) : null;
+  },
+
+  create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO user_settings (id, stopOnReply, resumeTime, resumeUnit, userId, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.stopOnReply ? 1 : 0,
+      data.resumeTime,
+      data.resumeUnit,
+      data.userId,
+      now,
+      now
+    );
+
+    return this.findUnique({ where: { id } });
+  },
+
+  upsert({ where, update, create }: any) {
+    const existing = this.findUnique({ where });
+
+    if (existing) {
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (update.stopOnReply !== undefined) {
+        updates.push('stopOnReply = ?');
+        params.push(update.stopOnReply ? 1 : 0);
+      }
+      if (update.resumeTime !== undefined) {
+        updates.push('resumeTime = ?');
+        params.push(update.resumeTime);
+      }
+      if (update.resumeUnit !== undefined) {
+        updates.push('resumeUnit = ?');
+        params.push(update.resumeUnit);
+      }
+
+      updates.push('updatedAt = ?');
+      params.push(new Date().toISOString());
+      params.push(where.userId);
+
+      const query = `UPDATE user_settings SET ${updates.join(', ')} WHERE userId = ?`;
+      db.prepare(query).run(...params);
+
+      return this.findUnique({ where });
+    } else {
+      return this.create({ data: create });
+    }
+  },
+};
+
+// ChatLog model operations
+export const chatLog = {
+  count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*) as count FROM chat_logs';
+    const params: any[] = [];
+
+    if (where?.userId) {
+      query += ' WHERE userId = ?';
+      params.push(where.userId);
+    }
+
+    const result = db.prepare(query).get(...params) as any;
+    return result.count;
+  },
+
+  groupBy({ by, where, _count }: any) {
+    // Simplified groupBy for createdAt
+    let query = 'SELECT createdAt, COUNT(*) as _count FROM chat_logs';
+    const params: any[] = [];
+
+    if (where?.userId) {
+      query += ' WHERE userId = ?';
+      params.push(where.userId);
+    }
+
+    if (where?.createdAt?.gte) {
+      query += where?.userId ? ' AND' : ' WHERE';
+      query += ' createdAt >= ?';
+      params.push(where.createdAt.gte.toISOString());
+    }
+
+    query += ' GROUP BY DATE(createdAt)';
+
+    return db.prepare(query).all(...params);
+  },
+
+  create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO chat_logs (id, agentId, message, response, model, userId, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.agentId,
+      data.message,
+      data.response,
+      data.model,
+      data.userId,
+      now
+    );
+
+    return { id, ...data, createdAt: now };
+  },
+};
+
+// Add count method to agent model
+const agentWithCount = {
+  ...agent,
+  count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*) as count FROM agents WHERE 1=1';
+    const params: any[] = [];
+
+    if (where?.userId) {
+      query += ' AND userId = ?';
+      params.push(where.userId);
+    }
+    if (where?.isActive !== undefined) {
+      query += ' AND isActive = ?';
+      params.push(where.isActive ? 1 : 0);
+    }
+
+    const result = db.prepare(query).get(...params) as any;
+    return result.count;
+  },
+};
+
 // Export as prisma-like object
 export const prisma = {
-  agent,
+  agent: agentWithCount,
   user,
   kbCategory,
   kbArticle,
   contact,
   deal,
+  userSettings,
+  chatLog,
   $connect: async () => {
     console.log('✅ Database connected successfully (using better-sqlite3)');
   },
