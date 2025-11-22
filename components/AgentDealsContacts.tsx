@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import {
     Eye,
     Edit,
@@ -12,7 +12,8 @@ import {
     ArrowUp,
     ArrowDown
 } from 'lucide-react';
-import { MOCK_CRM_FIELDS } from '../services/crmData';
+import { DEAL_FIELDS, CONTACT_FIELDS } from '../services/crmData';
+import { Agent } from '../types';
 
 interface UpdateRule {
     id: string;
@@ -22,17 +23,38 @@ interface UpdateRule {
 }
 
 interface AgentDealsContactsProps {
+    agent?: Agent | null;
     onCancel: () => void;
     crmConnected: boolean;
+    onSyncCRM: () => Promise<void>;
 }
 
-export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel, crmConnected }) => {
+export interface AgentDealsContactsRef {
+    getData: () => any;
+}
+
+export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, crmConnected, onSyncCRM }, ref) => {
+    // Parse CRM data from agent
+    const parseCrmData = () => {
+        if (!agent?.crmData) return null;
+        try {
+            return JSON.parse(agent.crmData);
+        } catch {
+            return null;
+        }
+    };
+
+    const crmData = parseCrmData();
+    const availableDealFields = crmData?.dealFields || DEAL_FIELDS;
+    const availableContactFields = crmData?.contactFields || CONTACT_FIELDS;
+
     // --- State ---
     // Data Access
-    const [readDealFields, setReadDealFields] = useState<string[]>(['stage_id']);
-    const [readContactFields, setReadContactFields] = useState<string[]>(['f_name']);
+    const [readDealFields, setReadDealFields] = useState<string[]>(['deal_stage']);
+    const [readContactFields, setReadContactFields] = useState<string[]>(['contact_name']);
     const [isDealAccessOpen, setIsDealAccessOpen] = useState(true);
     const [isContactAccessOpen, setIsContactAccessOpen] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Data Input
     const [dealUpdateRules, setDealUpdateRules] = useState<UpdateRule[]>([
@@ -44,6 +66,26 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
     const [isDealRulesOpen, setIsDealRulesOpen] = useState(true);
     const [isContactRulesOpen, setIsContactRulesOpen] = useState(true);
 
+    // Expose getData method via ref
+    useImperativeHandle(ref, () => ({
+        getData: () => ({
+            dealReadFields: readDealFields,
+            contactReadFields: readContactFields,
+            dealUpdateRules,
+            contactUpdateRules
+        })
+    }));
+
+    // --- Handlers ---
+    const handleSyncCRM = async () => {
+        setIsSyncing(true);
+        try {
+            await onSyncCRM();
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
     // --- Helpers ---
     const toggleSelection = (id: string, currentList: string[], setter: (l: string[]) => void) => {
         if (currentList.includes(id)) setter(currentList.filter(item => item !== id));
@@ -51,7 +93,9 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
     };
 
     const getFieldName = (fieldId: string) => {
-        return MOCK_CRM_FIELDS.find(f => f.id === fieldId)?.label || fieldId;
+        const dealField = DEAL_FIELDS.find(f => f.id === fieldId);
+        const contactField = CONTACT_FIELDS.find(f => f.id === fieldId);
+        return dealField?.label || contactField?.label || fieldId;
     };
 
     // Dynamic List Helpers
@@ -101,7 +145,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
         selectedIds: string[],
         onChange: (id: string) => void,
         placeholder: string,
-        availableFields: typeof MOCK_CRM_FIELDS
+        availableFields: typeof DEAL_FIELDS | typeof CONTACT_FIELDS
     }) => (
         <div className="bg-gray-50 dark:bg-gray-750/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
             <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">{label}</label>
@@ -148,8 +192,6 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
         </div>
     );
 
-    const availableCrmFields = crmConnected ? MOCK_CRM_FIELDS : [];
-
     return (
         <div className="space-y-6 mt-6">
 
@@ -163,9 +205,13 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Выберите, какие данные агент может читать и использовать в диалогах</p>
                         </div>
                     </div>
-                    <button className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors">
-                        <RefreshCw size={12} />
-                        Синхронизировать настройки CRM
+                    <button
+                        onClick={handleSyncCRM}
+                        disabled={isSyncing}
+                        className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
                     </button>
                 </div>
 
@@ -191,7 +237,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                     selectedIds={readDealFields}
                                     onChange={(id) => toggleSelection(id, readDealFields, setReadDealFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
-                                    availableFields={availableCrmFields}
+                                    availableFields={availableDealFields}
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Дополнительные поля добавляют лишний контекст и могут снизить точность ответов</p>
                             </div>
@@ -221,7 +267,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                     selectedIds={readContactFields}
                                     onChange={(id) => toggleSelection(id, readContactFields, setReadContactFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
-                                    availableFields={availableCrmFields}
+                                    availableFields={availableContactFields}
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Большее количество полей добавляет дополнительный контекст и может снизить точность ответов.</p>
                             </div>
@@ -285,7 +331,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
                                                             <option value="">Выберите поле для обновления</option>
-                                                            {availableCrmFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                                                            {availableDealFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>
@@ -366,7 +412,7 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
                                                             <option value="">Выберите поле для обновления</option>
-                                                            {availableCrmFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                                                            {availableContactFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>

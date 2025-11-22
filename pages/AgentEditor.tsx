@@ -6,10 +6,11 @@ import {
   XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
 } from 'lucide-react';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS } from '../services/crmData';
-import { AgentDealsContacts } from '../components/AgentDealsContacts';
+import { AgentDealsContacts, AgentDealsContactsRef } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
 import { Agent } from '../types';
 import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
+import { crmService } from '../src/services/api';
 // import Toggle from '../components/Toggle'; // Removed: Defined internally
 import { ConfirmationModal } from '../components/ConfirmationModal';
 // import Toast, { ToastRef } from '../components/Toast'; // Removed: Not used or incorrect
@@ -17,7 +18,7 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 interface AgentEditorProps {
   agent: Agent | null;
   onCancel: () => void;
-  onSave: (agent: Agent) => void;
+  onSave: (agent: Agent) => Promise<void>;
   kbCategories: { id: string; name: string }[];
   onNavigate: (page: string) => void;
 }
@@ -97,6 +98,11 @@ const GoogleIcon = () => (
 export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<Tab>('main');
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
+  const dealsContactsRef = useRef<AgentDealsContactsRef>(null);
+
+  // --- Loading and Error States ---
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // --- Modal States ---
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
@@ -122,19 +128,68 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
 
   // --- Save Handler ---
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!agent) return;
 
-    // Get data from basic settings
-    const basicData = basicSettingsRef.current?.getData() || {};
+    try {
+      setIsSaving(true);
+      setSaveError('');
 
-    // Merge with existing agent data
-    const updatedAgent: Agent = {
-      ...agent,
-      ...basicData
-    };
+      // Get data from basic settings
+      const basicData = basicSettingsRef.current?.getData() || {};
 
-    onSave(updatedAgent);
+      // Get data from deals & contacts settings
+      const dealsContactsData = dealsContactsRef.current?.getData() || {};
+
+      // Parse existing crmData and merge with new deals/contacts settings
+      let crmData = {};
+      try {
+        crmData = agent.crmData ? JSON.parse(agent.crmData) : {};
+      } catch (e) {
+        console.error('Failed to parse crmData:', e);
+      }
+
+      const updatedCrmData = {
+        ...crmData,
+        ...dealsContactsData
+      };
+
+      // Merge with existing agent data
+      const updatedAgent: Agent = {
+        ...agent,
+        ...basicData,
+        crmData: JSON.stringify(updatedCrmData)
+      };
+
+      await onSave(updatedAgent);
+    } catch (error: any) {
+      setSaveError(error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.');
+      console.error('Failed to save agent:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- CRM Sync Handler ---
+  const handleSyncCRM = async () => {
+    if (!agent) return;
+
+    try {
+      setIsSaving(true);
+      const result = await crmService.syncCRM(agent.id, 'Kommo');
+      setKommoConnected(true);
+      console.log('CRM синхронизирована:', result);
+
+      alert(`CRM успешно синхронизирована!\nВоронок: ${result.pipelines || 0}\nКаналов: ${result.channels || 0}\nКонтактов: ${result.contacts}\nСделок: ${result.deals}`);
+
+      // Reload page to update agent with new crmData
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Failed to sync CRM:', error);
+      alert('Не удалось синхронизировать CRM. Попробуйте еще раз.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // --- Chains Data ---
@@ -601,9 +656,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
           {/* Footer Actions (Advanced) */}
           <div className="flex items-center gap-4 pt-4">
-            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
-              Сохранить
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить'}
             </button>
+            {saveError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+            )}
             <button
               onClick={onCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
@@ -715,11 +777,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <p className="text-sm text-gray-500 dark:text-gray-400">Включить или отключить эту интеграцию</p>
 
                   <button
-                    onClick={() => setKommoConnected(true)}
-                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit"
+                    onClick={handleSyncCRM}
+                    disabled={isSaving}
+                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw size={16} />
-                    Синхронизировать настройки CRM
+                    <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
+                    {isSaving ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
                   </button>
                 </div>
               </div>
@@ -797,13 +860,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             crmConnected={kommoConnected}
             kbCategories={kbCategories}
             onNavigateToKbArticles={() => onNavigate('kb-articles')}
+            onSyncCRM={handleSyncCRM}
           />
 
           {/* Footer Actions */}
           <div className="flex items-center gap-4 pt-4 mt-6">
-            <button onClick={handleSave} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm">
-              Сохранить
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'Сохранение...' : 'Сохранить'}
             </button>
+            {saveError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+            )}
             <button
               onClick={onCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
@@ -815,7 +886,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       )}
 
       {activeTab === 'deals' && (
-        <AgentDealsContacts onCancel={onCancel} crmConnected={kommoConnected} />
+        <AgentDealsContacts
+          ref={dealsContactsRef}
+          agent={agent}
+          onCancel={onCancel}
+          crmConnected={kommoConnected}
+          onSyncCRM={handleSyncCRM}
+        />
       )}
 
       {activeTab === 'triggers' && (

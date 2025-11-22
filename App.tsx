@@ -15,6 +15,9 @@ import { KbArticleCreate } from './pages/KbArticleCreate';
 import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
+import { useAuth } from './src/contexts/AuthContext';
+import { Auth } from './src/pages/Auth';
+import { agentService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
 const INITIAL_KB_CATEGORIES = [
@@ -22,17 +25,19 @@ const INITIAL_KB_CATEGORIES = [
 ];
 
 const App: React.FC = () => {
+  // === 1. Все хуки должны быть в начале компонента ===
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // State для агентов
+  const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     const saved = localStorage.getItem('currentPage');
     return (saved as Page) || 'dashboard';
   });
-  const [agents, setAgents] = useState<Agent[]>(() => {
-    const saved = localStorage.getItem('agents');
-    return saved ? JSON.parse(saved) : INITIAL_AGENTS;
-  });
+  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
-  // KB Categories state
+  // State для KB Categories
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
     const saved = localStorage.getItem('kbCategories');
     return saved ? JSON.parse(saved) : INITIAL_KB_CATEGORIES;
@@ -41,29 +46,9 @@ const App: React.FC = () => {
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(() => {
     const saved = localStorage.getItem('currentCategoryId');
     return saved ? (saved === 'null' ? null : saved) : null;
-  }); // для навигации внутрь категорий
+  });
 
-  // Save currentPage to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('currentPage', currentPage);
-  }, [currentPage]);
-
-  // Save currentCategoryId to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
-  }, [currentCategoryId]);
-
-  // Save agents to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('agents', JSON.stringify(agents));
-  }, [agents]);
-
-  // Save kbCategories to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
-  }, [kbCategories]);
-
-  // KB Articles state
+  // State для KB Articles
   const [kbArticles, setKbArticles] = useState<{
     id: number;
     title: string;
@@ -78,21 +63,15 @@ const App: React.FC = () => {
   });
   const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
 
-  // Save kbArticles to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
-  }, [kbArticles]);
-
-  // Confirmation Modal State
+  // State для модалок и toast
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
     onConfirm: () => void;
   }>({ isOpen: false, title: '', onConfirm: () => { } });
-
-  // Toast State
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // === 2. Вспомогательные функции ===
   const showConfirmation = (title: string, onConfirm: () => void) => {
     setConfirmationModal({ isOpen: true, title, onConfirm });
   };
@@ -110,8 +89,67 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
-  const handleAddAgent = (agent: Agent) => {
-    setAgents(prev => [...prev, agent]);
+  const loadAgents = async () => {
+    try {
+      setIsLoadingAgents(true);
+      const agentsData = await agentService.getAllAgents();
+      setAgents(agentsData as unknown as Agent[]);
+    } catch (error: any) {
+      console.error('Failed to load agents:', error);
+      showToast('error', 'Не удалось загрузить агентов');
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  };
+
+  // === 3. Effects ===
+  // Загрузка агентов из API при авторизации
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAgents();
+    }
+  }, [isAuthenticated]);
+
+  // Save currentPage to localStorage
+  useEffect(() => {
+    localStorage.setItem('currentPage', currentPage);
+  }, [currentPage]);
+
+  // Save currentCategoryId to localStorage
+  useEffect(() => {
+    localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
+  }, [currentCategoryId]);
+
+  // Save kbCategories to localStorage
+  useEffect(() => {
+    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
+  }, [kbCategories]);
+
+  // Save kbArticles to localStorage
+  useEffect(() => {
+    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
+  }, [kbArticles]);
+
+  // === 4. Обработчики событий ===
+  const handleAddAgent = async (agentData: Omit<Agent, 'id' | 'createdAt'>) => {
+    try {
+      const newAgent = await agentService.createAgent({
+        name: agentData.name,
+        model: agentData.model,
+        systemInstructions: agentData.systemInstructions,
+        isActive: agentData.isActive,
+        pipelineSettings: agentData.pipelineSettings,
+        channelSettings: agentData.channelSettings,
+        kbSettings: agentData.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список агентов
+      showToast('success', 'Агент создан');
+      return newAgent;
+    } catch (error: any) {
+      console.error('Failed to create agent:', error);
+      showToast('error', error.response?.data?.message || 'Не удалось создать агента');
+      throw error;
+    }
   };
 
   const handleAddArticle = (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => {
@@ -131,45 +169,73 @@ const App: React.FC = () => {
     showToast('success', 'Статья создана');
   };
 
-  const handleToggleAgentStatus = (id: string) => {
-    setAgents(prevAgents =>
-      prevAgents.map(agent =>
-        agent.id === id ? { ...agent, isActive: !agent.isActive } : agent
-      )
-    );
+  const handleToggleAgentStatus = async (id: string) => {
+    try {
+      await agentService.toggleAgentStatus(id);
+      await loadAgents(); // Перезагрузить список
+      showToast('success', 'Статус изменен');
+    } catch (error: any) {
+      console.error('Failed to toggle agent status:', error);
+      showToast('error', 'Не удалось изменить статус');
+    }
   };
 
   const handleDeleteAgent = (id: string) => {
     const agent = agents.find(a => a.id === id);
     if (!agent) return;
 
-    showConfirmation(`Удалить ${agent.name}`, () => {
-      setAgents(prev => prev.filter(agent => agent.id !== id));
-      hideConfirmation();
-      showToast('success', 'Удалено');
+    showConfirmation(`Удалить ${agent.name}`, async () => {
+      try {
+        await agentService.deleteAgent(id);
+        await loadAgents(); // Перезагрузить список
+        hideConfirmation();
+        showToast('success', 'Удалено');
+      } catch (error: any) {
+        console.error('Failed to delete agent:', error);
+        showToast('error', 'Не удалось удалить агента');
+        hideConfirmation();
+      }
     });
   };
 
-  const handleCopyAgent = (agent: Agent) => {
-    const copiedAgent: Agent = {
-      ...agent,
-      id: Math.random().toString(36).substr(2, 9),
-      name: `${agent.name} (копия)`,
-      isActive: false,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    setAgents(prev => [...prev, copiedAgent]);
-    showToast('success', `Создана копия: ${copiedAgent.name}`);
+  const handleCopyAgent = async (agent: Agent) => {
+    try {
+      const newAgent = await agentService.createAgent({
+        name: `${agent.name} (копия)`,
+        model: agent.model,
+        systemInstructions: agent.systemInstructions,
+        isActive: false,
+        pipelineSettings: agent.pipelineSettings,
+        channelSettings: agent.channelSettings,
+        kbSettings: agent.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список
+      showToast('success', `Создана копия: ${newAgent.name}`);
+    } catch (error: any) {
+      console.error('Failed to copy agent:', error);
+      showToast('error', 'Не удалось создать копию');
+    }
   };
 
-  const handleSaveAgent = (updatedAgent: Agent) => {
-    setAgents(prev => prev.map(agent =>
-      agent.id === updatedAgent.id ? updatedAgent : agent
-    ));
-    showToast('success', 'Изменения сохранены');
-    setEditingAgent(null);
-    setCurrentPage('agents');
+  const handleSaveAgent = async (updatedAgent: Agent) => {
+    try {
+      await agentService.updateAgent(updatedAgent.id, {
+        name: updatedAgent.name,
+        model: updatedAgent.model,
+        systemInstructions: updatedAgent.systemInstructions,
+        isActive: updatedAgent.isActive,
+        pipelineSettings: updatedAgent.pipelineSettings,
+        channelSettings: updatedAgent.channelSettings,
+        kbSettings: updatedAgent.kbSettings,
+      });
+      await loadAgents(); // Перезагрузить список
+      showToast('success', 'Изменения сохранены');
+      setEditingAgent(null);
+      setCurrentPage('agents');
+    } catch (error: any) {
+      console.error('Failed to save agent:', error);
+      showToast('error', error.response?.data?.message || 'Не удалось сохранить изменения');
+    }
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -293,10 +359,10 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard />;
-      case 'agents': return <Agents agents={agents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
+      case 'agents': return <Agents agents={agents} isLoading={isLoadingAgents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
       case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
-      case 'chat': return <Chat />;
+      case 'chat': return <Chat agents={agents} />;
       case 'billing': return <Billing />;
       case 'settings': return <Settings />;
       case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
@@ -307,6 +373,28 @@ const App: React.FC = () => {
     }
   };
 
+  // === 5. Условные return (после всех хуков) ===
+  // Показываем загрузку пока проверяем аутентификацию
+  if (authLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}>
+        <div style={{ color: 'white', fontSize: '18px' }}>Загрузка...</div>
+      </div>
+    );
+  }
+
+  // Если пользователь не авторизован, показываем страницу Auth
+  if (!isAuthenticated) {
+    return <Auth />;
+  }
+
+  // === 6. Основной return (пользователь авторизован) ===
   return (
     <div className="flex h-screen bg-[#F9FAFB] dark:bg-gray-900 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />

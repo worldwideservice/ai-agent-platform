@@ -5,28 +5,53 @@ import { Agent } from '../types';
 interface AgentCreateProps {
   onCancel: () => void;
   onCreate?: () => void;
-  onAddAgent: (agent: Agent) => void;
+  onAddAgent: (agent: Omit<Agent, 'id' | 'createdAt'>) => Promise<any>;
 }
 
 export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, onAddAgent }) => {
   const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleCreate = () => {
+  const handleCreate = async (shouldClose: boolean = true) => {
     if (!name.trim()) {
-      alert('Пожалуйста, введите название агента');
-      return;
+      setError('Пожалуйста, введите название агента');
+      return false;
     }
 
-    const newAgent: Agent = {
-      id: Math.random().toString(36).substr(2, 9),
+    const newAgent: Omit<Agent, 'id' | 'createdAt'> = {
       name: name.trim(),
       isActive: false,
-      model: 'OpenAI GPT-4.1',
-      createdAt: new Date().toISOString().split('T')[0]
+      model: 'Google Gemini 2.5 Flash',
+      systemInstructions: undefined,
+      pipelineSettings: undefined,
+      channelSettings: undefined,
+      kbSettings: undefined
     };
 
-    onAddAgent(newAgent);
-    if (onCreate) onCreate();
+    try {
+      setIsLoading(true);
+      setError('');
+      await onAddAgent(newAgent);
+
+      // Очистить форму если не закрываем
+      if (!shouldClose) {
+        setName('');
+      }
+
+      // Закрыть форму только если shouldClose = true
+      if (shouldClose && onCreate) {
+        onCreate();
+      }
+
+      return true;
+    } catch (err) {
+      setError('Не удалось создать агента. Попробуйте еще раз.');
+      console.error('Failed to create agent:', err);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,9 +86,16 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              onChange={(e) => {
+                setName(e.target.value);
+                setError('');
+              }}
+              disabled={isLoading}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
             />
+            {error && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+            )}
           </div>
         </div>
       </div>
@@ -71,23 +103,23 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
       {/* Action Buttons */}
       <div className="flex items-center gap-4">
         <button
-          onClick={handleCreate}
-          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+          onClick={() => handleCreate(true)}
+          disabled={isLoading}
+          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Создать
+          {isLoading ? 'Создание...' : 'Создать'}
         </button>
         <button
-          onClick={() => {
-            handleCreate();
-            setName('');
-          }}
-          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+          onClick={() => handleCreate(false)}
+          disabled={isLoading}
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
         >
           Создать и Создать еще
         </button>
         <button
           onClick={onCancel}
-          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+          disabled={isLoading}
+          className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
         >
           Отмена
         </button>
