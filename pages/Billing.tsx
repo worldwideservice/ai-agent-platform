@@ -20,14 +20,15 @@ import { billingService, SubscriptionInfo } from '../src/services/api';
 // --- Types & Data ---
 
 type BillingCycle = 'monthly' | 'yearly';
-type ResponseCount = 5000 | 10000 | 15000 | 20000 | 50000;
+type ResponseCount = 1000 | 5000 | 10000 | 15000 | 20000 | 50000;
 
-const RESPONSE_OPTIONS: ResponseCount[] = [5000, 10000, 15000, 20000, 50000];
+const RESPONSE_OPTIONS: ResponseCount[] = [1000, 5000, 10000, 15000, 20000, 50000];
 
 const PRICING_DATA: Record<ResponseCount, { launch: number | null; scale: number; max: number }> = {
+  1000: { launch: 5, scale: 35, max: 60 },
   5000: { launch: 18, scale: 171, max: 292 },
   10000: { launch: null, scale: 305, max: 550 },
-  15000: { launch: null, scale: 578, max: 973 }, 
+  15000: { launch: null, scale: 578, max: 973 },
   20000: { launch: null, scale: 760, max: 1280 },
   50000: { launch: null, scale: 1800, max: 2900 },
 };
@@ -195,8 +196,43 @@ export const Billing: React.FC = () => {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-        
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+
+        {/* Trial Plan */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col transition-colors hover:border-gray-300 dark:hover:border-gray-600">
+           <div className="flex items-center gap-2 mb-4 text-gray-500 dark:text-gray-400">
+              <Check size={20} className="text-gray-400" />
+              <span className="font-bold text-lg">Trial</span>
+           </div>
+
+           <div className="mb-1 min-h-[60px]">
+              <span className="text-4xl font-extrabold text-gray-900 dark:text-white">$0</span>
+              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">/15 дней</span>
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Пробный период</div>
+           </div>
+
+           <div className="flex items-center gap-1 mb-6 h-4">
+             <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded">
+                Бесплатно
+             </span>
+           </div>
+
+           <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
+              <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
+              <ul className="space-y-3">
+                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агент</li>
+                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> 100 статей базы знаний</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> 5,000 Ответов всего</li>
+                <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> 15 дней использования</li>
+                <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> Доступ к Google Gemini 2.5 Flash</li>
+              </ul>
+           </div>
+
+           <button className="w-full py-3 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 rounded-lg text-sm font-bold cursor-not-allowed">
+             Текущий план
+           </button>
+        </div>
+
         {/* Launch Plan */}
         <div className={`bg-white dark:bg-gray-800 rounded-2xl border p-6 flex flex-col transition-all duration-300 relative ${prices.launch === null ? 'opacity-60 border-gray-200 dark:border-gray-700' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}>
            <div className="flex items-center gap-2 mb-4 text-gray-500 dark:text-gray-400">
@@ -222,9 +258,9 @@ export const Billing: React.FC = () => {
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
               <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
               <ul className="space-y-3">
-                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агентов</li>
+                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агент</li>
                 <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> 500 статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {formatNumber(5000)} Ответов / месяц</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {formatNumber(responseCount)} Ответов / месяц</li>
                 <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> Начальные инструкции агента: До 20,000 символов</li>
               </ul>
            </div>
