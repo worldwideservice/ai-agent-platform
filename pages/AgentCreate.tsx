@@ -13,10 +13,10 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleCreate = async () => {
+  const handleCreate = async (shouldClose: boolean = true) => {
     if (!name.trim()) {
       setError('Пожалуйста, введите название агента');
-      return;
+      return false;
     }
 
     const newAgent: Omit<Agent, 'id' | 'createdAt'> = {
@@ -33,10 +33,22 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
       setIsLoading(true);
       setError('');
       await onAddAgent(newAgent);
-      if (onCreate) onCreate();
+
+      // Очистить форму если не закрываем
+      if (!shouldClose) {
+        setName('');
+      }
+
+      // Закрыть форму только если shouldClose = true
+      if (shouldClose && onCreate) {
+        onCreate();
+      }
+
+      return true;
     } catch (err) {
       setError('Не удалось создать агента. Попробуйте еще раз.');
       console.error('Failed to create agent:', err);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -91,17 +103,14 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
       {/* Action Buttons */}
       <div className="flex items-center gap-4">
         <button
-          onClick={handleCreate}
+          onClick={() => handleCreate(true)}
           disabled={isLoading}
           className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? 'Создание...' : 'Создать'}
         </button>
         <button
-          onClick={async () => {
-            await handleCreate();
-            setName('');
-          }}
+          onClick={() => handleCreate(false)}
           disabled={isLoading}
           className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
         >

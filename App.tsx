@@ -25,30 +25,11 @@ const INITIAL_KB_CATEGORIES = [
 ];
 
 const App: React.FC = () => {
+  // === 1. Все хуки должны быть в начале компонента ===
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  // State для агентов
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
-
-  // Показываем загрузку пока проверяем аутентификацию
-  if (authLoading) {
-    return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      }}>
-        <div style={{ color: 'white', fontSize: '18px' }}>Загрузка...</div>
-      </div>
-    );
-  }
-
-  // Если пользователь не авторизован, показываем страницу Auth
-  if (!isAuthenticated) {
-    return <Auth />;
-  }
-
-  // Пользователь авторизован - показываем основное приложение
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     const saved = localStorage.getItem('currentPage');
     return (saved as Page) || 'dashboard';
@@ -56,27 +37,7 @@ const App: React.FC = () => {
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
-  // Загрузка агентов из API при авторизации
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadAgents();
-    }
-  }, [isAuthenticated]);
-
-  const loadAgents = async () => {
-    try {
-      setIsLoadingAgents(true);
-      const agentsData = await agentService.getAllAgents();
-      setAgents(agentsData as unknown as Agent[]);
-    } catch (error: any) {
-      console.error('Failed to load agents:', error);
-      showToast('error', 'Не удалось загрузить агентов');
-    } finally {
-      setIsLoadingAgents(false);
-    }
-  };
-
-  // KB Categories state
+  // State для KB Categories
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
     const saved = localStorage.getItem('kbCategories');
     return saved ? JSON.parse(saved) : INITIAL_KB_CATEGORIES;
@@ -85,24 +46,9 @@ const App: React.FC = () => {
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(() => {
     const saved = localStorage.getItem('currentCategoryId');
     return saved ? (saved === 'null' ? null : saved) : null;
-  }); // для навигации внутрь категорий
+  });
 
-  // Save currentPage to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('currentPage', currentPage);
-  }, [currentPage]);
-
-  // Save currentCategoryId to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
-  }, [currentCategoryId]);
-
-  // Save kbCategories to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
-  }, [kbCategories]);
-
-  // KB Articles state
+  // State для KB Articles
   const [kbArticles, setKbArticles] = useState<{
     id: number;
     title: string;
@@ -117,21 +63,15 @@ const App: React.FC = () => {
   });
   const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
 
-  // Save kbArticles to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
-  }, [kbArticles]);
-
-  // Confirmation Modal State
+  // State для модалок и toast
   const [confirmationModal, setConfirmationModal] = useState<{
     isOpen: boolean;
     title: string;
     onConfirm: () => void;
   }>({ isOpen: false, title: '', onConfirm: () => { } });
-
-  // Toast State
   const [toasts, setToasts] = useState<Toast[]>([]);
 
+  // === 2. Вспомогательные функции ===
   const showConfirmation = (title: string, onConfirm: () => void) => {
     setConfirmationModal({ isOpen: true, title, onConfirm });
   };
@@ -149,6 +89,48 @@ const App: React.FC = () => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
+  const loadAgents = async () => {
+    try {
+      setIsLoadingAgents(true);
+      const agentsData = await agentService.getAllAgents();
+      setAgents(agentsData as unknown as Agent[]);
+    } catch (error: any) {
+      console.error('Failed to load agents:', error);
+      showToast('error', 'Не удалось загрузить агентов');
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  };
+
+  // === 3. Effects ===
+  // Загрузка агентов из API при авторизации
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadAgents();
+    }
+  }, [isAuthenticated]);
+
+  // Save currentPage to localStorage
+  useEffect(() => {
+    localStorage.setItem('currentPage', currentPage);
+  }, [currentPage]);
+
+  // Save currentCategoryId to localStorage
+  useEffect(() => {
+    localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
+  }, [currentCategoryId]);
+
+  // Save kbCategories to localStorage
+  useEffect(() => {
+    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
+  }, [kbCategories]);
+
+  // Save kbArticles to localStorage
+  useEffect(() => {
+    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
+  }, [kbArticles]);
+
+  // === 4. Обработчики событий ===
   const handleAddAgent = async (agentData: Omit<Agent, 'id' | 'createdAt'>) => {
     try {
       const newAgent = await agentService.createAgent({
@@ -391,6 +373,28 @@ const App: React.FC = () => {
     }
   };
 
+  // === 5. Условные return (после всех хуков) ===
+  // Показываем загрузку пока проверяем аутентификацию
+  if (authLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}>
+        <div style={{ color: 'white', fontSize: '18px' }}>Загрузка...</div>
+      </div>
+    );
+  }
+
+  // Если пользователь не авторизован, показываем страницу Auth
+  if (!isAuthenticated) {
+    return <Auth />;
+  }
+
+  // === 6. Основной return (пользователь авторизован) ===
   return (
     <div className="flex h-screen bg-[#F9FAFB] dark:bg-gray-900 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
