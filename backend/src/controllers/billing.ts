@@ -33,7 +33,8 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
     let daysRemaining = 0;
     if (user.trialEndsAt) {
       const now = new Date();
-      const diffTime = user.trialEndsAt.getTime() - now.getTime();
+      const trialEndDate = new Date(user.trialEndsAt);
+      const diffTime = trialEndDate.getTime() - now.getTime();
       daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
     }
 

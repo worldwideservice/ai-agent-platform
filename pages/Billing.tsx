@@ -25,8 +25,8 @@ type ResponseCount = 1000 | 5000 | 10000 | 15000 | 20000 | 50000;
 const RESPONSE_OPTIONS: ResponseCount[] = [1000, 5000, 10000, 15000, 20000, 50000];
 
 const PRICING_DATA: Record<ResponseCount, { launch: number | null; scale: number; max: number }> = {
-  1000: { launch: 5, scale: 35, max: 60 },
-  5000: { launch: 18, scale: 171, max: 292 },
+  1000: { launch: 18, scale: 35, max: 60 },
+  5000: { launch: null, scale: 171, max: 292 },
   10000: { launch: null, scale: 305, max: 550 },
   15000: { launch: null, scale: 578, max: 973 },
   20000: { launch: null, scale: 760, max: 1280 },
