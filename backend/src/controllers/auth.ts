@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database';
-import { hashPassword, comparePassword, generateToken } from '../utils/auth';
+import { hashPassword, comparePasswords, generateToken } from '../utils/auth';
 import { AuthRequest } from '../types';
 
 /**
@@ -108,7 +108,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     }
 
     // Проверяем пароль
-    const isPasswordValid = await comparePassword(password, user.password);
+    const isPasswordValid = await comparePasswords(password, user.password);
 
     if (!isPasswordValid) {
       res.status(401).json({

@@ -155,7 +155,7 @@ export const agent = {
 
 // User model operations
 export const user = {
-  findUnique({ where }: any) {
+  findUnique({ where, select }: any) {
     let query = 'SELECT * FROM users WHERE ';
     let param: any;
 
@@ -168,10 +168,24 @@ export const user = {
     }
 
     const row = db.prepare(query).get(param);
-    return row || null;
+
+    if (!row) return null;
+
+    // If select is specified, filter the fields
+    if (select) {
+      const filtered: any = {};
+      Object.keys(select).forEach(key => {
+        if (select[key] && key in row) {
+          filtered[key] = row[key];
+        }
+      });
+      return filtered;
+    }
+
+    return row;
   },
 
-  create({ data }: any) {
+  create({ data, select }: any) {
     const id = randomUUID();
     const now = new Date().toISOString();
 
@@ -190,7 +204,20 @@ export const user = {
       now
     );
 
-    return this.findUnique({ where: { id } });
+    const user = this.findUnique({ where: { id } });
+
+    // If select is specified, filter the fields
+    if (select && user) {
+      const filtered: any = {};
+      Object.keys(select).forEach(key => {
+        if (select[key] && key in user) {
+          filtered[key] = user[key];
+        }
+      });
+      return filtered;
+    }
+
+    return user;
   },
 };
 
