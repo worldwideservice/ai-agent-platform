@@ -1,0 +1,154 @@
+// Prisma Schema для AI Agent Platform
+// Документация: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Модель пользователя
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связи
+  agents      Agent[]
+  kbCategories KbCategory[]
+  kbArticles   KbArticle[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+// Модель AI агента
+model Agent {
+  id                 String   @id @default(cuid())
+  name               String
+  isActive           Boolean  @default(false)
+  model              String   @default("Google Gemini 2.5 Flash")
+  systemInstructions String?  @db.Text
+
+  // Настройки воронок и каналов (JSON для гибкости)
+  pipelineSettings   Json?
+  channelSettings    Json?
+  kbSettings         Json?
+
+  // CRM интеграция
+  crmType            String?  // 'kommo', 'bitrix24', etc
+  crmConnected       Boolean  @default(false)
+  crmData            Json?    // Храним данные из CRM
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связи
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("agents")
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Модель категории базы знаний (с поддержкой иерархии)
+model KbCategory {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Связи
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       KbCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children     KbCategory[] @relation("CategoryHierarchy")
+  articleCategories ArticleCategory[]
+
+  @@map("kb_categories")
+  @@index([userId])
+  @@index([parentId])
+}
+
+// Модель статьи базы знаний
+model KbArticle {
+  id               Int      @id @default(autoincrement())
+  title            String
+  content          String   @db.Text
+  isActive         Boolean  @default(true)
+
+  // Связи со статьями (many-to-many)
+  relatedArticles  String[] // Массив ID связанных статей
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Связи
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  articleCategories ArticleCategory[]
+
+  @@map("kb_articles")
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Связующая таблица для many-to-many между статьями и категориями
+model ArticleCategory {
+  articleId  Int
+  categoryId String
+
+  article  KbArticle  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  category KbCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, categoryId])
+  @@map("article_categories")
+  @@index([articleId])
+  @@index([categoryId])
+}
+
+// Модель для хранения настроек пользователя
+model UserSettings {
+  id                 String  @id @default(cuid())
+  stopOnReply        Boolean @default(false)
+  resumeTime         Int     @default(30)
+  resumeUnit         String  @default("дней")
+
+  userId             String  @unique
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("user_settings")
+}
+
+// Модель для логов чатов (для аналитики)
+model ChatLog {
+  id        String   @id @default(cuid())
+  agentId   String
+  message   String   @db.Text
+  response  String   @db.Text
+  model     String
+  userId    String
+
+  createdAt DateTime @default(now())
+
+  @@map("chat_logs")
+  @@index([userId])
+  @@index([agentId])
+  @@index([createdAt])
+}
