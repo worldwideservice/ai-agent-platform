@@ -35,3 +35,6 @@ export function authMiddleware(
     });
   }
 }
+
+// Alias export for compatibility
+export const authenticateToken = authMiddleware;
