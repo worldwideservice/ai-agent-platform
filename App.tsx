@@ -15,6 +15,8 @@ import { KbArticleCreate } from './pages/KbArticleCreate';
 import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
+import { useAuth } from './contexts/AuthContext';
+import { Auth } from './pages/Auth';
 
 const INITIAL_AGENTS: Agent[] = [];
 const INITIAL_KB_CATEGORIES = [
@@ -22,6 +24,29 @@ const INITIAL_KB_CATEGORIES = [
 ];
 
 const App: React.FC = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  // Показываем загрузку пока проверяем аутентификацию
+  if (isLoading) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      }}>
+        <div style={{ color: 'white', fontSize: '18px' }}>Загрузка...</div>
+      </div>
+    );
+  }
+
+  // Если пользователь не авторизован, показываем страницу Auth
+  if (!isAuthenticated) {
+    return <Auth />;
+  }
+
+  // Пользователь авторизован - показываем основное приложение
   const [currentPage, setCurrentPage] = useState<Page>(() => {
     const saved = localStorage.getItem('currentPage');
     return (saved as Page) || 'dashboard';
