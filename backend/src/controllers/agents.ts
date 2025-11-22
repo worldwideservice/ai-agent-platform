@@ -95,6 +95,7 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     if (data.pipelineSettings !== undefined) updateData.pipelineSettings = data.pipelineSettings;
     if (data.channelSettings !== undefined) updateData.channelSettings = data.channelSettings;
     if (data.kbSettings !== undefined) updateData.kbSettings = data.kbSettings;
+    if (data.crmData !== undefined) updateData.crmData = data.crmData;
 
     const agent = await prisma.agent.update({
       where: { id },

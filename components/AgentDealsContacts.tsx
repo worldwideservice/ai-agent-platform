@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import {
     Eye,
     Edit,
@@ -13,6 +13,7 @@ import {
     ArrowDown
 } from 'lucide-react';
 import { DEAL_FIELDS, CONTACT_FIELDS } from '../services/crmData';
+import { Agent } from '../types';
 
 interface UpdateRule {
     id: string;
@@ -22,17 +23,38 @@ interface UpdateRule {
 }
 
 interface AgentDealsContactsProps {
+    agent?: Agent | null;
     onCancel: () => void;
     crmConnected: boolean;
+    onSyncCRM: () => Promise<void>;
 }
 
-export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel, crmConnected }) => {
+export interface AgentDealsContactsRef {
+    getData: () => any;
+}
+
+export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, crmConnected, onSyncCRM }, ref) => {
+    // Parse CRM data from agent
+    const parseCrmData = () => {
+        if (!agent?.crmData) return null;
+        try {
+            return JSON.parse(agent.crmData);
+        } catch {
+            return null;
+        }
+    };
+
+    const crmData = parseCrmData();
+    const availableDealFields = crmData?.dealFields || DEAL_FIELDS;
+    const availableContactFields = crmData?.contactFields || CONTACT_FIELDS;
+
     // --- State ---
     // Data Access
     const [readDealFields, setReadDealFields] = useState<string[]>(['deal_stage']);
     const [readContactFields, setReadContactFields] = useState<string[]>(['contact_name']);
     const [isDealAccessOpen, setIsDealAccessOpen] = useState(true);
     const [isContactAccessOpen, setIsContactAccessOpen] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Data Input
     const [dealUpdateRules, setDealUpdateRules] = useState<UpdateRule[]>([
@@ -43,6 +65,26 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
     ]);
     const [isDealRulesOpen, setIsDealRulesOpen] = useState(true);
     const [isContactRulesOpen, setIsContactRulesOpen] = useState(true);
+
+    // Expose getData method via ref
+    useImperativeHandle(ref, () => ({
+        getData: () => ({
+            dealReadFields: readDealFields,
+            contactReadFields: readContactFields,
+            dealUpdateRules,
+            contactUpdateRules
+        })
+    }));
+
+    // --- Handlers ---
+    const handleSyncCRM = async () => {
+        setIsSyncing(true);
+        try {
+            await onSyncCRM();
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     // --- Helpers ---
     const toggleSelection = (id: string, currentList: string[], setter: (l: string[]) => void) => {
@@ -150,9 +192,6 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
         </div>
     );
 
-    const availableDealFields = crmConnected ? DEAL_FIELDS : [];
-    const availableContactFields = crmConnected ? CONTACT_FIELDS : [];
-
     return (
         <div className="space-y-6 mt-6">
 
@@ -166,9 +205,13 @@ export const AgentDealsContacts: React.FC<AgentDealsContactsProps> = ({ onCancel
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Выберите, какие данные агент может читать и использовать в диалогах</p>
                         </div>
                     </div>
-                    <button className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors">
-                        <RefreshCw size={12} />
-                        Синхронизировать настройки CRM
+                    <button
+                        onClick={handleSyncCRM}
+                        disabled={isSyncing}
+                        className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
                     </button>
                 </div>
 

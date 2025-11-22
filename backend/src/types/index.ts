@@ -23,6 +23,7 @@ export interface UpdateAgentDto {
   pipelineSettings?: any;
   channelSettings?: any;
   kbSettings?: any;
+  crmData?: any;
 }
 
 export interface CreateKbCategoryDto {

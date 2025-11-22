@@ -6,7 +6,7 @@ import {
   XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
 } from 'lucide-react';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS } from '../services/crmData';
-import { AgentDealsContacts } from '../components/AgentDealsContacts';
+import { AgentDealsContacts, AgentDealsContactsRef } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
 import { Agent } from '../types';
 import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
@@ -98,6 +98,7 @@ const GoogleIcon = () => (
 export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<Tab>('main');
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
+  const dealsContactsRef = useRef<AgentDealsContactsRef>(null);
 
   // --- Loading and Error States ---
   const [isSaving, setIsSaving] = useState(false);
@@ -137,10 +138,27 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       // Get data from basic settings
       const basicData = basicSettingsRef.current?.getData() || {};
 
+      // Get data from deals & contacts settings
+      const dealsContactsData = dealsContactsRef.current?.getData() || {};
+
+      // Parse existing crmData and merge with new deals/contacts settings
+      let crmData = {};
+      try {
+        crmData = agent.crmData ? JSON.parse(agent.crmData) : {};
+      } catch (e) {
+        console.error('Failed to parse crmData:', e);
+      }
+
+      const updatedCrmData = {
+        ...crmData,
+        ...dealsContactsData
+      };
+
       // Merge with existing agent data
       const updatedAgent: Agent = {
         ...agent,
-        ...basicData
+        ...basicData,
+        crmData: JSON.stringify(updatedCrmData)
       };
 
       await onSave(updatedAgent);
@@ -868,7 +886,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       )}
 
       {activeTab === 'deals' && (
-        <AgentDealsContacts onCancel={onCancel} crmConnected={kommoConnected} />
+        <AgentDealsContacts
+          ref={dealsContactsRef}
+          agent={agent}
+          onCancel={onCancel}
+          crmConnected={kommoConnected}
+          onSyncCRM={handleSyncCRM}
+        />
       )}
 
       {activeTab === 'triggers' && (
