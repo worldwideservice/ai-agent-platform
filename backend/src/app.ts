@@ -7,6 +7,9 @@ import authRoutes from './routes/auth';
 import agentRoutes from './routes/agents';
 import kbCategoryRoutes from './routes/kb-categories';
 import kbArticleRoutes from './routes/kb-articles';
+import contactRoutes from './routes/contacts';
+import dealRoutes from './routes/deals';
+import crmRoutes from './routes/crm';
 
 const app: Express = express();
 
@@ -34,6 +37,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/kb/categories', kbCategoryRoutes);
 app.use('/api/kb/articles', kbArticleRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/deals', dealRoutes);
+app.use('/api/crm', crmRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

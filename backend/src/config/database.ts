@@ -364,12 +364,293 @@ export const kbArticle = {
   },
 };
 
+// Contact model operations
+export const contact = {
+  findMany({ where, orderBy }: any = {}) {
+    let query = 'SELECT * FROM contacts';
+    const params: any[] = [];
+
+    if (where?.userId) {
+      query += ' WHERE userId = ?';
+      params.push(where.userId);
+    }
+
+    if (orderBy?.createdAt) {
+      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    return db.prepare(query).all(...params);
+  },
+
+  findFirst({ where }: any) {
+    let query = 'SELECT * FROM contacts WHERE 1=1';
+    const params: any[] = [];
+
+    if (where?.id) {
+      query += ' AND id = ?';
+      params.push(where.id);
+    }
+    if (where?.userId) {
+      query += ' AND userId = ?';
+      params.push(where.userId);
+    }
+    if (where?.crmId) {
+      query += ' AND crmId = ?';
+      params.push(where.crmId);
+    }
+
+    query += ' LIMIT 1';
+    return db.prepare(query).get(...params) || null;
+  },
+
+  create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO contacts (
+        id, name, phone, email, company, position, tags,
+        customFields, crmId, crmType, userId, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.name,
+      data.phone || null,
+      data.email || null,
+      data.company || null,
+      data.position || null,
+      data.tags || null,
+      data.customFields || null,
+      data.crmId || null,
+      data.crmType || null,
+      data.userId,
+      now,
+      now
+    );
+
+    return this.findFirst({ where: { id } });
+  },
+
+  update({ where, data }: any) {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.phone !== undefined) {
+      updates.push('phone = ?');
+      params.push(data.phone);
+    }
+    if (data.email !== undefined) {
+      updates.push('email = ?');
+      params.push(data.email);
+    }
+    if (data.company !== undefined) {
+      updates.push('company = ?');
+      params.push(data.company);
+    }
+    if (data.position !== undefined) {
+      updates.push('position = ?');
+      params.push(data.position);
+    }
+    if (data.tags !== undefined) {
+      updates.push('tags = ?');
+      params.push(data.tags);
+    }
+    if (data.customFields !== undefined) {
+      updates.push('customFields = ?');
+      params.push(data.customFields);
+    }
+
+    updates.push('updatedAt = ?');
+    params.push(new Date().toISOString());
+    params.push(where.id);
+
+    const query = `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`;
+    db.prepare(query).run(...params);
+    return this.findFirst({ where: { id: where.id } });
+  },
+
+  delete({ where }: any) {
+    db.prepare('DELETE FROM contacts WHERE id = ?').run(where.id);
+    return { id: where.id };
+  },
+};
+
+// Deal model operations
+export const deal = {
+  findMany({ where, orderBy, include }: any = {}) {
+    let query = 'SELECT * FROM deals';
+    const params: any[] = [];
+
+    if (where?.userId) {
+      query += ' WHERE userId = ?';
+      params.push(where.userId);
+    }
+
+    if (orderBy?.createdAt) {
+      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    const rows = db.prepare(query).all(...params);
+
+    // If include contact, fetch contact data
+    if (include?.contact) {
+      return rows.map((row: any) => {
+        if (row.contactId) {
+          const contactRow = db.prepare('SELECT * FROM contacts WHERE id = ?').get(row.contactId);
+          return { ...row, contact: contactRow };
+        }
+        return row;
+      });
+    }
+
+    return rows;
+  },
+
+  findFirst({ where, include }: any) {
+    let query = 'SELECT * FROM deals WHERE 1=1';
+    const params: any[] = [];
+
+    if (where?.id) {
+      query += ' AND id = ?';
+      params.push(where.id);
+    }
+    if (where?.userId) {
+      query += ' AND userId = ?';
+      params.push(where.userId);
+    }
+    if (where?.crmId) {
+      query += ' AND crmId = ?';
+      params.push(where.crmId);
+    }
+
+    query += ' LIMIT 1';
+    const row = db.prepare(query).get(...params);
+
+    if (!row) return null;
+
+    // If include contact, fetch contact data
+    if (include?.contact && row.contactId) {
+      const contactRow = db.prepare('SELECT * FROM contacts WHERE id = ?').get(row.contactId);
+      return { ...row, contact: contactRow };
+    }
+
+    return row;
+  },
+
+  create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = db.prepare(`
+      INSERT INTO deals (
+        id, name, price, currency, status, stage, pipelineId, pipelineName,
+        responsibleUserId, contactId, tags, customFields, crmId, crmType,
+        closedAt, userId, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.name,
+      data.price || 0,
+      data.currency || 'RUB',
+      data.status || null,
+      data.stage || null,
+      data.pipelineId || null,
+      data.pipelineName || null,
+      data.responsibleUserId || null,
+      data.contactId || null,
+      data.tags || null,
+      data.customFields || null,
+      data.crmId || null,
+      data.crmType || null,
+      data.closedAt || null,
+      data.userId,
+      now,
+      now
+    );
+
+    return this.findFirst({ where: { id } });
+  },
+
+  update({ where, data }: any) {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.price !== undefined) {
+      updates.push('price = ?');
+      params.push(data.price);
+    }
+    if (data.currency !== undefined) {
+      updates.push('currency = ?');
+      params.push(data.currency);
+    }
+    if (data.status !== undefined) {
+      updates.push('status = ?');
+      params.push(data.status);
+    }
+    if (data.stage !== undefined) {
+      updates.push('stage = ?');
+      params.push(data.stage);
+    }
+    if (data.pipelineId !== undefined) {
+      updates.push('pipelineId = ?');
+      params.push(data.pipelineId);
+    }
+    if (data.pipelineName !== undefined) {
+      updates.push('pipelineName = ?');
+      params.push(data.pipelineName);
+    }
+    if (data.contactId !== undefined) {
+      updates.push('contactId = ?');
+      params.push(data.contactId);
+    }
+    if (data.tags !== undefined) {
+      updates.push('tags = ?');
+      params.push(data.tags);
+    }
+    if (data.customFields !== undefined) {
+      updates.push('customFields = ?');
+      params.push(data.customFields);
+    }
+    if (data.closedAt !== undefined) {
+      updates.push('closedAt = ?');
+      params.push(data.closedAt);
+    }
+
+    updates.push('updatedAt = ?');
+    params.push(new Date().toISOString());
+    params.push(where.id);
+
+    const query = `UPDATE deals SET ${updates.join(', ')} WHERE id = ?`;
+    db.prepare(query).run(...params);
+    return this.findFirst({ where: { id: where.id } });
+  },
+
+  delete({ where }: any) {
+    db.prepare('DELETE FROM deals WHERE id = ?').run(where.id);
+    return { id: where.id };
+  },
+};
+
 // Export as prisma-like object
 export const prisma = {
   agent,
   user,
   kbCategory,
   kbArticle,
+  contact,
+  deal,
   $connect: async () => {
     console.log('✅ Database connected successfully (using better-sqlite3)');
   },
