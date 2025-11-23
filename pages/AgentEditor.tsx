@@ -114,9 +114,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // --- Integrations State ---
   const [integrationView, setIntegrationView] = useState<IntegrationView>('list');
   const [kommoActive, setKommoActive] = useState(true);
-  const [kommoConnected, setKommoConnected] = useState(false);
-  const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
-  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [kommoConnected, setKommoConnected] = useState(true);
+  const [googleCalendarActive, setGoogleCalendarActive] = useState(true);
+  const [googleCalendarConnected, setGoogleCalendarConnected] = useState(true);
 
   // --- Advanced Tab State ---
   const [advancedModel, setAdvancedModel] = useState('OpenAI GPT-4.1');
@@ -537,7 +537,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-20">
+    <div className="space-y-6 max-w-6xl mx-auto pb-20 px-12">
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -553,19 +553,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto no-scrollbar">
-        <TabButton id="main" label="Основные" icon={Settings} />
-        <TabButton id="deals" label="Сделки и контакты" icon={Users} />
-        <TabButton id="triggers" label="Триггеры" icon={Zap} />
-        <TabButton id="chains" label="Цепочки" icon={Clock} />
-        <TabButton id="integrations" label="Интеграции" icon={Puzzle} />
-        <TabButton id="advanced" label="Дополнительно" icon={FilePenLine} />
-      </div>
+      {/* Tabs Container */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
+        {/* Tabs */}
+        <div className="border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto no-scrollbar pl-[90px]">
+          <TabButton id="main" label="Основные" icon={Settings} />
+          <TabButton id="deals" label="Сделки и контакты" icon={Users} />
+          <TabButton id="triggers" label="Триггеры" icon={Zap} />
+          <TabButton id="chains" label="Цепочки" icon={Clock} />
+          <TabButton id="integrations" label="Интеграции" icon={Puzzle} />
+          <TabButton id="advanced" label="Дополнительно" icon={FilePenLine} />
+        </div>
 
       {/* Tab Content: Advanced */}
       {activeTab === 'advanced' && (
-        <div className="space-y-6 mt-6">
+        <div className="p-6 space-y-6">
 
           {/* Model Card */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
@@ -717,7 +719,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       {/* ... (Previous Tab Contents: Integrations, Chains, etc.) ... */}
       {activeTab === 'integrations' && (
-        <div className="space-y-6 mt-6">
+        <div className="p-6 space-y-6">
           {/* List View */}
           {integrationView === 'list' && (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
@@ -890,7 +892,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       {/* Content for Main/Deals/Triggers preserved by React state rendering but code structure implies they are peers */}
       {activeTab === 'main' && (
-        <div>
+        <div className="p-6">
           <AgentBasicSettings
             ref={basicSettingsRef}
             agent={agent}
@@ -924,19 +926,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       )}
 
       {activeTab === 'deals' && (
-        <AgentDealsContacts
-          ref={dealsContactsRef}
-          agent={agent}
-          onCancel={onCancel}
-          onSave={handleSave}
-          crmConnected={kommoConnected}
-          onSyncCRM={handleSyncCRM}
-        />
+        <div className="p-6">
+          <AgentDealsContacts
+            ref={dealsContactsRef}
+            agent={agent}
+            onCancel={onCancel}
+            onSave={handleSave}
+            crmConnected={kommoConnected}
+            onSyncCRM={handleSyncCRM}
+          />
+        </div>
       )}
 
       {activeTab === 'triggers' && (
         // ... (Triggers tab content code - reused from previous turn)
-        <div className="space-y-6 mt-6">
+        <div className="p-6 space-y-6">
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between">
             <div><h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Триггеры</h2><p className="text-sm text-gray-500">Выполняйте мгновенные действия...</p></div>
             <button onClick={handleCreateTrigger} className="bg-[#0078D4] text-white px-4 py-2 rounded-md text-sm font-medium">Создать</button>
@@ -988,7 +992,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           {isTriggerModalOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsTriggerModalOpen(false)} />
-              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col transition-colors animate-fadeIn">
+              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col transition-colors animate-fadeIn">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingTriggerId ? 'Редактировать Триггер' : 'Создать Триггер'}</h2>
                   <button onClick={() => setIsTriggerModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24} /></button>
@@ -1138,7 +1142,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       {activeTab === 'chains' && (
         // ... (Chains tab content code - reused from previous turn)
-        <div className="space-y-6 mt-6">
+        <div className="p-6 space-y-6">
           {/* ... (Chains implementation) ... */}
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between transition-colors">
             <div>
@@ -1187,7 +1191,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           {isChainModalOpen && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
               <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsChainModalOpen(false)} />
-              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col transition-colors animate-fadeIn">
+              <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col transition-colors animate-fadeIn">
                 <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingChainId ? 'Редактировать Цепочку' : 'Создать Цепочку'}</h2>
                   <button onClick={() => setIsChainModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
@@ -1553,7 +1557,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           )}
         </div>
       )}
-
+      </div>
+      {/* End Tabs Container */}
     </div>
   );
 };
