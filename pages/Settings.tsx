@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { settingsService } from '../src/services/api';
+import { Toast } from '../components/Toast';
 
-export const Settings: React.FC = () => {
+interface SettingsProps {
+  showToast: (type: Toast['type'], message: string) => void;
+}
+
+export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
   const [stopOnReply, setStopOnReply] = useState(false);
   const [resumeTime, setResumeTime] = useState(30);
   const [resumeUnit, setResumeUnit] = useState('дней');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Загрузка настроек при монтировании компонента
   useEffect(() => {
@@ -18,14 +21,13 @@ export const Settings: React.FC = () => {
   const loadSettings = async () => {
     try {
       setIsLoading(true);
-      setError(null);
       const settings = await settingsService.getSettings();
       setStopOnReply(settings.stopOnReply);
       setResumeTime(settings.resumeTime);
       setResumeUnit(settings.resumeUnit);
     } catch (err: any) {
       console.error('Failed to load settings:', err);
-      setError('Не удалось загрузить настройки');
+      showToast('error', 'Не удалось загрузить настройки');
     } finally {
       setIsLoading(false);
     }
@@ -34,8 +36,6 @@ export const Settings: React.FC = () => {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      setError(null);
-      setSuccessMessage(null);
 
       await settingsService.updateSettings({
         stopOnReply,
@@ -43,11 +43,10 @@ export const Settings: React.FC = () => {
         resumeUnit,
       });
 
-      setSuccessMessage('Настройки успешно сохранены');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      showToast('success', 'Настройки успешно сохранены');
     } catch (err: any) {
       console.error('Failed to save settings:', err);
-      setError(err.response?.data?.message || 'Не удалось сохранить настройки');
+      showToast('error', err.response?.data?.message || 'Не удалось сохранить настройки');
     } finally {
       setIsSaving(false);
     }
@@ -55,7 +54,7 @@ export const Settings: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 mt-4">Настройки аккаунта</h1>
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
           <div className="text-center text-gray-500 dark:text-gray-400">Загрузка настроек...</div>
@@ -65,22 +64,8 @@ export const Settings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-7xl mx-auto">
        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 mt-4">Настройки аккаунта</h1>
-
-       {/* Error Message */}
-       {error && (
-         <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg">
-           {error}
-         </div>
-       )}
-
-       {/* Success Message */}
-       {successMessage && (
-         <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 px-4 py-3 rounded-lg">
-           {successMessage}
-         </div>
-       )}
 
        {/* Settings Section */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 transition-colors">

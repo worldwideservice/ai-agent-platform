@@ -12,6 +12,9 @@ export interface CreateAgentDto {
   model?: string;
   systemInstructions?: string;
   isActive?: boolean;
+  pipelineSettings?: any;
+  channelSettings?: any;
+  kbSettings?: any;
 }
 
 export interface UpdateAgentDto {

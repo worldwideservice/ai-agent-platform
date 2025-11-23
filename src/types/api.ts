@@ -41,6 +41,7 @@ export interface AgentCreateRequest {
   pipelineSettings?: any;
   channelSettings?: any;
   kbSettings?: any;
+  crmData?: any;
 }
 
 export interface AgentUpdateRequest extends Partial<AgentCreateRequest> {}

@@ -104,7 +104,7 @@ export const Billing: React.FC = () => {
        {/* Current Plan Card - Polished to match screenshot */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm">
          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
-            <div className="w-full md:flex-1 space-y-5">
+            <div className="w-full md:flex-1 min-w-0 space-y-5">
                <div className="flex flex-wrap items-baseline gap-2">
                  <span className="text-xl font-bold text-gray-900 dark:text-white">Ваш текущий план:</span>
                  <span className="text-xl font-bold text-gray-500 dark:text-gray-400">Пробный период</span>
@@ -139,7 +139,7 @@ export const Billing: React.FC = () => {
                </div>
             </div>
 
-            <div className="w-full md:w-auto flex justify-end md:justify-start md:self-start md:mt-0">
+            <div className="w-full md:w-auto md:flex-shrink-0 flex justify-end md:justify-start md:self-start md:mt-0">
                 <button className="bg-[#B91C1C] hover:bg-[#991B1B] text-white px-5 py-2 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap text-sm">
                   Управление подпиской
                 </button>

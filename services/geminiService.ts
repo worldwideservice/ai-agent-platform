@@ -23,7 +23,9 @@ const getClient = () => {
 // Маппинг названий моделей из UI на технические ID Gemini
 const MODEL_MAPPING: Record<string, string> = {
   'OpenAI GPT-4.1': 'gemini-2.0-flash-exp',        // Пока используем Gemini (в будущем - OpenAI API)
+  'OpenAI GPT-4o': 'gemini-2.0-flash-exp',         // Пока используем Gemini (в будущем - OpenAI API)
   'OpenAI GPT-5': 'gemini-2.0-flash-exp',          // Пока используем Gemini
+  'Gemini 1.5 Pro': 'gemini-1.5-pro',              // Google Gemini 1.5 Pro
   'Google Gemini 2.5 Flash': 'gemini-2.0-flash-exp',
   'Claude Sonnet 4': 'gemini-2.0-flash-exp',       // Пока используем Gemini (в будущем - Anthropic API)
 };

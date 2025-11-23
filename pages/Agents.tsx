@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Edit, Copy, Trash2, Search, LayoutGrid, X, ChevronDown, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Edit, Copy, Trash2, Search, LayoutGrid, X, ChevronDown, Loader2, Filter } from 'lucide-react';
 import { Agent } from '../types';
 
 interface AgentsProps {
@@ -22,6 +22,24 @@ export const Agents: React.FC<AgentsProps> = ({
   onCreateAgent,
 }) => {
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState({
+    name: true,
+    active: true,
+    createdAt: true,
+  });
+  const [filters, setFilters] = useState({
+    status: 'all', // all, active, inactive
+    model: 'all',
+  });
+
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  const columnsPanelRef = useRef<HTMLDivElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const columnsButtonRef = useRef<HTMLButtonElement>(null);
 
   const toggleSelectAgent = (id: string) => {
     setSelectedAgents(prev =>
@@ -29,8 +47,76 @@ export const Agents: React.FC<AgentsProps> = ({
     );
   };
 
-  const selectAll = () => setSelectedAgents(agents.map(a => a.id));
+  const selectAll = () => setSelectedAgents(filteredAgents.map(a => a.id));
   const deselectAll = () => setSelectedAgents([]);
+
+  // Фильтрация агентов по поисковому запросу и фильтрам
+  const filteredAgents = agents.filter(agent => {
+    const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = filters.status === 'all' ||
+      (filters.status === 'active' && agent.isActive) ||
+      (filters.status === 'inactive' && !agent.isActive);
+    const matchesModel = filters.model === 'all' || agent.model === filters.model;
+
+    return matchesSearch && matchesStatus && matchesModel;
+  });
+
+  // Массовые действия
+  const handleBulkDelete = () => {
+    selectedAgents.forEach(id => onDeleteAgent(id));
+    setSelectedAgents([]);
+    setShowActionsMenu(false);
+  };
+
+  const handleBulkActivate = () => {
+    selectedAgents.forEach(id => {
+      const agent = agents.find(a => a.id === id);
+      if (agent && !agent.isActive) {
+        onToggleAgentStatus(id);
+      }
+    });
+    setSelectedAgents([]);
+    setShowActionsMenu(false);
+  };
+
+  const handleBulkDeactivate = () => {
+    selectedAgents.forEach(id => {
+      const agent = agents.find(a => a.id === id);
+      if (agent && agent.isActive) {
+        onToggleAgentStatus(id);
+      }
+    });
+    setSelectedAgents([]);
+    setShowActionsMenu(false);
+  };
+
+  // Закрытие панелей при клике вне их области
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Закрытие панели фильтров
+      if (showFilterPanel &&
+          filterPanelRef.current &&
+          !filterPanelRef.current.contains(event.target as Node) &&
+          filterButtonRef.current &&
+          !filterButtonRef.current.contains(event.target as Node)) {
+        setShowFilterPanel(false);
+      }
+
+      // Закрытие панели столбцов
+      if (showColumnsPanel &&
+          columnsPanelRef.current &&
+          !columnsPanelRef.current.contains(event.target as Node) &&
+          columnsButtonRef.current &&
+          !columnsButtonRef.current.contains(event.target as Node)) {
+        setShowColumnsPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterPanel, showColumnsPanel]);
 
   return (
     <div className="space-y-6">
@@ -53,26 +139,162 @@ export const Agents: React.FC<AgentsProps> = ({
       </div>
 
       {/* Main container */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors relative">
         {/* Toolbar */}
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <button className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-            Открыть действия
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowActionsMenu(!showActionsMenu)}
+              disabled={selectedAgents.length === 0}
+              className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              Открыть действия ({selectedAgents.length})
+            </button>
+
+            {/* Dropdown меню массовых действий */}
+            {showActionsMenu && selectedAgents.length > 0 && (
+              <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
+                <button
+                  onClick={handleBulkActivate}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Активировать выбранные
+                </button>
+                <button
+                  onClick={handleBulkDeactivate}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Деактивировать выбранные
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  Удалить выбранные
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <input
                 type="text"
                 placeholder="Поиск"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-48 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
               />
             </div>
-            <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors">
+            <button
+              ref={filterButtonRef}
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative"
+              title="Фильтры"
+            >
+              <Filter size={16} />
+              {(filters.status !== 'all' || filters.model !== 'all') && (
+                <span className="absolute -top-1 -right-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1 rounded-full">
+                  {(filters.status !== 'all' ? 1 : 0) + (filters.model !== 'all' ? 1 : 0)}
+                </span>
+              )}
+            </button>
+            <button
+              ref={columnsButtonRef}
+              onClick={() => setShowColumnsPanel(!showColumnsPanel)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors"
+              title="Столбцы"
+            >
               <LayoutGrid size={16} />
             </button>
           </div>
         </div>
+
+        {/* Filter Panel - Боковая панель фильтров */}
+        {showFilterPanel && (
+          <div ref={filterPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900 dark:text-white">Фильтры</h3>
+              <button
+                onClick={() => setFilters({ status: 'all', model: 'all' })}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Сбросить
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Статус
+                </label>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="all">Все</option>
+                  <option value="active">Активные</option>
+                  <option value="inactive">Неактивные</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Модель
+                </label>
+                <select
+                  value={filters.model}
+                  onChange={(e) => setFilters(prev => ({ ...prev, model: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="all">Все модели</option>
+                  <option value="OpenAI GPT-4.1">OpenAI GPT-4.1</option>
+                  <option value="OpenAI GPT-4o">OpenAI GPT-4o</option>
+                  <option value="OpenAI GPT-5">OpenAI GPT-5</option>
+                  <option value="Gemini 1.5 Pro">Gemini 1.5 Pro</option>
+                  <option value="Google Gemini 2.5 Flash">Google Gemini 2.5 Flash</option>
+                  <option value="Claude Sonnet 4">Claude Sonnet 4</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Columns Panel - Боковая панель столбцов */}
+        {showColumnsPanel && (
+          <div ref={columnsPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
+            <h3 className="font-medium text-gray-900 dark:text-white mb-3">Столбцы</h3>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.name}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, name: !prev.name }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Название</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.active}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, active: !prev.active }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Активно</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.createdAt}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, createdAt: !prev.createdAt }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Дата создания</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         {isLoading ? (
@@ -80,7 +302,7 @@ export const Agents: React.FC<AgentsProps> = ({
             <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-white">Загрузка агентов...</h3>
           </div>
-        ) : agents.length > 0 ? (
+        ) : filteredAgents.length > 0 ? (
           <>
             {/* Table */}
             <table className="w-full">
@@ -89,27 +311,33 @@ export const Agents: React.FC<AgentsProps> = ({
                   <th className="w-12 p-4">
                     <input
                       type="checkbox"
-                      checked={selectedAgents.length === agents.length && agents.length > 0}
-                      onChange={() => (selectedAgents.length === agents.length ? deselectAll() : selectAll())}
+                      checked={selectedAgents.length === filteredAgents.length && filteredAgents.length > 0}
+                      onChange={() => (selectedAgents.length === filteredAgents.length ? deselectAll() : selectAll())}
                       className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22white%22%3E%3Cpath d=%22M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z%22/%3E%3C/svg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                    Название <ChevronDown size={14} className="inline ml-1" />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                    Активно
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                    Дата создания <ChevronDown size={14} className="inline ml-1" />
-                  </th>
+                  {visibleColumns.name && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      Название <ChevronDown size={14} className="inline ml-1" />
+                    </th>
+                  )}
+                  {visibleColumns.active && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      Активно
+                    </th>
+                  )}
+                  {visibleColumns.createdAt && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      Дата создания <ChevronDown size={14} className="inline ml-1" />
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
                     Действия
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {agents.map(agent =>
+                {filteredAgents.map(agent =>
                   <tr
                     key={agent.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer"
@@ -126,21 +354,27 @@ export const Agents: React.FC<AgentsProps> = ({
                         className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22white%22%3E%3Cpath d=%22M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0z%22/%3E%3C/svg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                       />
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.name}</td>
-                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleAgentStatus(agent.id);
-                        }}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${agent.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.isActive ? 'translate-x-5' : 'translate-x-0'}`}
-                        />
-                      </button>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.createdAt}</td>
+                    {visibleColumns.name && (
+                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.name}</td>
+                    )}
+                    {visibleColumns.active && (
+                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleAgentStatus(agent.id);
+                          }}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${agent.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${agent.isActive ? 'translate-x-5' : 'translate-x-0'}`}
+                          />
+                        </button>
+                      </td>
+                    )}
+                    {visibleColumns.createdAt && (
+                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">{agent.createdAt}</td>
+                    )}
                     <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
                         <button onClick={(e) => { e.stopPropagation(); onEditAgent(agent.id); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -162,7 +396,7 @@ export const Agents: React.FC<AgentsProps> = ({
             {/* Pagination */}
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                Показано с 1 по {agents.length} из {agents.length}
+                Показано с 1 по {filteredAgents.length} из {agents.length}
               </span>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600 dark:text-gray-400">на страницу</span>
@@ -179,7 +413,14 @@ export const Agents: React.FC<AgentsProps> = ({
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
               <X size={32} strokeWidth={1.5} />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Не найдено Агенты ИИ</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              {searchQuery ? 'Не найдено агентов по запросу' : 'Не найдено Агенты ИИ'}
+            </h3>
+            {searchQuery && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                Попробуйте изменить поисковый запрос
+              </p>
+            )}
           </div>
         )}
     </div>

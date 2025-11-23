@@ -96,7 +96,10 @@ const GoogleIcon = () => (
 );
 
 export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<Tab>('main');
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const saved = localStorage.getItem('agentEditorActiveTab');
+    return (saved as Tab) || 'main';
+  });
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
   const dealsContactsRef = useRef<AgentDealsContactsRef>(null);
 
@@ -126,10 +129,27 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // --- Triggers Data ---
   const [triggers, setTriggers] = useState<Trigger[]>([]);
 
+  // Загружаем модель из агента при монтировании компонента
+  React.useEffect(() => {
+    if (agent?.model) {
+      setAdvancedModel(agent.model);
+    }
+  }, [agent]);
+
+  // Сохраняем активную вкладку в localStorage
+  React.useEffect(() => {
+    localStorage.setItem('agentEditorActiveTab', activeTab);
+  }, [activeTab]);
 
   // --- Save Handler ---
   const handleSave = async () => {
-    if (!agent) return;
+    console.log('=== handleSave called ===');
+    console.log('Agent:', agent);
+
+    if (!agent) {
+      console.error('Agent is not defined! Cannot save.');
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -137,14 +157,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       // Get data from basic settings
       const basicData = basicSettingsRef.current?.getData() || {};
+      console.log('Basic data:', basicData);
 
       // Get data from deals & contacts settings
       const dealsContactsData = dealsContactsRef.current?.getData() || {};
+      console.log('Deals/Contacts data:', dealsContactsData);
 
       // Parse existing crmData and merge with new deals/contacts settings
       let crmData = {};
       try {
-        crmData = agent.crmData ? JSON.parse(agent.crmData) : {};
+        // crmData может быть уже объектом (после парсинга на backend) или строкой
+        if (typeof agent.crmData === 'string') {
+          crmData = JSON.parse(agent.crmData);
+        } else if (agent.crmData && typeof agent.crmData === 'object') {
+          crmData = agent.crmData;
+        }
       } catch (e) {
         console.error('Failed to parse crmData:', e);
       }
@@ -155,13 +182,18 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       };
 
       // Merge with existing agent data
+      // НЕ делаем JSON.stringify здесь - backend сделает это сам!
       const updatedAgent: Agent = {
         ...agent,
         ...basicData,
-        crmData: JSON.stringify(updatedCrmData)
+        model: advancedModel,  // Сохраняем выбранную модель
+        crmData: updatedCrmData  // Отправляем объект, не строку!
       };
 
+      console.log('Updated agent:', updatedAgent);
+      console.log('Calling onSave...');
       await onSave(updatedAgent);
+      console.log('onSave completed successfully');
     } catch (error: any) {
       setSaveError(error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.');
       console.error('Failed to save agent:', error);
@@ -190,6 +222,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // --- Cancel Handler ---
+  const handleCancel = () => {
+    localStorage.removeItem('agentEditorActiveTab');
+    onCancel();
   };
 
   // --- Chains Data ---
@@ -508,7 +546,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             {renderPageTitle()}
           </h1>
         </div>
-        {(activeTab !== 'triggers' && activeTab !== 'chains' && activeTab !== 'integrations') && (
+        {activeTab === 'main' && (
           <button className="bg-[#DC2626] hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
             Удалить
           </button>
@@ -667,7 +705,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
               <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
             )}
             <button
-              onClick={onCancel}
+              onClick={handleCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
             >
               Отмена
@@ -856,7 +894,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           <AgentBasicSettings
             ref={basicSettingsRef}
             agent={agent}
-            onCancel={onCancel}
+            onCancel={handleCancel}
             crmConnected={kommoConnected}
             kbCategories={kbCategories}
             onNavigateToKbArticles={() => onNavigate('kb-articles')}
@@ -876,7 +914,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
               <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
             )}
             <button
-              onClick={onCancel}
+              onClick={handleCancel}
               className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
             >
               Отмена
@@ -890,6 +928,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           ref={dealsContactsRef}
           agent={agent}
           onCancel={onCancel}
+          onSave={handleSave}
           crmConnected={kommoConnected}
           onSyncCRM={handleSyncCRM}
         />

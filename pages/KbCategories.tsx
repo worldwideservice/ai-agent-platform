@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Folder, Edit, Trash2, Filter, LayoutGrid, ChevronDown, Copy, ArrowLeft, X, Search, Plus } from 'lucide-react';
 
 interface KbCategoriesProps {
@@ -31,6 +31,52 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
 
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [showColumnsPanel, setShowColumnsPanel] = React.useState(false);
+  const [showFilterPanel, setShowFilterPanel] = React.useState(false);
+  const [visibleColumns, setVisibleColumns] = React.useState({
+    title: true,
+    subcategories: true,
+    articles: true,
+  });
+  const [filters, setFilters] = React.useState({
+    parentCategory: 'all',
+  });
+
+  // Refs for click-outside detection
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+  const columnsPanelRef = useRef<HTMLDivElement>(null);
+  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const columnsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Click outside to close panels
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showFilterPanel &&
+        filterPanelRef.current &&
+        !filterPanelRef.current.contains(event.target as Node) &&
+        filterButtonRef.current &&
+        !filterButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowFilterPanel(false);
+      }
+
+      if (
+        showColumnsPanel &&
+        columnsPanelRef.current &&
+        !columnsPanelRef.current.contains(event.target as Node) &&
+        columnsButtonRef.current &&
+        !columnsButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowColumnsPanel(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterPanel, showColumnsPanel]);
 
   const toggleSelectCategory = (id: string) => {
     setSelectedCategories(prev =>
@@ -132,17 +178,97 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
       </div>
 
       {/* Subcategories Section */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors relative">
         {/* Filters / Toolbar */}
         <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative">
+          <button
+            ref={filterButtonRef}
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative"
+            title="Фильтры"
+          >
             <Filter size={16} />
-            <span className="absolute -top-1 -right-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1 rounded-full">0</span>
+            {filters.parentCategory !== 'all' && (
+              <span className="absolute -top-1 -right-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1 rounded-full">1</span>
+            )}
           </button>
-          <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors">
+          <button
+            ref={columnsButtonRef}
+            onClick={() => setShowColumnsPanel(!showColumnsPanel)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors"
+            title="Столбцы"
+          >
             <LayoutGrid size={16} />
           </button>
         </div>
+
+        {/* Filter Panel - Боковая панель фильтров */}
+        {showFilterPanel && (
+          <div ref={filterPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900 dark:text-white">Фильтры</h3>
+              <button
+                onClick={() => setFilters({ parentCategory: 'all' })}
+                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Сбросить
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Родительская категория
+                </label>
+                <select
+                  value={filters.parentCategory}
+                  onChange={(e) => setFilters(prev => ({ ...prev, parentCategory: e.target.value }))}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="all">Все</option>
+                  {categories.filter(cat => cat.parentId === null).map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Columns Panel - Боковая панель столбцов */}
+        {showColumnsPanel && (
+          <div ref={columnsPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
+            <h3 className="font-medium text-gray-900 dark:text-white mb-3">Столбцы</h3>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.title}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Заголовок</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.subcategories}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, subcategories: !prev.subcategories }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Подкатегории</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.articles}
+                  onChange={() => setVisibleColumns(prev => ({ ...prev, articles: !prev.articles }))}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Статьи</span>
+              </label>
+            </div>
+          </div>
+        )}
 
         {/* Empty State for Subcategories */}
         {displayedCategories.length === 0 ? (
@@ -165,12 +291,18 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                       className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                     />
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                    Заголовок <ChevronDown size={14} className="inline ml-1" />
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Подкатегории</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Статьи</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider"></th>
+                  {visibleColumns.title && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      Заголовок <ChevronDown size={14} className="inline ml-1" />
+                    </th>
+                  )}
+                  {visibleColumns.subcategories && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Подкатегории</th>
+                  )}
+                  {visibleColumns.articles && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Статьи</th>
+                  )}
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Действия</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -195,18 +327,24 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                         className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22 fill=%22white%22%3E%3Cpath d=%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C/svg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
                       />
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <Folder size={18} className="text-gray-400 dark:text-gray-500" />
-                        <span className="text-sm text-gray-900 dark:text-white">{category.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                      {getSubcategoriesCount(category.id)}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                      {getArticlesCount(category.name)}
-                    </td>
+                    {visibleColumns.title && (
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <Folder size={18} className="text-gray-400 dark:text-gray-500" />
+                          <span className="text-sm text-gray-900 dark:text-white">{category.name}</span>
+                        </div>
+                      </td>
+                    )}
+                    {visibleColumns.subcategories && (
+                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                        {getSubcategoriesCount(category.id)}
+                      </td>
+                    )}
+                    {visibleColumns.articles && (
+                      <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                        {getArticlesCount(category.name)}
+                      </td>
+                    )}
                     <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
                         <button

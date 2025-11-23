@@ -2,6 +2,27 @@ import { Response } from 'express';
 import { AuthRequest, CreateAgentDto, UpdateAgentDto } from '../types';
 import { prisma } from '../config/database';
 
+// Helper функция для парсинга JSON полей агента
+function parseAgentJson(agent: any) {
+  const safeJsonParse = (jsonString: string | null) => {
+    if (!jsonString) return null;
+    try {
+      return JSON.parse(jsonString);
+    } catch (error) {
+      console.error('Failed to parse JSON:', error);
+      return null;
+    }
+  };
+
+  return {
+    ...agent,
+    pipelineSettings: safeJsonParse(agent.pipelineSettings),
+    channelSettings: safeJsonParse(agent.channelSettings),
+    kbSettings: safeJsonParse(agent.kbSettings),
+    crmData: safeJsonParse(agent.crmData),
+  };
+}
+
 // GET /api/agents - Получить все агенты пользователя
 export async function getAllAgents(req: AuthRequest, res: Response) {
   try {
@@ -10,7 +31,9 @@ export async function getAllAgents(req: AuthRequest, res: Response) {
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(agents);
+    // Парсим JSON поля для каждого агента
+    const parsedAgents = agents.map(parseAgentJson);
+    res.json(parsedAgents);
   } catch (error) {
     console.error('Error fetching agents:', error);
     res.status(500).json({ error: 'Failed to fetch agents' });
@@ -34,7 +57,9 @@ export async function getAgentById(req: AuthRequest, res: Response) {
       return;
     }
 
-    res.json(agent);
+    // Парсим JSON поля
+    const parsedAgent = parseAgentJson(agent);
+    res.json(parsedAgent);
   } catch (error) {
     console.error('Error fetching agent:', error);
     res.status(500).json({ error: 'Failed to fetch agent' });
@@ -58,11 +83,16 @@ export async function createAgent(req: AuthRequest, res: Response) {
         model: data.model || 'Google Gemini 2.5 Flash',
         systemInstructions: data.systemInstructions,
         isActive: data.isActive || false,
+        pipelineSettings: data.pipelineSettings ? JSON.stringify(data.pipelineSettings) : null,
+        channelSettings: data.channelSettings ? JSON.stringify(data.channelSettings) : null,
+        kbSettings: data.kbSettings ? JSON.stringify(data.kbSettings) : null,
         userId: req.userId!,
       },
     });
 
-    res.status(201).json(agent);
+    // Парсим JSON поля перед отправкой
+    const parsedAgent = parseAgentJson(agent);
+    res.status(201).json(parsedAgent);
   } catch (error) {
     console.error('Error creating agent:', error);
     res.status(500).json({ error: 'Failed to create agent' });
@@ -74,6 +104,11 @@ export async function updateAgent(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const data: UpdateAgentDto = req.body;
+
+    console.log('=== UPDATE AGENT REQUEST ===');
+    console.log('Agent ID:', id);
+    console.log('Request body:', JSON.stringify(data, null, 2));
+    console.log('crmData in request:', data.crmData);
 
     // Проверяем что агент принадлежит пользователю
     const existingAgent = await prisma.agent.findFirst({
@@ -92,17 +127,36 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     if (data.systemInstructions !== undefined) updateData.systemInstructions = data.systemInstructions;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
     if (data.checkBeforeSend !== undefined) updateData.checkBeforeSend = data.checkBeforeSend;
-    if (data.pipelineSettings !== undefined) updateData.pipelineSettings = data.pipelineSettings;
-    if (data.channelSettings !== undefined) updateData.channelSettings = data.channelSettings;
-    if (data.kbSettings !== undefined) updateData.kbSettings = data.kbSettings;
-    if (data.crmData !== undefined) updateData.crmData = data.crmData;
+
+    // JSON поля нужно сериализовать в строки для SQLite
+    if (data.pipelineSettings !== undefined) {
+      updateData.pipelineSettings = data.pipelineSettings ? JSON.stringify(data.pipelineSettings) : null;
+    }
+    if (data.channelSettings !== undefined) {
+      updateData.channelSettings = data.channelSettings ? JSON.stringify(data.channelSettings) : null;
+    }
+    if (data.kbSettings !== undefined) {
+      updateData.kbSettings = data.kbSettings ? JSON.stringify(data.kbSettings) : null;
+    }
+    if (data.crmData !== undefined) {
+      updateData.crmData = data.crmData ? JSON.stringify(data.crmData) : null;
+    }
+
+    console.log('=== DATA TO UPDATE IN DB ===');
+    console.log('Update data:', JSON.stringify(updateData, null, 2));
+    console.log('crmData to save:', updateData.crmData);
 
     const agent = await prisma.agent.update({
       where: { id },
       data: updateData,
     });
 
-    res.json(agent);
+    console.log('=== UPDATED AGENT ===');
+    console.log('Updated agent crmData:', agent.crmData);
+
+    // Парсим JSON поля перед отправкой клиенту
+    const parsedAgent = parseAgentJson(agent);
+    res.json(parsedAgent);
   } catch (error) {
     console.error('Error updating agent:', error);
     res.status(500).json({ error: 'Failed to update agent' });
@@ -155,7 +209,9 @@ export async function toggleAgentStatus(req: AuthRequest, res: Response) {
       data: { isActive: !existingAgent.isActive },
     });
 
-    res.json(agent);
+    // Парсим JSON поля перед отправкой клиенту
+    const parsedAgent = parseAgentJson(agent);
+    res.json(parsedAgent);
   } catch (error) {
     console.error('Error toggling agent status:', error);
     res.status(500).json({ error: 'Failed to toggle agent status' });

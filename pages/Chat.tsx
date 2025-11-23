@@ -14,6 +14,13 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Автоматически выбираем первого активного агента при загрузке
+  useEffect(() => {
+    if (activeAgents.length > 0 && !selectedAgent) {
+      setSelectedAgent(activeAgents[0]);
+    }
+  }, [agents]);
+
   // Устанавливаем начальное сообщение в зависимости от выбранного агента
   useEffect(() => {
     if (selectedAgent) {
@@ -26,7 +33,7 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
       ]);
     } else {
       setMessages([
-        { role: 'model', text: 'Выберите агента для начала тестирования' }
+        { role: 'model', text: 'Нет доступных агентов для тестирования' }
       ]);
     }
   }, [selectedAgent]);
@@ -177,7 +184,7 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
 
         {/* Input Area */}
         <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex gap-2 items-end">
+          <div className="flex gap-2 items-stretch">
              {/* Agent Select - с реальными данными */}
              <select
                value={selectedAgent?.id || ''}
@@ -185,9 +192,8 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
                  const agent = agents.find(a => a.id === e.target.value);
                  setSelectedAgent(agent || null);
                }}
-               className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-64"
+               className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-64 flex-shrink-0"
              >
-                <option value="">Выберите агента ИИ</option>
                 {activeAgents.length > 0 ? (
                   activeAgents.map(agent => (
                     <option key={agent.id} value={agent.id}>
@@ -199,37 +205,30 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
                 )}
              </select>
 
-            <div className="flex-1 relative">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder={selectedAgent ? "Введите сообщение здесь..." : "Сначала выберите агента..."}
-                disabled={!selectedAgent}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-md pl-4 pr-12 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed transition-colors"
-                rows={1}
-                style={{ minHeight: '42px' }}
-              />
-            </div>
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Введите сообщение здесь..."
+              disabled={!selectedAgent}
+              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed transition-colors"
+            />
+
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim() || !selectedAgent}
-              className={`bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed`}
+              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
               <span>Отправить</span>
             </button>
           </div>
-          {!selectedAgent && (
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-              💡 Выберите агента из списка выше, чтобы начать тестирование
-            </p>
-          )}
-          {selectedAgent && activeAgents.length === 0 && (
+          {activeAgents.length === 0 && (
             <p className="text-xs text-orange-600 dark:text-orange-400 mt-2">
               ⚠️ У вас нет активных агентов. Активируйте агента в настройках.
             </p>

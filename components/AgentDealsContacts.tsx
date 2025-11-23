@@ -25,6 +25,7 @@ interface UpdateRule {
 interface AgentDealsContactsProps {
     agent?: Agent | null;
     onCancel: () => void;
+    onSave?: () => void;
     crmConnected: boolean;
     onSyncCRM: () => Promise<void>;
 }
@@ -33,12 +34,18 @@ export interface AgentDealsContactsRef {
     getData: () => any;
 }
 
-export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, crmConnected, onSyncCRM }, ref) => {
+export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, onSave, crmConnected, onSyncCRM }, ref) => {
     // Parse CRM data from agent
     const parseCrmData = () => {
         if (!agent?.crmData) return null;
         try {
-            return JSON.parse(agent.crmData);
+            // crmData может быть уже объектом (после парсинга на backend) или строкой
+            if (typeof agent.crmData === 'string') {
+                return JSON.parse(agent.crmData);
+            } else if (typeof agent.crmData === 'object') {
+                return agent.crmData;
+            }
+            return null;
         } catch {
             return null;
         }
@@ -49,22 +56,37 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     const availableContactFields = crmData?.contactFields || CONTACT_FIELDS;
 
     // --- State ---
-    // Data Access
-    const [readDealFields, setReadDealFields] = useState<string[]>(['deal_stage']);
-    const [readContactFields, setReadContactFields] = useState<string[]>(['contact_name']);
+    // Data Access - Инициализируем из сохраненных данных или дефолтными значениями
+    const [readDealFields, setReadDealFields] = useState<string[]>(
+        crmData?.dealReadFields || ['deal_stage']
+    );
+    const [readContactFields, setReadContactFields] = useState<string[]>(
+        crmData?.contactReadFields || ['contact_name']
+    );
     const [isDealAccessOpen, setIsDealAccessOpen] = useState(true);
     const [isContactAccessOpen, setIsContactAccessOpen] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
 
-    // Data Input
-    const [dealUpdateRules, setDealUpdateRules] = useState<UpdateRule[]>([
-        { id: '1', fieldId: '', condition: '', overwrite: false }
-    ]);
-    const [contactUpdateRules, setContactUpdateRules] = useState<UpdateRule[]>([
-        { id: '1', fieldId: '', condition: '', overwrite: true }
-    ]);
+    // Data Input - Инициализируем из сохраненных данных или дефолтными значениями
+    const [dealUpdateRules, setDealUpdateRules] = useState<UpdateRule[]>(
+        crmData?.dealUpdateRules || [{ id: '1', fieldId: '', condition: '', overwrite: false }]
+    );
+    const [contactUpdateRules, setContactUpdateRules] = useState<UpdateRule[]>(
+        crmData?.contactUpdateRules || [{ id: '1', fieldId: '', condition: '', overwrite: true }]
+    );
     const [isDealRulesOpen, setIsDealRulesOpen] = useState(true);
     const [isContactRulesOpen, setIsContactRulesOpen] = useState(true);
+
+    // Загружаем данные из агента при изменении агента
+    React.useEffect(() => {
+        const data = parseCrmData();
+        if (data) {
+            if (data.dealReadFields) setReadDealFields(data.dealReadFields);
+            if (data.contactReadFields) setReadContactFields(data.contactReadFields);
+            if (data.dealUpdateRules) setDealUpdateRules(data.dealUpdateRules);
+            if (data.contactUpdateRules) setContactUpdateRules(data.contactUpdateRules);
+        }
+    }, [agent?.id]);
 
     // Expose getData method via ref
     useImperativeHandle(ref, () => ({
@@ -358,9 +380,10 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                 <button
                                     onClick={() => addRule(setDealUpdateRules)}
-                                    className="w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors font-medium"
+                                    className="group w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-medium flex items-center justify-center gap-2"
                                 >
-                                    Добавить поле
+                                    <Plus size={18} className="group-hover:scale-110 transition-transform" />
+                                    <span>Добавить поле</span>
                                 </button>
                             </div>
                         )}
@@ -439,9 +462,10 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                 <button
                                     onClick={() => addRule(setContactUpdateRules)}
-                                    className="w-full py-2 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors font-medium"
+                                    className="group w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-medium flex items-center justify-center gap-2"
                                 >
-                                    Добавить поле
+                                    <Plus size={18} className="group-hover:scale-110 transition-transform" />
+                                    <span>Добавить поле</span>
                                 </button>
                             </div>
                         )}
@@ -451,7 +475,18 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
             {/* Footer Actions */}
             <div className="flex items-center gap-4 pt-4">
-                <button className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm">
+                <button
+                    onClick={() => {
+                        console.log('Save button clicked!');
+                        console.log('onSave function:', onSave);
+                        if (onSave) {
+                            onSave();
+                        } else {
+                            console.error('onSave is not defined!');
+                        }
+                    }}
+                    className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
+                >
                     Сохранить
                 </button>
                 <button

@@ -17,7 +17,7 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
 import { useAuth } from './src/contexts/AuthContext';
 import { Auth } from './src/pages/Auth';
-import { agentService } from './src/services/api';
+import { agentService, billingService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
 const INITIAL_KB_CATEGORIES = [
@@ -36,6 +36,10 @@ const App: React.FC = () => {
   });
   const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('editingAgentId');
+    return saved || null;
+  });
 
   // State для KB Categories
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
@@ -43,6 +47,10 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : INITIAL_KB_CATEGORIES;
   });
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; parentId: string | null } | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('editingCategoryId');
+    return saved || null;
+  });
   const [currentCategoryId, setCurrentCategoryId] = useState<string | null>(() => {
     const saved = localStorage.getItem('currentCategoryId');
     return saved ? (saved === 'null' ? null : saved) : null;
@@ -62,6 +70,10 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
+  const [editingArticleId, setEditingArticleId] = useState<number | null>(() => {
+    const saved = localStorage.getItem('editingArticleId');
+    return saved ? parseInt(saved) : null;
+  });
 
   // State для модалок и toast
   const [confirmationModal, setConfirmationModal] = useState<{
@@ -102,13 +114,147 @@ const App: React.FC = () => {
     }
   };
 
+  // Проверка и показ уведомлений о пробном периоде
+  const checkTrialNotification = async () => {
+    try {
+      const subscription = await billingService.getSubscription();
+
+      // Проверяем только если пользователь на пробном периоде
+      if (subscription.currentPlan !== 'trial') {
+        return;
+      }
+
+      // Проверяем последнее время показа уведомления
+      const lastNotificationDate = localStorage.getItem('lastTrialNotification');
+      const now = new Date().getTime();
+
+      // Если уведомление показывалось менее 24 часов назад - не показываем
+      if (lastNotificationDate) {
+        const lastNotificationTime = parseInt(lastNotificationDate);
+        const hoursSinceLastNotification = (now - lastNotificationTime) / (1000 * 60 * 60);
+
+        if (hoursSinceLastNotification < 24) {
+          return; // Ещё не прошло 24 часа
+        }
+      }
+
+      // Формируем текст уведомления в зависимости от оставшихся дней
+      const daysRemaining = subscription.daysRemaining;
+      let message = '';
+      let type: Toast['type'] = 'info';
+
+      if (daysRemaining === 0) {
+        message = '⏰ Пробный период закончился. Оформите подписку для продолжения работы.';
+        type = 'error';
+      } else if (daysRemaining === 1) {
+        message = '⏰ Остался 1 день пробного периода. Не забудьте оформить подписку!';
+        type = 'warning';
+      } else if (daysRemaining <= 3) {
+        message = `⏰ Осталось ${daysRemaining} дня пробного периода. Оформите подписку, чтобы не потерять доступ.`;
+        type = 'warning';
+      } else if (daysRemaining <= 7) {
+        message = `📅 Осталось ${daysRemaining} дней пробного периода.`;
+        type = 'info';
+      } else {
+        message = `📅 У вас ${daysRemaining} дней пробного периода.`;
+        type = 'info';
+      }
+
+      // Показываем уведомление
+      showToast(type, message);
+
+      // Сохраняем время показа уведомления
+      localStorage.setItem('lastTrialNotification', now.toString());
+
+    } catch (error) {
+      console.error('Failed to check trial notification:', error);
+    }
+  };
+
   // === 3. Effects ===
   // Загрузка агентов из API при авторизации
   useEffect(() => {
     if (isAuthenticated) {
       loadAgents();
+      checkTrialNotification(); // Проверяем пробный период при входе
     }
   }, [isAuthenticated]);
+
+  // Восстанавливаем editingAgent после загрузки агентов
+  useEffect(() => {
+    if (editingAgentId && agents.length > 0 && !editingAgent) {
+      const agent = agents.find(a => a.id === editingAgentId);
+      if (agent) {
+        setEditingAgent(agent);
+      } else {
+        // Агент не найден, очищаем ID и возвращаемся на список
+        localStorage.removeItem('editingAgentId');
+        setEditingAgentId(null);
+        if (currentPage === 'agent-editor') {
+          setCurrentPage('agents');
+        }
+      }
+    }
+  }, [agents, editingAgentId, editingAgent, currentPage]);
+
+  // Сохраняем editingAgentId в localStorage
+  useEffect(() => {
+    if (editingAgentId) {
+      localStorage.setItem('editingAgentId', editingAgentId);
+    } else {
+      localStorage.removeItem('editingAgentId');
+    }
+  }, [editingAgentId]);
+
+  // Восстанавливаем editingCategory
+  useEffect(() => {
+    if (editingCategoryId && kbCategories.length > 0 && !editingCategory) {
+      const category = kbCategories.find(c => c.id === editingCategoryId);
+      if (category) {
+        setEditingCategory(category);
+      } else {
+        localStorage.removeItem('editingCategoryId');
+        setEditingCategoryId(null);
+        if (currentPage === 'kb-category-create') {
+          setCurrentPage('kb-categories');
+        }
+      }
+    }
+  }, [kbCategories, editingCategoryId, editingCategory, currentPage]);
+
+  // Сохраняем editingCategoryId
+  useEffect(() => {
+    if (editingCategoryId) {
+      localStorage.setItem('editingCategoryId', editingCategoryId);
+    } else {
+      localStorage.removeItem('editingCategoryId');
+    }
+  }, [editingCategoryId]);
+
+  // Восстанавливаем editingArticle
+  useEffect(() => {
+    if (editingArticleId && kbArticles.length > 0 && !editingArticle) {
+      const article = kbArticles.find(a => a.id === editingArticleId);
+      if (article) {
+        setEditingArticle(article);
+      } else {
+        localStorage.removeItem('editingArticleId');
+        setEditingArticleId(null);
+        if (currentPage === 'kb-article-create') {
+          setCurrentPage('kb-articles');
+        }
+      }
+    }
+  }, [kbArticles, editingArticleId, editingArticle, currentPage]);
+
+  // Сохраняем editingArticleId
+  useEffect(() => {
+    if (editingArticleId !== null) {
+      localStorage.setItem('editingArticleId', editingArticleId.toString());
+    } else {
+      localStorage.removeItem('editingArticleId');
+    }
+  }, [editingArticleId]);
 
   // Save currentPage to localStorage
   useEffect(() => {
@@ -227,11 +373,10 @@ const App: React.FC = () => {
         pipelineSettings: updatedAgent.pipelineSettings,
         channelSettings: updatedAgent.channelSettings,
         kbSettings: updatedAgent.kbSettings,
+        crmData: updatedAgent.crmData,
       });
       await loadAgents(); // Перезагрузить список
       showToast('success', 'Изменения сохранены');
-      setEditingAgent(null);
-      setCurrentPage('agents');
     } catch (error: any) {
       console.error('Failed to save agent:', error);
       showToast('error', error.response?.data?.message || 'Не удалось сохранить изменения');
@@ -303,6 +448,7 @@ const App: React.FC = () => {
     const category = kbCategories.find(c => c.id === id);
     if (category) {
       setEditingCategory(category);
+      setEditingCategoryId(id);
       setCurrentPage('kb-category-create');
     }
   };
@@ -311,6 +457,7 @@ const App: React.FC = () => {
     const article = kbArticles.find(a => a.id === id);
     if (article) {
       setEditingArticle(article);
+      setEditingArticleId(id);
       setCurrentPage('kb-article-create');
     }
   };
@@ -359,16 +506,16 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard />;
-      case 'agents': return <Agents agents={agents} isLoading={isLoadingAgents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
+      case 'agents': return <Agents agents={agents} isLoading={isLoadingAgents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setEditingAgentId(agentId); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
-      case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
+      case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setEditingAgentId(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
       case 'chat': return <Chat agents={agents} />;
       case 'billing': return <Billing />;
-      case 'settings': return <Settings />;
-      case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
-      case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
-      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
-      case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} />;
+      case 'settings': return <Settings showToast={showToast} />;
+      case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
+      case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
+      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
+      case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} />;
       default: return <Dashboard />;
     }
   };

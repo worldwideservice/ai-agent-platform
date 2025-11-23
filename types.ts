@@ -25,12 +25,12 @@ export interface Agent {
   checkBeforeSend?: boolean;
   pipelineId?: string;
   stageId?: string;
-  pipelineSettings?: string;
-  channelSettings?: string;
-  kbSettings?: string;
+  pipelineSettings?: any;  // Может быть object или string (из БД)
+  channelSettings?: any;   // Может быть object или string (из БД)
+  kbSettings?: any;        // Может быть object или string (из БД)
   crmType?: string;
   crmConnected?: boolean;
-  crmData?: string;
+  crmData?: any;           // Может быть object или string (из БД)
   createdAt: string;
   updatedAt?: string;
   userId?: string;
