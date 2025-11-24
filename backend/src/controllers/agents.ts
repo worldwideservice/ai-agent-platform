@@ -77,6 +77,16 @@ export async function createAgent(req: AuthRequest, res: Response) {
       return;
     }
 
+    // Проверяем что пользователь существует
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! }
+    });
+
+    if (!user) {
+      res.status(401).json({ error: 'User not found. Please log out and log in again.' });
+      return;
+    }
+
     const agent = await prisma.agent.create({
       data: {
         name: data.name.trim(),
@@ -93,9 +103,15 @@ export async function createAgent(req: AuthRequest, res: Response) {
     // Парсим JSON поля перед отправкой
     const parsedAgent = parseAgentJson(agent);
     res.status(201).json(parsedAgent);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating agent:', error);
-    res.status(500).json({ error: 'Failed to create agent' });
+
+    // Проверяем тип ошибки
+    if (error.code === '23503' && error.constraint === 'agents_user_id_fkey') {
+      res.status(401).json({ error: 'User session expired. Please log out and log in again.' });
+    } else {
+      res.status(500).json({ error: 'Failed to create agent' });
+    }
   }
 }
 

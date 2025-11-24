@@ -9,15 +9,13 @@ import {
 class AuthService {
   /**
    * Регистрация нового пользователя
+   * После регистрации пользователь НЕ логинится автоматически
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>('/auth/register', data);
 
-    // Сохраняем токен и пользователя в localStorage
-    if (response.data.token) {
-      localStorage.setItem('auth_token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
+    // НЕ сохраняем токен - пользователь должен войти вручную
+    // Это стандартный UX flow для безопасности
 
     return response.data;
   }

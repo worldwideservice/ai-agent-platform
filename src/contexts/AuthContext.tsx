@@ -71,8 +71,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (data: RegisterRequest) => {
     setIsLoading(true);
     try {
-      const response = await authService.register(data);
-      setUser(response.user);
+      // Регистрируем пользователя, но НЕ логиним его автоматически
+      await authService.register(data);
+      // Пользователь должен войти вручную после регистрации
     } finally {
       setIsLoading(false);
     }

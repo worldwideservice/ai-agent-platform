@@ -35,24 +35,41 @@ export const getDashboardAnalytics = async (req: AuthRequest, res: Response) => 
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const messagesData = await prisma.chatLog.groupBy({
-      by: ['createdAt'],
+    // Получаем все сообщения за последние 6 месяцев
+    const allMessages = await prisma.chatLog.findMany({
       where: {
         userId,
         createdAt: {
           gte: sixMonthsAgo,
         },
       },
-      _count: true,
+      select: {
+        createdAt: true,
+      },
     });
 
-    // Преобразуем данные в формат для графика
-    const monthlyMessages = messagesData.reduce((acc: any, item: any) => {
-      const month = new Date(item.createdAt).toLocaleDateString('ru-RU', { month: 'short' });
-      acc[month] = (acc[month] || 0) + item._count;
-      return acc;
-    }, {});
+    // Группируем сообщения по месяцам вручную
+    const monthNames = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+    const monthlyMessages: Record<string, number> = {};
 
+    // Инициализируем последние 6 месяцев нулями
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = monthNames[date.getMonth()];
+      monthlyMessages[monthKey] = 0;
+    }
+
+    // Подсчитываем сообщения по месяцам
+    allMessages.forEach((message: any) => {
+      const date = new Date(message.createdAt);
+      const monthKey = monthNames[date.getMonth()];
+      if (monthlyMessages.hasOwnProperty(monthKey)) {
+        monthlyMessages[monthKey]++;
+      }
+    });
+
+    // Преобразуем в формат для графика
     const messagesChartData = Object.entries(monthlyMessages).map(([name, value]) => ({
       name,
       value,

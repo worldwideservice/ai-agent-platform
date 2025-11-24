@@ -1,795 +1,318 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Pool, QueryResult } from 'pg';
 import { randomUUID } from 'crypto';
 
-const dbPath = path.join(__dirname, '..', '..', 'prisma', 'dev.db');
-const db = new Database(dbPath);
+// PostgreSQL Connection Pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
 
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
+// Export pool for use in services (embeddings, knowledge base, etc.)
+export { pool };
 
-// Helper to convert SQLite row to boolean fields
-function convertBooleanFields<T extends Record<string, any>>(row: any, booleanFields: string[]): T {
-  if (!row) return row;
-  const result = { ...row };
-  for (const field of booleanFields) {
-    if (field in result) {
-      result[field] = Boolean(result[field]);
-    }
+// Helper to convert snake_case to camelCase
+function toCamelCase(obj: any): any {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(toCamelCase);
   }
-  return result as T;
+
+  const converted: any = {};
+  for (const key in obj) {
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    converted[camelKey] = toCamelCase(obj[key]);
+  }
+  return converted;
+}
+
+// Helper to convert camelCase to snake_case
+function toSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 }
 
 // Agent model operations
 export const agent = {
-  findMany({ where, orderBy }: any = {}) {
-    let query = 'SELECT * FROM agents';
+  async findMany({ where, orderBy }: any = {}) {
+    let query = 'SELECT * FROM agents WHERE 1=1';
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (where?.userId) {
-      query += ' WHERE userId = ?';
+      query += ` AND user_id = $${paramIndex++}`;
       params.push(where.userId);
     }
 
     if (orderBy?.createdAt) {
-      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+      query += ` ORDER BY created_at ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
     }
 
-    const rows = db.prepare(query).all(...params);
-    return rows.map(row => convertBooleanFields(row, ['isActive', 'crmConnected']));
+    const result = await pool.query(query, params);
+    return result.rows.map(toCamelCase);
   },
 
-  findFirst({ where }: any) {
+  async findFirst({ where }: any) {
     let query = 'SELECT * FROM agents WHERE 1=1';
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (where?.id) {
-      query += ' AND id = ?';
+      query += ` AND id = $${paramIndex++}`;
       params.push(where.id);
     }
     if (where?.userId) {
-      query += ' AND userId = ?';
+      query += ` AND user_id = $${paramIndex++}`;
       params.push(where.userId);
     }
 
     query += ' LIMIT 1';
 
-    const row = db.prepare(query).get(...params);
-    return row ? convertBooleanFields(row, ['isActive', 'crmConnected']) : null;
+    const result = await pool.query(query, params);
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
 
-  create({ data }: any) {
+  async create({ data }: any) {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    const stmt = db.prepare(`
+    const query = `
       INSERT INTO agents (
-        id, name, isActive, model, systemInstructions,
-        pipelineSettings, channelSettings, kbSettings,
-        crmType, crmConnected, crmData, userId, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+        id, name, is_active, model, system_instructions,
+        pipeline_settings, channel_settings, kb_settings,
+        crm_type, crm_connected, crm_data, user_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *
+    `;
 
-    stmt.run(
+    const result = await pool.query(query, [
       id,
       data.name,
-      data.isActive ? 1 : 0,
+      data.isActive || false,
       data.model || 'Google Gemini 2.5 Flash',
       data.systemInstructions || null,
-      data.pipelineSettings || null,
-      data.channelSettings || null,
-      data.kbSettings || null,
+      data.pipelineSettings ? JSON.stringify(data.pipelineSettings) : null,
+      data.channelSettings ? JSON.stringify(data.channelSettings) : null,
+      data.kbSettings ? JSON.stringify(data.kbSettings) : null,
       data.crmType || null,
-      data.crmConnected ? 1 : 0,
-      data.crmData || null,
+      data.crmConnected || false,
+      data.crmData ? JSON.stringify(data.crmData) : null,
       data.userId,
       now,
       now
-    );
+    ]);
 
-    return this.findFirst({ where: { id } });
+    return toCamelCase(result.rows[0]);
   },
 
-  update({ where, data }: any) {
+  async update({ where, data }: any) {
     const updates: string[] = [];
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (data.name !== undefined) {
-      updates.push('name = ?');
+      updates.push(`name = $${paramIndex++}`);
       params.push(data.name);
     }
     if (data.isActive !== undefined) {
-      updates.push('isActive = ?');
-      params.push(data.isActive ? 1 : 0);
+      updates.push(`is_active = $${paramIndex++}`);
+      params.push(data.isActive);
     }
     if (data.model !== undefined) {
-      updates.push('model = ?');
+      updates.push(`model = $${paramIndex++}`);
       params.push(data.model);
     }
     if (data.systemInstructions !== undefined) {
-      updates.push('systemInstructions = ?');
+      updates.push(`system_instructions = $${paramIndex++}`);
       params.push(data.systemInstructions);
     }
     if (data.pipelineSettings !== undefined) {
-      updates.push('pipelineSettings = ?');
-      params.push(data.pipelineSettings);
+      updates.push(`pipeline_settings = $${paramIndex++}`);
+      params.push(JSON.stringify(data.pipelineSettings));
     }
     if (data.channelSettings !== undefined) {
-      updates.push('channelSettings = ?');
-      params.push(data.channelSettings);
+      updates.push(`channel_settings = $${paramIndex++}`);
+      params.push(JSON.stringify(data.channelSettings));
     }
     if (data.kbSettings !== undefined) {
-      updates.push('kbSettings = ?');
-      params.push(data.kbSettings);
+      updates.push(`kb_settings = $${paramIndex++}`);
+      params.push(JSON.stringify(data.kbSettings));
     }
     if (data.crmType !== undefined) {
-      updates.push('crmType = ?');
+      updates.push(`crm_type = $${paramIndex++}`);
       params.push(data.crmType);
     }
     if (data.crmConnected !== undefined) {
-      updates.push('crmConnected = ?');
-      params.push(data.crmConnected ? 1 : 0);
+      updates.push(`crm_connected = $${paramIndex++}`);
+      params.push(data.crmConnected);
     }
     if (data.crmData !== undefined) {
-      updates.push('crmData = ?');
-      params.push(data.crmData);
+      updates.push(`crm_data = $${paramIndex++}`);
+      params.push(JSON.stringify(data.crmData));
     }
 
-    updates.push('updatedAt = ?');
+    updates.push(`updated_at = $${paramIndex++}`);
     params.push(new Date().toISOString());
 
     params.push(where.id);
 
-    const query = `UPDATE agents SET ${updates.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...params);
+    const query = `UPDATE agents SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    const result = await pool.query(query, params);
 
-    return this.findFirst({ where: { id: where.id } });
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
 
-  delete({ where }: any) {
-    const stmt = db.prepare('DELETE FROM agents WHERE id = ?');
-    stmt.run(where.id);
+  async delete({ where }: any) {
+    await pool.query('DELETE FROM agents WHERE id = $1', [where.id]);
     return { id: where.id };
+  },
+
+  async findUnique({ where }: any) {
+    return this.findFirst({ where });
+  },
+
+  async count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*)::int as count FROM agents WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.isActive !== undefined) {
+      query += ` AND is_active = $${paramIndex++}`;
+      params.push(where.isActive);
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows[0].count;
   },
 };
 
 // User model operations
 export const user = {
-  findUnique({ where, select }: any) {
+  async findUnique({ where, select }: any) {
     let query = 'SELECT * FROM users WHERE ';
     let param: any;
 
     if (where.id) {
-      query += 'id = ?';
+      query += 'id = $1';
       param = where.id;
     } else if (where.email) {
-      query += 'email = ?';
+      query += 'email = $1';
       param = where.email;
     }
 
-    const row = db.prepare(query).get(param);
+    const result = await pool.query(query, [param]);
+    if (!result.rows[0]) return null;
 
-    if (!row) return null;
+    const row = toCamelCase(result.rows[0]);
 
-    // If select is specified, filter the fields
     if (select) {
       const filtered: any = {};
-      Object.keys(select).forEach(key => {
-        if (select[key] && key in row) {
+      for (const key in select) {
+        if (select[key] && row[key] !== undefined) {
           filtered[key] = row[key];
         }
-      });
+      }
       return filtered;
     }
 
     return row;
   },
 
-  create({ data, select }: any) {
+  async create({ data }: any) {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    const stmt = db.prepare(`
-      INSERT INTO users (id, email, password, name, role, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    const query = `
+      INSERT INTO users (
+        id, email, password, name, role,
+        current_plan, trial_ends_at, responses_used, responses_limit,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *
+    `;
 
-    stmt.run(
+    const result = await pool.query(query, [
       id,
       data.email,
       data.password,
       data.name || null,
       data.role || 'USER',
+      data.currentPlan || 'trial',
+      data.trialEndsAt || null,
+      data.responsesUsed || 0,
+      data.responsesLimit || 5000,
       now,
       now
-    );
+    ]);
 
-    const user = this.findUnique({ where: { id } });
-
-    // If select is specified, filter the fields
-    if (select && user) {
-      const filtered: any = {};
-      Object.keys(select).forEach(key => {
-        if (select[key] && key in user) {
-          filtered[key] = user[key];
-        }
-      });
-      return filtered;
-    }
-
-    return user;
-  },
-};
-
-// KB Categories model operations
-export const kbCategory = {
-  findMany({ where, orderBy }: any = {}) {
-    let query = 'SELECT * FROM kb_categories';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    if (orderBy?.name) {
-      query += ` ORDER BY name ${orderBy.name === 'desc' ? 'DESC' : 'ASC'}`;
-    }
-
-    return db.prepare(query).all(...params);
+    return toCamelCase(result.rows[0]);
   },
 
-  findFirst({ where }: any) {
-    let query = 'SELECT * FROM kb_categories WHERE 1=1';
-    const params: any[] = [];
-
-    if (where?.id) {
-      query += ' AND id = ?';
-      params.push(where.id);
-    }
-    if (where?.userId) {
-      query += ' AND userId = ?';
-      params.push(where.userId);
-    }
-
-    query += ' LIMIT 1';
-    return db.prepare(query).get(...params) || null;
-  },
-
-  create({ data }: any) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-
-    const stmt = db.prepare(`
-      INSERT INTO kb_categories (id, name, parentId, userId, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(id, data.name, data.parentId || null, data.userId, now, now);
-    return this.findFirst({ where: { id } });
-  },
-
-  update({ where, data }: any) {
+  async update({ where, data }: any) {
     const updates: string[] = [];
     const params: any[] = [];
+    let paramIndex = 1;
 
     if (data.name !== undefined) {
-      updates.push('name = ?');
+      updates.push(`name = $${paramIndex++}`);
       params.push(data.name);
-    }
-    if (data.parentId !== undefined) {
-      updates.push('parentId = ?');
-      params.push(data.parentId);
-    }
-
-    updates.push('updatedAt = ?');
-    params.push(new Date().toISOString());
-    params.push(where.id);
-
-    const query = `UPDATE kb_categories SET ${updates.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...params);
-    return this.findFirst({ where: { id: where.id } });
-  },
-
-  delete({ where }: any) {
-    db.prepare('DELETE FROM kb_categories WHERE id = ?').run(where.id);
-    return { id: where.id };
-  },
-};
-
-// KB Articles model operations
-export const kbArticle = {
-  findMany({ where, orderBy }: any = {}) {
-    let query = 'SELECT * FROM kb_articles';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    if (orderBy?.createdAt) {
-      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
-    }
-
-    const rows = db.prepare(query).all(...params);
-    return rows.map(row => convertBooleanFields(row, ['isActive']));
-  },
-
-  findFirst({ where }: any) {
-    let query = 'SELECT * FROM kb_articles WHERE 1=1';
-    const params: any[] = [];
-
-    if (where?.id) {
-      query += ' AND id = ?';
-      params.push(where.id);
-    }
-    if (where?.userId) {
-      query += ' AND userId = ?';
-      params.push(where.userId);
-    }
-
-    query += ' LIMIT 1';
-    const row = db.prepare(query).get(...params);
-    return row ? convertBooleanFields(row, ['isActive']) : null;
-  },
-
-  create({ data }: any) {
-    const now = new Date().toISOString();
-
-    const stmt = db.prepare(`
-      INSERT INTO kb_articles (title, content, isActive, relatedArticles, userId, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    const info = stmt.run(
-      data.title,
-      data.content,
-      data.isActive ? 1 : 0,
-      data.relatedArticles || null,
-      data.userId,
-      now,
-      now
-    );
-
-    return this.findFirst({ where: { id: info.lastInsertRowid } });
-  },
-
-  update({ where, data }: any) {
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.title !== undefined) {
-      updates.push('title = ?');
-      params.push(data.title);
-    }
-    if (data.content !== undefined) {
-      updates.push('content = ?');
-      params.push(data.content);
-    }
-    if (data.isActive !== undefined) {
-      updates.push('isActive = ?');
-      params.push(data.isActive ? 1 : 0);
-    }
-    if (data.relatedArticles !== undefined) {
-      updates.push('relatedArticles = ?');
-      params.push(data.relatedArticles);
-    }
-
-    updates.push('updatedAt = ?');
-    params.push(new Date().toISOString());
-    params.push(where.id);
-
-    const query = `UPDATE kb_articles SET ${updates.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...params);
-    return this.findFirst({ where: { id: where.id } });
-  },
-
-  delete({ where }: any) {
-    db.prepare('DELETE FROM kb_articles WHERE id = ?').run(where.id);
-    return { id: where.id };
-  },
-};
-
-// Contact model operations
-export const contact = {
-  findMany({ where, orderBy }: any = {}) {
-    let query = 'SELECT * FROM contacts';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    if (orderBy?.createdAt) {
-      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
-    }
-
-    return db.prepare(query).all(...params);
-  },
-
-  findFirst({ where }: any) {
-    let query = 'SELECT * FROM contacts WHERE 1=1';
-    const params: any[] = [];
-
-    if (where?.id) {
-      query += ' AND id = ?';
-      params.push(where.id);
-    }
-    if (where?.userId) {
-      query += ' AND userId = ?';
-      params.push(where.userId);
-    }
-    if (where?.crmId) {
-      query += ' AND crmId = ?';
-      params.push(where.crmId);
-    }
-
-    query += ' LIMIT 1';
-    return db.prepare(query).get(...params) || null;
-  },
-
-  create({ data }: any) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-
-    const stmt = db.prepare(`
-      INSERT INTO contacts (
-        id, name, phone, email, company, position, tags,
-        customFields, crmId, crmType, userId, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      id,
-      data.name,
-      data.phone || null,
-      data.email || null,
-      data.company || null,
-      data.position || null,
-      data.tags || null,
-      data.customFields || null,
-      data.crmId || null,
-      data.crmType || null,
-      data.userId,
-      now,
-      now
-    );
-
-    return this.findFirst({ where: { id } });
-  },
-
-  update({ where, data }: any) {
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name);
-    }
-    if (data.phone !== undefined) {
-      updates.push('phone = ?');
-      params.push(data.phone);
     }
     if (data.email !== undefined) {
-      updates.push('email = ?');
+      updates.push(`email = $${paramIndex++}`);
       params.push(data.email);
     }
-    if (data.company !== undefined) {
-      updates.push('company = ?');
-      params.push(data.company);
+    if (data.password !== undefined) {
+      updates.push(`password = $${paramIndex++}`);
+      params.push(data.password);
     }
-    if (data.position !== undefined) {
-      updates.push('position = ?');
-      params.push(data.position);
+    if (data.currentPlan !== undefined) {
+      updates.push(`current_plan = $${paramIndex++}`);
+      params.push(data.currentPlan);
     }
-    if (data.tags !== undefined) {
-      updates.push('tags = ?');
-      params.push(data.tags);
+    if (data.responsesUsed !== undefined) {
+      if (data.responsesUsed.increment) {
+        updates.push(`responses_used = responses_used + $${paramIndex++}`);
+        params.push(data.responsesUsed.increment);
+      } else {
+        updates.push(`responses_used = $${paramIndex++}`);
+        params.push(data.responsesUsed);
+      }
     }
-    if (data.customFields !== undefined) {
-      updates.push('customFields = ?');
-      params.push(data.customFields);
+    if (data.responsesLimit !== undefined) {
+      updates.push(`responses_limit = $${paramIndex++}`);
+      params.push(data.responsesLimit);
     }
 
-    updates.push('updatedAt = ?');
+    updates.push(`updated_at = $${paramIndex++}`);
     params.push(new Date().toISOString());
+
     params.push(where.id);
 
-    const query = `UPDATE contacts SET ${updates.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...params);
-    return this.findFirst({ where: { id: where.id } });
-  },
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    const result = await pool.query(query, params);
 
-  delete({ where }: any) {
-    db.prepare('DELETE FROM contacts WHERE id = ?').run(where.id);
-    return { id: where.id };
-  },
-};
-
-// Deal model operations
-export const deal = {
-  findMany({ where, orderBy, include }: any = {}) {
-    let query = 'SELECT * FROM deals';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    if (orderBy?.createdAt) {
-      query += ` ORDER BY createdAt ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
-    }
-
-    const rows = db.prepare(query).all(...params);
-
-    // If include contact, fetch contact data
-    if (include?.contact) {
-      return rows.map((row: any) => {
-        if (row.contactId) {
-          const contactRow = db.prepare('SELECT * FROM contacts WHERE id = ?').get(row.contactId);
-          return { ...row, contact: contactRow };
-        }
-        return row;
-      });
-    }
-
-    return rows;
-  },
-
-  findFirst({ where, include }: any) {
-    let query = 'SELECT * FROM deals WHERE 1=1';
-    const params: any[] = [];
-
-    if (where?.id) {
-      query += ' AND id = ?';
-      params.push(where.id);
-    }
-    if (where?.userId) {
-      query += ' AND userId = ?';
-      params.push(where.userId);
-    }
-    if (where?.crmId) {
-      query += ' AND crmId = ?';
-      params.push(where.crmId);
-    }
-
-    query += ' LIMIT 1';
-    const row = db.prepare(query).get(...params);
-
-    if (!row) return null;
-
-    // If include contact, fetch contact data
-    if (include?.contact && row.contactId) {
-      const contactRow = db.prepare('SELECT * FROM contacts WHERE id = ?').get(row.contactId);
-      return { ...row, contact: contactRow };
-    }
-
-    return row;
-  },
-
-  create({ data }: any) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-
-    const stmt = db.prepare(`
-      INSERT INTO deals (
-        id, name, price, currency, status, stage, pipelineId, pipelineName,
-        responsibleUserId, contactId, tags, customFields, crmId, crmType,
-        closedAt, userId, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      id,
-      data.name,
-      data.price || 0,
-      data.currency || 'RUB',
-      data.status || null,
-      data.stage || null,
-      data.pipelineId || null,
-      data.pipelineName || null,
-      data.responsibleUserId || null,
-      data.contactId || null,
-      data.tags || null,
-      data.customFields || null,
-      data.crmId || null,
-      data.crmType || null,
-      data.closedAt || null,
-      data.userId,
-      now,
-      now
-    );
-
-    return this.findFirst({ where: { id } });
-  },
-
-  update({ where, data }: any) {
-    const updates: string[] = [];
-    const params: any[] = [];
-
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name);
-    }
-    if (data.price !== undefined) {
-      updates.push('price = ?');
-      params.push(data.price);
-    }
-    if (data.currency !== undefined) {
-      updates.push('currency = ?');
-      params.push(data.currency);
-    }
-    if (data.status !== undefined) {
-      updates.push('status = ?');
-      params.push(data.status);
-    }
-    if (data.stage !== undefined) {
-      updates.push('stage = ?');
-      params.push(data.stage);
-    }
-    if (data.pipelineId !== undefined) {
-      updates.push('pipelineId = ?');
-      params.push(data.pipelineId);
-    }
-    if (data.pipelineName !== undefined) {
-      updates.push('pipelineName = ?');
-      params.push(data.pipelineName);
-    }
-    if (data.contactId !== undefined) {
-      updates.push('contactId = ?');
-      params.push(data.contactId);
-    }
-    if (data.tags !== undefined) {
-      updates.push('tags = ?');
-      params.push(data.tags);
-    }
-    if (data.customFields !== undefined) {
-      updates.push('customFields = ?');
-      params.push(data.customFields);
-    }
-    if (data.closedAt !== undefined) {
-      updates.push('closedAt = ?');
-      params.push(data.closedAt);
-    }
-
-    updates.push('updatedAt = ?');
-    params.push(new Date().toISOString());
-    params.push(where.id);
-
-    const query = `UPDATE deals SET ${updates.join(', ')} WHERE id = ?`;
-    db.prepare(query).run(...params);
-    return this.findFirst({ where: { id: where.id } });
-  },
-
-  delete({ where }: any) {
-    db.prepare('DELETE FROM deals WHERE id = ?').run(where.id);
-    return { id: where.id };
-  },
-};
-
-// UserSettings model operations
-export const userSettings = {
-  findUnique({ where }: any) {
-    let query = 'SELECT * FROM user_settings WHERE ';
-    let param: any;
-
-    if (where.userId) {
-      query += 'userId = ?';
-      param = where.userId;
-    } else if (where.id) {
-      query += 'id = ?';
-      param = where.id;
-    }
-
-    const row = db.prepare(query).get(param);
-    return row ? convertBooleanFields(row, ['stopOnReply']) : null;
-  },
-
-  create({ data }: any) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
-
-    const stmt = db.prepare(`
-      INSERT INTO user_settings (id, stopOnReply, resumeTime, resumeUnit, userId, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      id,
-      data.stopOnReply ? 1 : 0,
-      data.resumeTime,
-      data.resumeUnit,
-      data.userId,
-      now,
-      now
-    );
-
-    return this.findUnique({ where: { id } });
-  },
-
-  upsert({ where, update, create }: any) {
-    const existing = this.findUnique({ where });
-
-    if (existing) {
-      const updates: string[] = [];
-      const params: any[] = [];
-
-      if (update.stopOnReply !== undefined) {
-        updates.push('stopOnReply = ?');
-        params.push(update.stopOnReply ? 1 : 0);
-      }
-      if (update.resumeTime !== undefined) {
-        updates.push('resumeTime = ?');
-        params.push(update.resumeTime);
-      }
-      if (update.resumeUnit !== undefined) {
-        updates.push('resumeUnit = ?');
-        params.push(update.resumeUnit);
-      }
-
-      updates.push('updatedAt = ?');
-      params.push(new Date().toISOString());
-      params.push(where.userId);
-
-      const query = `UPDATE user_settings SET ${updates.join(', ')} WHERE userId = ?`;
-      db.prepare(query).run(...params);
-
-      return this.findUnique({ where });
-    } else {
-      return this.create({ data: create });
-    }
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
 };
 
 // ChatLog model operations
 export const chatLog = {
-  count({ where }: any = {}) {
-    let query = 'SELECT COUNT(*) as count FROM chat_logs';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    const result = db.prepare(query).get(...params) as any;
-    return result.count;
-  },
-
-  groupBy({ by, where, _count }: any) {
-    // Simplified groupBy for createdAt
-    let query = 'SELECT createdAt, COUNT(*) as _count FROM chat_logs';
-    const params: any[] = [];
-
-    if (where?.userId) {
-      query += ' WHERE userId = ?';
-      params.push(where.userId);
-    }
-
-    if (where?.createdAt?.gte) {
-      query += where?.userId ? ' AND' : ' WHERE';
-      query += ' createdAt >= ?';
-      params.push(where.createdAt.gte.toISOString());
-    }
-
-    query += ' GROUP BY DATE(createdAt)';
-
-    return db.prepare(query).all(...params);
-  },
-
-  create({ data }: any) {
+  async create({ data }: any) {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    const stmt = db.prepare(`
-      INSERT INTO chat_logs (id, agentId, message, response, model, userId, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
+    const query = `
+      INSERT INTO chat_logs (id, agent_id, message, response, model, user_id, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING *
+    `;
 
-    stmt.run(
+    const result = await pool.query(query, [
       id,
       data.agentId,
       data.message,
@@ -797,36 +320,284 @@ export const chatLog = {
       data.model,
       data.userId,
       now
-    );
+    ]);
 
-    return { id, ...data, createdAt: now };
+    return toCamelCase(result.rows[0]);
+  },
+
+  async findMany({ where, orderBy, take }: any = {}) {
+    let query = 'SELECT * FROM chat_logs WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+
+    if (orderBy?.createdAt) {
+      query += ` ORDER BY created_at ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    if (take) {
+      query += ` LIMIT ${take}`;
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows.map(toCamelCase);
+  },
+
+  async count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*)::int as count FROM chat_logs WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows[0].count;
   },
 };
 
-// Add count method to agent model
-const agentWithCount = {
-  ...agent,
-  count({ where }: any = {}) {
-    let query = 'SELECT COUNT(*) as count FROM agents WHERE 1=1';
-    const params: any[] = [];
+// Simplified stubs for other models (to be fully implemented as needed)
+export const kbCategory = {
+  async findMany() { return []; },
+  async create() { return null; },
+};
 
-    if (where?.userId) {
-      query += ' AND userId = ?';
-      params.push(where.userId);
+export const kbArticle = {
+  async findMany({ where, include }: any = {}) {
+    let query = 'SELECT * FROM kb_articles WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.id?.in) {
+      const ids = where.id.in;
+      query += ` AND id = ANY($${paramIndex++}::int[])`;
+      params.push(ids);
     }
     if (where?.isActive !== undefined) {
-      query += ' AND isActive = ?';
-      params.push(where.isActive ? 1 : 0);
+      query += ` AND is_active = $${paramIndex++}`;
+      params.push(where.isActive);
+    }
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
     }
 
-    const result = db.prepare(query).get(...params) as any;
-    return result.count;
+    const result = await pool.query(query, params);
+    const articles = result.rows.map(toCamelCase);
+
+    // If include is specified, fetch related data
+    if (include?.articleCategories) {
+      for (const article of articles) {
+        // Fetch article categories
+        const catQuery = `
+          SELECT ac.*, c.id as category_id, c.name as category_name
+          FROM article_categories ac
+          LEFT JOIN kb_categories c ON c.id = ac.category_id
+          WHERE ac.article_id = $1
+        `;
+        const catResult = await pool.query(catQuery, [article.id]);
+        article.articleCategories = catResult.rows.map((row: any) => ({
+          ...toCamelCase(row),
+          category: {
+            id: row.category_id,
+            name: row.category_name,
+          },
+        }));
+      }
+    }
+
+    return articles;
   },
+  async create() { return null; },
+};
+
+export const contact = {
+  async findMany() { return []; },
+  async create() { return null; },
+};
+
+export const deal = {
+  async findMany() { return []; },
+  async create() { return null; },
+};
+
+export const userSettings = {
+  async findUnique() { return null; },
+  async create() { return null; },
+};
+
+export const trigger = {
+  async findMany() { return []; },
+  async findUnique() { return null; },
+  async create() { return null; },
+  async update() { return null; },
+  async delete() { return null; },
+};
+
+export const triggerAction = {
+  async deleteMany() { return {}; },
+};
+
+export const chain = {
+  async findMany() { return []; },
+  async findUnique() { return null; },
+  async create() { return null; },
+  async update() { return null; },
+  async delete() { return null; },
+};
+
+export const chainCondition = {
+  async deleteMany() { return {}; },
+};
+
+export const chainStep = {
+  async deleteMany() { return {}; },
+};
+
+export const chainStepAction = {
+  async deleteMany() { return {}; },
+};
+
+export const chainSchedule = {
+  async deleteMany() { return {}; },
+};
+
+export const integration = {
+  async findMany({ where, orderBy }: any = {}) {
+    let query = 'SELECT * FROM integrations WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+    if (where?.integrationType) {
+      query += ` AND integration_type = $${paramIndex++}`;
+      params.push(where.integrationType);
+    }
+
+    if (orderBy?.createdAt) {
+      query += ` ORDER BY created_at ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows.map(toCamelCase);
+  },
+
+  async findFirst({ where }: any) {
+    let query = 'SELECT * FROM integrations WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.id) {
+      query += ` AND id = $${paramIndex++}`;
+      params.push(where.id);
+    }
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+    if (where?.integrationType) {
+      query += ` AND integration_type = $${paramIndex++}`;
+      params.push(where.integrationType);
+    }
+
+    query += ' LIMIT 1';
+
+    const result = await pool.query(query, params);
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+
+  async create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const query = `
+      INSERT INTO integrations (
+        id, agent_id, integration_type, is_active, is_connected,
+        connected_at, last_synced, settings, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      id,
+      data.agentId,
+      data.integrationType,
+      data.isActive !== undefined ? data.isActive : true,
+      data.isConnected !== undefined ? data.isConnected : false,
+      data.connectedAt || null,
+      data.lastSynced || null,
+      data.settings || null,
+      now,
+      now
+    ]);
+
+    return toCamelCase(result.rows[0]);
+  },
+
+  async update({ where, data }: any) {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.isActive !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      params.push(data.isActive);
+    }
+    if (data.isConnected !== undefined) {
+      updates.push(`is_connected = $${paramIndex++}`);
+      params.push(data.isConnected);
+    }
+    if (data.connectedAt !== undefined) {
+      updates.push(`connected_at = $${paramIndex++}`);
+      params.push(data.connectedAt);
+    }
+    if (data.lastSynced !== undefined) {
+      updates.push(`last_synced = $${paramIndex++}`);
+      params.push(data.lastSynced);
+    }
+    if (data.settings !== undefined) {
+      updates.push(`settings = $${paramIndex++}`);
+      params.push(data.settings);
+    }
+
+    updates.push(`updated_at = $${paramIndex++}`);
+    params.push(new Date().toISOString());
+
+    params.push(where.id);
+
+    const query = `UPDATE integrations SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    const result = await pool.query(query, params);
+
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+};
+
+export const agentAdvancedSettings = {
+  async findUnique() { return null; },
+  async create() { return null; },
+  async update() { return null; },
 };
 
 // Export as prisma-like object
 export const prisma = {
-  agent: agentWithCount,
+  agent: { ...agent, count: agent.count },
   user,
   kbCategory,
   kbArticle,
@@ -834,16 +605,31 @@ export const prisma = {
   deal,
   userSettings,
   chatLog,
+  trigger,
+  triggerAction,
+  chain,
+  chainCondition,
+  chainStep,
+  chainStepAction,
+  chainSchedule,
+  integration,
+  agentAdvancedSettings,
   $connect: async () => {
-    console.log('✅ Database connected successfully (using better-sqlite3)');
+    try {
+      await pool.query('SELECT NOW()');
+      console.log('✅ Database connected successfully (PostgreSQL on Supabase)');
+    } catch (error) {
+      console.error('❌ Database connection failed:', error);
+      throw error;
+    }
   },
   $disconnect: async () => {
-    db.close();
+    await pool.end();
     console.log('👋 Database disconnected');
   },
 };
 
-// Connect function
+// Initialize connection
 export async function connectDatabase() {
   try {
     await prisma.$connect();
