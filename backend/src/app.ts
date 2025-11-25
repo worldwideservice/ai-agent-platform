@@ -13,12 +13,21 @@ import crmRoutes from './routes/crm';
 import settingsRoutes from './routes/settings';
 import analyticsRoutes from './routes/analytics';
 import billingRoutes from './routes/billing';
+import chatRoutes from './routes/chat';
+import triggersRoutes from './routes/triggers';
+import chainsRoutes from './routes/chains';
+import integrationsRoutes from './routes/integrations';
+import agentSettingsRoutes from './routes/agent-settings';
+import modelsRoutes from './routes/models';
+import kommoRoutes from './routes/kommo';
+import memoryRoutes from './routes/memory';
+import kbImportRoutes from './routes/kb-import';
 
 const app: Express = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3002'],
   credentials: true,
 }));
 
@@ -37,15 +46,24 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/models', modelsRoutes);
+app.use('/api/kommo', kommoRoutes);
 app.use('/api/agents', agentRoutes);
+app.use('/api/agents', triggersRoutes);
+app.use('/api/agents', chainsRoutes);
+app.use('/api/agents', integrationsRoutes);
+app.use('/api/agents', agentSettingsRoutes);
+app.use('/api/agents', memoryRoutes);
 app.use('/api/kb/categories', kbCategoryRoutes);
 app.use('/api/kb/articles', kbArticleRoutes);
+app.use('/api/kb/import', kbImportRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/crm', crmRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/chat', chatRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
