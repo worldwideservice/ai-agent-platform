@@ -140,12 +140,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // --- Triggers Data ---
   const [triggers, setTriggers] = useState<Trigger[]>([]);
 
-  // Parse CRM data from agent
+  // Parse CRM data from agent (handles double-encoded JSON)
   const parseCrmData = () => {
     if (!agent?.crmData) return null;
     try {
       if (typeof agent.crmData === 'string') {
-        return JSON.parse(agent.crmData);
+        let parsed = JSON.parse(agent.crmData);
+        // Handle double-encoded JSON (string inside string)
+        if (typeof parsed === 'string') {
+          parsed = JSON.parse(parsed);
+        }
+        return parsed;
       } else if (typeof agent.crmData === 'object') {
         return agent.crmData;
       }
@@ -289,12 +294,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const dealsContactsData = dealsContactsRef.current?.getData() || {};
       console.log('Deals/Contacts data:', dealsContactsData);
 
-      // Parse existing crmData and merge with new deals/contacts settings
+      // Parse existing crmData and merge with new deals/contacts settings (handles double-encoded JSON)
       let crmData = {};
       try {
         // crmData может быть уже объектом (после парсинга на backend) или строкой
         if (typeof agent.crmData === 'string') {
-          crmData = JSON.parse(agent.crmData);
+          let parsed = JSON.parse(agent.crmData);
+          // Handle double-encoded JSON (string inside string)
+          if (typeof parsed === 'string') {
+            parsed = JSON.parse(parsed);
+          }
+          crmData = parsed;
         } else if (agent.crmData && typeof agent.crmData === 'object') {
           crmData = agent.crmData;
         }

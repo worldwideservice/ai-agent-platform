@@ -7,7 +7,17 @@ function parseAgentJson(agent: any) {
   const safeJsonParse = (jsonString: string | null) => {
     if (!jsonString) return null;
     try {
-      return JSON.parse(jsonString);
+      let parsed = JSON.parse(jsonString);
+      // Handle double-encoded JSON (string inside string)
+      // This happens when crmData was saved as JSON.stringify(JSON.stringify(data))
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          // If second parse fails, return the first parsed result
+        }
+      }
+      return parsed;
     } catch (error) {
       console.error('Failed to parse JSON:', error);
       return null;
@@ -20,6 +30,9 @@ function parseAgentJson(agent: any) {
     channelSettings: safeJsonParse(agent.channelSettings),
     kbSettings: safeJsonParse(agent.kbSettings),
     crmData: safeJsonParse(agent.crmData),
+    // Конвертируем даты в ISO строки для корректного отображения на frontend
+    createdAt: agent.createdAt instanceof Date ? agent.createdAt.toISOString() : agent.createdAt,
+    updatedAt: agent.updatedAt instanceof Date ? agent.updatedAt.toISOString() : agent.updatedAt,
   };
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import {
     User,
     MessageSquare,
@@ -31,8 +31,32 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     // Parse CRM data from agent
     const parseCrmData = () => {
         if (!agent?.crmData) return null;
+        // If it's already an object (parsed by backend), return as-is
+        if (typeof agent.crmData === 'object') {
+            return agent.crmData;
+        }
+        // If it's a string, try to parse it
         try {
-            return JSON.parse(agent.crmData);
+            let parsed = JSON.parse(agent.crmData);
+            // Handle double-encoded JSON (string inside string)
+            if (typeof parsed === 'string') {
+                parsed = JSON.parse(parsed);
+            }
+            return parsed;
+        } catch {
+            return null;
+        }
+    };
+
+    // Parse pipeline settings from agent
+    const parsePipelineSettings = () => {
+        if (!agent?.pipelineSettings) return null;
+        // If it's already an object (parsed by backend), return as-is
+        if (typeof agent.pipelineSettings === 'object') {
+            return agent.pipelineSettings;
+        }
+        try {
+            return JSON.parse(agent.pipelineSettings);
         } catch {
             return null;
         }
@@ -41,6 +65,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     const crmData = parseCrmData();
     const availablePipelines = crmData?.pipelines || MOCK_PIPELINES;
     const availableChannels = crmData?.channels || MOCK_CHANNELS;
+    const savedPipelineSettings = parsePipelineSettings();
 
     // --- State ---
     // Profile
@@ -55,13 +80,49 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     const [isSyncing, setIsSyncing] = useState(false);
 
     // Pipelines
-    const [expandedPipelines, setExpandedPipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
-    const [activePipelines, setActivePipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
-    const [allStagesPipelines, setAllStagesPipelines] = useState<Record<string, boolean>>({});
-    const [pipelineStages, setPipelineStages] = useState<Record<string, string[]>>({
-        'sales_funnel_1': ['new_lead', 'qualification', 'social_media']
+    const [expandedPipelines, setExpandedPipelines] = useState<Record<string, boolean>>({ 'pipeline_1': true });
+    const [activePipelines, setActivePipelines] = useState<Record<string, boolean>>(() => {
+        if (!savedPipelineSettings?.pipelines) return {};
+        const active: Record<string, boolean> = {};
+        Object.keys(savedPipelineSettings.pipelines).forEach(pipelineId => {
+            active[pipelineId] = savedPipelineSettings.pipelines[pipelineId].active || false;
+        });
+        return active;
+    });
+    const [allStagesPipelines, setAllStagesPipelines] = useState<Record<string, boolean>>(() => {
+        if (!savedPipelineSettings?.pipelines) return {};
+        const allStages: Record<string, boolean> = {};
+        Object.keys(savedPipelineSettings.pipelines).forEach(pipelineId => {
+            allStages[pipelineId] = savedPipelineSettings.pipelines[pipelineId].allStages || false;
+        });
+        return allStages;
+    });
+    const [pipelineStages, setPipelineStages] = useState<Record<string, string[]>>(() => {
+        if (!savedPipelineSettings?.pipelines) return {};
+        const stages: Record<string, string[]> = {};
+        Object.keys(savedPipelineSettings.pipelines).forEach(pipelineId => {
+            stages[pipelineId] = savedPipelineSettings.pipelines[pipelineId].stages || [];
+        });
+        return stages;
     });
     const [stageInstructionsOpen, setStageInstructionsOpen] = useState<Record<string, boolean>>({});
+    const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
+
+    // Initialize stage instructions from saved settings
+    // Structure: { pipelineId: { stageId: "instructions" } }
+    const [stageInstructions, setStageInstructions] = useState<Record<string, Record<string, string>>>(() => {
+        if (!savedPipelineSettings?.pipelines) return {};
+        const instructions: Record<string, Record<string, string>> = {};
+        Object.keys(savedPipelineSettings.pipelines).forEach(pipelineId => {
+            const pipeline = savedPipelineSettings.pipelines[pipelineId];
+            if (pipeline.stageInstructions) {
+                instructions[pipelineId] = pipeline.stageInstructions;
+            } else {
+                instructions[pipelineId] = {};
+            }
+        });
+        return instructions;
+    });
 
     // Channels
     const [channelsAll, setChannelsAll] = useState(false);
@@ -73,6 +134,9 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     const [kbCreateTask, setKbCreateTask] = useState(false);
     const [kbNoAnswerMessage, setKbNoAnswerMessage] = useState('Ответ на этот вопрос предоставит ваш персональный immigration advisor, когда свяжется с вами напрямую.');
 
+    // Dropdown state
+    const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
+
     // Expose getData method via ref
     useImperativeHandle(ref, () => ({
         getData: () => ({
@@ -81,11 +145,13 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
             systemInstructions,
             checkBeforeSend,
             pipelineSettings: JSON.stringify({
-                pipelines: Object.keys(activePipelines).filter(id => activePipelines[id]).reduce((acc, id) => {
-                    acc[id] = {
-                        name: availablePipelines.find(p => p.id === id)?.name || '',
-                        active: true,
-                        stages: pipelineStages[id] || []
+                pipelines: availablePipelines.reduce((acc, pipeline) => {
+                    acc[pipeline.id] = {
+                        name: pipeline.name,
+                        active: activePipelines[pipeline.id] || false,
+                        allStages: allStagesPipelines[pipeline.id] || false,
+                        stages: pipelineStages[pipeline.id] || [],
+                        stageInstructions: stageInstructions[pipeline.id] || {}
                     };
                     return acc;
                 }, {} as Record<string, any>)
@@ -141,12 +207,16 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
         setStageInstructionsOpen(prev => ({ ...prev, [pipelineId]: !prev[pipelineId] }));
     };
 
+    const toggleStageExpand = (stageKey: string) => {
+        setExpandedStages(prev => ({ ...prev, [stageKey]: !prev[stageKey] }));
+    };
+
     const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
         <button
             onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
         >
-            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${checked ? 'translate-x-4 scale-110' : 'translate-x-0 scale-100'}`} />
         </button>
     );
 
@@ -154,43 +224,68 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
         options,
         selectedIds,
         onChange,
-        placeholder
+        placeholder,
+        dropdownId
     }: {
         options: { id: string, name: string }[],
         selectedIds: string[],
         onChange: (ids: string[]) => void,
-        placeholder: string
-    }) => (
-        <div className="relative group">
-            <div className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 flex justify-between items-center cursor-pointer hover:border-blue-500 transition-colors">
-                <span className="truncate">
-                    {selectedIds.length > 0
-                        ? selectedIds.map(id => options.find(o => o.id === id)?.name).join(', ')
-                        : placeholder}
-                </span>
-                <ChevronDown size={16} />
-            </div>
+        placeholder: string,
+        dropdownId: string
+    }) => {
+        const dropdownRef = useRef<HTMLDivElement>(null);
+        const isOpen = openDropdowns[dropdownId] || false;
 
-            <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg hidden group-hover:block max-h-48 overflow-y-auto">
-                {options.map(opt => (
-                    <div
-                        key={opt.id}
-                        onClick={() => {
-                            if (selectedIds.includes(opt.id)) onChange(selectedIds.filter(id => id !== opt.id));
-                            else onChange([...selectedIds, opt.id]);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white flex items-center justify-between"
-                    >
-                        <span>{opt.name}</span>
-                        {selectedIds.includes(opt.id) && <CheckCircle size={14} className="text-blue-600" />}
+        useEffect(() => {
+            const handleClickOutside = (event: MouseEvent) => {
+                if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                    setOpenDropdowns(prev => ({ ...prev, [dropdownId]: false }));
+                }
+            };
+
+            if (isOpen) {
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }
+        }, [isOpen, dropdownId]);
+
+        return (
+            <div className="relative" ref={dropdownRef}>
+                <div
+                    onClick={() => setOpenDropdowns(prev => ({ ...prev, [dropdownId]: !prev[dropdownId] }))}
+                    className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 flex justify-between items-center cursor-pointer hover:border-blue-500 transition-colors"
+                >
+                    <span className="truncate">
+                        {selectedIds.length > 0
+                            ? selectedIds.map(id => options.find(o => o.id === id)?.name).join(', ')
+                            : placeholder}
+                    </span>
+                    <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
+
+                {isOpen && (
+                    <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-[300px] overflow-y-auto">
+                        {options.map(opt => (
+                            <div
+                                key={opt.id}
+                                onClick={() => {
+                                    if (selectedIds.includes(opt.id)) onChange(selectedIds.filter(id => id !== opt.id));
+                                    else onChange([...selectedIds, opt.id]);
+                                }}
+                                className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white flex items-center justify-between"
+                            >
+                                <span>{opt.name}</span>
+                                {selectedIds.includes(opt.id) && <CheckCircle size={14} className="text-blue-600" />}
+                            </div>
+                        ))}
+                        {options.length === 0 && (
+                            <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных каналов</div>
+                        )}
                     </div>
-                ))}
-                {options.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных каналов</div>
                 )}
             </div>
-        </div>
-    );
+        );
+    };
 
     return (
         <div className="space-y-6 mt-6">
@@ -269,9 +364,9 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
 
                     <div className="space-y-4">
                         {availablePipelines.map(pipeline => (
-                            <div key={pipeline.id} className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                            <div key={pipeline.id} className="border border-gray-200 dark:border-gray-700 rounded-lg">
                                 <div
-                                    className="bg-gray-50 dark:bg-gray-750 px-4 py-3 flex items-center justify-between cursor-pointer"
+                                    className="bg-gray-50 dark:bg-gray-750 px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                                     onClick={() => togglePipelineExpand(pipeline.id)}
                                 >
                                     <span className="text-sm font-medium text-gray-900 dark:text-white uppercase">{pipeline.name}</span>
@@ -280,6 +375,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
 
                                 {expandedPipelines[pipeline.id] && (
                                     <div className="p-4 space-y-4 bg-white dark:bg-gray-800">
+                                        {/* Активно Toggle */}
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <Toggle checked={activePipelines[pipeline.id] || false} onChange={() => togglePipelineActive(pipeline.id)} />
@@ -287,10 +383,11 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <Toggle checked={allStagesPipelines[pipeline.id] || false} onChange={() => toggleAllStages(pipeline.id)} />
-                                                <span className="text-sm text-gray-900 dark:text-white">Все этапы сделок</span>
+                                                <span className="text-sm text-gray-900 dark:text-white">Все этапы воронок</span>
                                             </div>
                                         </div>
 
+                                        {/* Выбор этапов */}
                                         {!allStagesPipelines[pipeline.id] && (
                                             <div>
                                                 <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Выберите этапы сделок<span className="text-red-500">*</span></label>
@@ -312,25 +409,55 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                     selectedIds={pipelineStages[pipeline.id] || []}
                                                     onChange={(ids) => setPipelineStages(prev => ({ ...prev, [pipeline.id]: ids }))}
                                                     placeholder="Выбрать этапы"
+                                                    dropdownId={`pipeline-stages-${pipeline.id}`}
                                                 />
                                             </div>
                                         )}
 
+                                        {/* Инструкции для этапа сделки */}
                                         <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
                                             <div
                                                 className="flex items-center justify-between cursor-pointer"
                                                 onClick={() => toggleStageInstructions(pipeline.id)}
                                             >
-                                                <span className="text-xs font-medium text-gray-900 dark:text-white">Инструкции для этапов сделки</span>
+                                                <div>
+                                                    <span className="text-xs font-medium text-gray-900 dark:text-white">Инструкции для этапа сделки</span>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Настройте, как агент отвечает на каждом этапе сделки</p>
+                                                </div>
                                                 <ChevronDown size={14} className={`text-gray-400 transition-transform ${stageInstructionsOpen[pipeline.id] ? 'rotate-180' : ''}`} />
                                             </div>
                                             {stageInstructionsOpen[pipeline.id] && (
-                                                <div className="mt-2">
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Настройте, как агент отвечает на каждом этапе сделки</p>
-                                                    <textarea
-                                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm min-h-[80px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                        placeholder="Введите инструкции..."
-                                                    />
+                                                <div className="mt-4 space-y-3">
+                                                    {pipeline.stages.map(stage => {
+                                                        const stageKey = `${pipeline.id}_${stage.id}`;
+                                                        return (
+                                                            <div key={stage.id} className="border border-gray-200 dark:border-gray-700 rounded-lg">
+                                                                <div
+                                                                    className="bg-gray-50 dark:bg-gray-750 px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                                                    onClick={() => toggleStageExpand(stageKey)}
+                                                                >
+                                                                    <span className="text-sm font-medium text-gray-900 dark:text-white">{stage.name}</span>
+                                                                    <ChevronDown size={14} className={`text-gray-400 transition-transform ${expandedStages[stageKey] ? 'rotate-180' : ''}`} />
+                                                                </div>
+                                                                {expandedStages[stageKey] && (
+                                                                    <div className="p-4 bg-white dark:bg-gray-800">
+                                                                        <textarea
+                                                                            value={stageInstructions[pipeline.id]?.[stage.id] || ''}
+                                                                            onChange={(e) => setStageInstructions(prev => ({
+                                                                                ...prev,
+                                                                                [pipeline.id]: {
+                                                                                    ...prev[pipeline.id],
+                                                                                    [stage.id]: e.target.value
+                                                                                }
+                                                                            }))}
+                                                                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[100px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                                            placeholder="Пример: для сделок на этом этапе сосредоточтесь на понимании их требований по бюджету и срокам"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
@@ -370,6 +497,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                     selectedIds={selectedChannels}
                                     onChange={setSelectedChannels}
                                     placeholder="Выбрать каналы"
+                                    dropdownId="channels"
                                 />
                             </div>
                         )}
@@ -399,6 +527,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                     selectedIds={selectedKbCategories}
                                     onChange={setSelectedKbCategories}
                                     placeholder="Выбрать категории"
+                                    dropdownId="kb-categories"
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Агент будет получать доступ к знаниям только из этих категорий.</p>
                             </div>

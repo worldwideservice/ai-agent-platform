@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import {
     Eye,
     Edit,
@@ -35,13 +35,18 @@ export interface AgentDealsContactsRef {
 }
 
 export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, onSave, crmConnected, onSyncCRM }, ref) => {
-    // Parse CRM data from agent
+    // Parse CRM data from agent (handles double-encoded JSON)
     const parseCrmData = () => {
         if (!agent?.crmData) return null;
         try {
             // crmData может быть уже объектом (после парсинга на backend) или строкой
             if (typeof agent.crmData === 'string') {
-                return JSON.parse(agent.crmData);
+                let parsed = JSON.parse(agent.crmData);
+                // Handle double-encoded JSON (string inside string)
+                if (typeof parsed === 'string') {
+                    parsed = JSON.parse(parsed);
+                }
+                return parsed;
             } else if (typeof agent.crmData === 'object') {
                 return agent.crmData;
             }
@@ -76,6 +81,9 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     );
     const [isDealRulesOpen, setIsDealRulesOpen] = useState(true);
     const [isContactRulesOpen, setIsContactRulesOpen] = useState(true);
+
+    // Dropdown state
+    const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({});
 
     // Загружаем данные из агента при изменении агента
     React.useEffect(() => {
@@ -137,9 +145,9 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
         <button
             onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
         >
-            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-4' : 'translate-x-0'}`} />
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${checked ? 'translate-x-4 scale-110' : 'translate-x-0 scale-100'}`} />
         </button>
     );
 
@@ -161,58 +169,83 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
         selectedIds,
         onChange,
         placeholder,
-        availableFields
+        availableFields,
+        dropdownId
     }: {
         label: string,
         selectedIds: string[],
         onChange: (id: string) => void,
         placeholder: string,
-        availableFields: typeof DEAL_FIELDS | typeof CONTACT_FIELDS
-    }) => (
-        <div className="bg-gray-50 dark:bg-gray-750/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-            <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">{label}</label>
+        availableFields: typeof DEAL_FIELDS | typeof CONTACT_FIELDS,
+        dropdownId: string
+    }) => {
+        const dropdownRef = useRef<HTMLDivElement>(null);
+        const isOpen = openDropdowns[dropdownId] || false;
 
-            {/* Selected Chips */}
-            <div className="flex flex-wrap gap-2 mb-3">
-                {selectedIds.map(id => (
-                    <div key={id} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-md text-sm border border-blue-100 dark:border-blue-800">
-                        <span>{getFieldName(id)}</span>
-                        <button onClick={() => onChange(id)} className="hover:text-blue-900 dark:hover:text-blue-100">
-                            <X size={14} />
-                        </button>
-                    </div>
-                ))}
-            </div>
+        useEffect(() => {
+            const handleClickOutside = (event: MouseEvent) => {
+                if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                    setOpenDropdowns(prev => ({ ...prev, [dropdownId]: false }));
+                }
+            };
 
-            {/* Dropdown Trigger (Mock) */}
-            <div className="relative group">
-                <div className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 flex justify-between items-center cursor-pointer hover:border-blue-500 transition-colors">
-                    <span>{placeholder}</span>
-                    <ChevronDown size={16} />
-                </div>
+            if (isOpen) {
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
+            }
+        }, [isOpen, dropdownId]);
 
-                {/* Dropdown Menu (Hidden by default, shown on hover for demo) */}
-                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg hidden group-hover:block max-h-48 overflow-y-auto">
-                    {availableFields.filter(f => !selectedIds.includes(f.id)).map(field => (
-                        <div
-                            key={field.id}
-                            onClick={() => onChange(field.id)}
-                            className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white"
-                        >
-                            {field.label}
+        return (
+            <div className="bg-gray-50 dark:bg-gray-750/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">{label}</label>
+
+                {/* Selected Chips */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {selectedIds.map(id => (
+                        <div key={id} className="flex items-center gap-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2.5 py-1 rounded-md text-sm border border-blue-100 dark:border-blue-800">
+                            <span>{getFieldName(id)}</span>
+                            <button onClick={() => onChange(id)} className="hover:text-blue-900 dark:hover:text-blue-100">
+                                <X size={14} />
+                            </button>
                         </div>
                     ))}
-                    {availableFields.filter(f => !selectedIds.includes(f.id)).length === 0 && (
-                        <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных полей</div>
+                </div>
+
+                {/* Dropdown Trigger */}
+                <div className="relative" ref={dropdownRef}>
+                    <div
+                        onClick={() => setOpenDropdowns(prev => ({ ...prev, [dropdownId]: !prev[dropdownId] }))}
+                        className="w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 flex justify-between items-center cursor-pointer hover:border-blue-500 transition-colors"
+                    >
+                        <span>{placeholder}</span>
+                        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    {/* Dropdown Menu */}
+                    {isOpen && (
+                        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-[300px] overflow-y-auto">
+                            {availableFields.filter(f => !selectedIds.includes(f.id)).map(field => (
+                                <div
+                                    key={field.id}
+                                    onClick={() => onChange(field.id)}
+                                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white"
+                                >
+                                    {field.label}
+                                </div>
+                            ))}
+                            {availableFields.filter(f => !selectedIds.includes(f.id)).length === 0 && (
+                                <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных полей</div>
+                            )}
+                        </div>
                     )}
                 </div>
-            </div>
 
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                Выберите поля, к которым агент сможет получить доступ.
-            </p>
-        </div>
-    );
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Выберите поля, к которым агент сможет получить доступ.
+                </p>
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-6 mt-6">
@@ -260,6 +293,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                     onChange={(id) => toggleSelection(id, readDealFields, setReadDealFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
                                     availableFields={availableDealFields}
+                                    dropdownId="deal-fields"
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Дополнительные поля добавляют лишний контекст и могут снизить точность ответов</p>
                             </div>
@@ -290,6 +324,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                     onChange={(id) => toggleSelection(id, readContactFields, setReadContactFields)}
                                     placeholder="Выберите поля, к которым агент сможет получить доступ..."
                                     availableFields={availableContactFields}
+                                    dropdownId="contact-fields"
                                 />
                                 <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Большее количество полей добавляет дополнительный контекст и может снизить точность ответов.</p>
                             </div>
