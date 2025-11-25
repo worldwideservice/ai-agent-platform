@@ -21,7 +21,7 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
 
     const newAgent: Omit<Agent, 'id' | 'createdAt'> = {
       name: name.trim(),
-      isActive: false,
+      isActive: true,
       model: 'Google Gemini 2.5 Flash',
       systemInstructions: undefined,
       pipelineSettings: undefined,

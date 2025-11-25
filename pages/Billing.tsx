@@ -222,7 +222,7 @@ export const Billing: React.FC = () => {
               <ul className="space-y-3">
                 <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агент</li>
                 <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> 100 статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> 5,000 Ответов всего</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> 500 Ответов всего</li>
                 <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> 15 дней использования</li>
                 <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> Доступ к Google Gemini 2.5 Flash</li>
               </ul>

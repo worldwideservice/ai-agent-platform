@@ -56,7 +56,7 @@ export async function register(req: Request, res: Response): Promise<void> {
         name: name?.trim() || null,
         currentPlan: 'trial',
         trialEndsAt,
-        responsesLimit: 5000,
+        responsesLimit: 500,
         responsesUsed: 0,
       },
       select: {

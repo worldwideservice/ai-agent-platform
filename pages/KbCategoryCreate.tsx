@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
 interface KbCategoryCreateProps {
@@ -22,6 +22,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
   const [description, setDescription] = useState('');
   const [parentCategory, setParentCategory] = useState<string | null>(currentCategoryId);
   const [showParentDropdown, setShowParentDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isEditMode = !!category;
 
@@ -33,6 +34,19 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
       setParentCategory(currentCategoryId);
     }
   }, [category, currentCategoryId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowParentDropdown(false);
+      }
+    };
+
+    if (showParentDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showParentDropdown]);
 
   const getParentCategoryName = () => {
     if (!parentCategory) return null;
@@ -62,7 +76,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
             Родительская категория
           </label>
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <div
               onClick={() => setShowParentDropdown(!showParentDropdown)}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 flex items-center justify-between bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
@@ -85,7 +99,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
 
             {/* Dropdown */}
             {showParentDropdown && (
-              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-[300px] overflow-auto">
                 <div
                   onClick={() => {
                     setParentCategory(null);

@@ -7,6 +7,11 @@ export { crmService } from './crm.service';
 export { default as settingsService } from './settings.service';
 export { default as analyticsService } from './analytics.service';
 export { default as billingService } from './billing.service';
+export { default as triggersService } from './triggers.service';
+export { default as chainsService } from './chains.service';
+export { default as memoryService } from './memory.service';
+export { integrationsService } from './integrations.service';
+export * as kommoService from './kommo.service';
 
 // Re-export для удобства
 export * from './apiClient';
@@ -17,3 +22,8 @@ export * from './crm.service';
 export * from './settings.service';
 export * from './analytics.service';
 export * from './billing.service';
+export * from './triggers.service';
+export * from './chains.service';
+export * from './memory.service';
+export * from './integrations.service';
+export * from './kommo.service';

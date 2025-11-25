@@ -9,6 +9,9 @@ router.use(authMiddleware);
 // GET /api/kb/articles - Получить все статьи
 router.get('/', kbArticleController.getAllArticles);
 
+// POST /api/kb/articles/search - Семантический поиск по статьям (ВАЖНО: до /:id)
+router.post('/search', kbArticleController.searchArticles);
+
 // GET /api/kb/articles/:id - Получить статью по ID
 router.get('/:id', kbArticleController.getArticleById);
 

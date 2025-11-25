@@ -1,5 +1,5 @@
 import fetch from 'node-fetch';
-import { Pool } from 'pg';
+import { prisma } from '../config/database';
 
 // Kommo OAuth Configuration
 const KOMMO_CLIENT_ID = process.env.KOMMO_CLIENT_ID || '';
@@ -65,7 +65,7 @@ export interface KommoTokens {
   refreshToken: string;
   expiresAt: Date;
   baseDomain: string;
-  apiDomain?: string; // Added for api-g.kommo.com
+  apiDomain?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -74,7 +74,6 @@ export interface KommoTokens {
  * Store Kommo OAuth tokens in database
  */
 export async function storeTokens(
-  pool: Pool,
   integrationId: string,
   accessToken: string,
   refreshToken: string,
@@ -83,44 +82,48 @@ export async function storeTokens(
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-  const query = `
-    INSERT INTO kommo_tokens (id, integration_id, access_token, refresh_token, expires_at, base_domain, created_at, updated_at)
-    VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
-    ON CONFLICT (integration_id)
-    DO UPDATE SET
-      access_token = EXCLUDED.access_token,
-      refresh_token = EXCLUDED.refresh_token,
-      expires_at = EXCLUDED.expires_at,
-      base_domain = EXCLUDED.base_domain,
-      updated_at = NOW()
-  `;
-
-  await pool.query(query, [integrationId, accessToken, refreshToken, expiresAt, baseDomain]);
+  await prisma.kommoToken.upsert({
+    where: { integrationId },
+    create: {
+      integrationId,
+      accessToken,
+      refreshToken,
+      expiresAt,
+      baseDomain,
+      apiDomain: baseDomain, // Use baseDomain from token, not hardcoded api-g.kommo.com
+    },
+    update: {
+      accessToken,
+      refreshToken,
+      expiresAt,
+      baseDomain,
+      updatedAt: new Date(),
+    },
+  });
 }
 
 /**
  * Get stored tokens for integration
  */
-export async function getTokens(pool: Pool, integrationId: string): Promise<KommoTokens | null> {
-  const result = await pool.query(
-    'SELECT * FROM kommo_tokens WHERE integration_id = $1',
-    [integrationId]
-  );
+export async function getTokens(integrationId: string): Promise<KommoTokens | null> {
+  const token = await prisma.kommoToken.findUnique({
+    where: { integrationId },
+  });
 
-  if (result.rows.length === 0) {
+  if (!token) {
     return null;
   }
 
-  const row = result.rows[0];
   return {
-    id: row.id,
-    integrationId: row.integration_id,
-    accessToken: row.access_token,
-    refreshToken: row.refresh_token,
-    expiresAt: new Date(row.expires_at),
-    baseDomain: row.base_domain,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    id: token.id,
+    integrationId: token.integrationId,
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: token.expiresAt,
+    baseDomain: token.baseDomain,
+    apiDomain: token.apiDomain || token.baseDomain, // Fallback to baseDomain
+    createdAt: token.createdAt,
+    updatedAt: token.updatedAt,
   };
 }
 
@@ -136,7 +139,6 @@ export function isTokenExpired(tokens: KommoTokens): boolean {
  * Refresh access token using refresh token
  */
 export async function refreshAccessToken(
-  pool: Pool,
   tokens: KommoTokens
 ): Promise<KommoTokens> {
   const response = await fetch(`https://${tokens.baseDomain}/oauth2/access_token`, {
@@ -162,7 +164,6 @@ export async function refreshAccessToken(
 
   // Store new tokens
   await storeTokens(
-    pool,
     tokens.integrationId,
     data.access_token,
     data.refresh_token,
@@ -184,22 +185,36 @@ export async function refreshAccessToken(
  * Get valid access token (refresh if needed)
  */
 export async function getValidAccessToken(
-  pool: Pool,
   integrationId: string
 ): Promise<{ token: string; baseDomain: string; apiDomain: string }> {
-  let tokens = await getTokens(pool, integrationId);
+  console.log('🔍 Getting valid access token for integration:', integrationId);
+
+  let tokens = await getTokens(integrationId);
 
   if (!tokens) {
+    console.error('❌ No tokens found for integration:', integrationId);
     throw new Error('No tokens found for integration');
   }
 
+  console.log('✅ Tokens found:', {
+    integrationId: tokens.integrationId,
+    baseDomain: tokens.baseDomain,
+    apiDomain: tokens.apiDomain,
+    expiresAt: tokens.expiresAt,
+    isExpired: isTokenExpired(tokens),
+  });
+
   // Refresh if expired
   if (isTokenExpired(tokens)) {
-    tokens = await refreshAccessToken(pool, tokens);
+    console.log('⏰ Token expired, refreshing...');
+    tokens = await refreshAccessToken(tokens);
   }
 
-  // Use api-g.kommo.com for all API requests (global API endpoint)
-  const apiDomain = tokens.apiDomain || 'api-g.kommo.com';
+  // ВАЖНО: Используем apiDomain из БД, если нет - используем baseDomain
+  // Некоторые Kommo аккаунты работают только с конкретным поддоменом
+  const apiDomain = tokens.apiDomain || tokens.baseDomain;
+
+  console.log('🎯 Returning valid token with apiDomain:', apiDomain);
 
   return {
     token: tokens.accessToken,
@@ -425,15 +440,41 @@ export interface KommoUser {
   };
 }
 
+export interface KommoCustomField {
+  id: number;
+  name: string;
+  field_type: string;
+  sort: number;
+  code: string | null;
+  is_multiple: boolean;
+  is_system: boolean;
+  is_editable: boolean;
+  is_required: boolean;
+  settings: any;
+  remind: string | null;
+  enums?: Array<{
+    id: number;
+    value: string;
+    sort: number;
+  }>;
+}
+
+export interface KommoTaskType {
+  id: number;
+  name: string;
+  code: string | null;
+  color: string | null;
+  icon_id: number | null;
+}
+
 /**
  * Fetch a specific lead by ID from Kommo
  */
 export async function fetchLeadById(
-  pool: Pool,
   integrationId: string,
   leadId: number
 ): Promise<KommoLead> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest<KommoLead>(
     apiDomain,
@@ -447,11 +488,10 @@ export async function fetchLeadById(
  * Fetch leads from Kommo
  */
 export async function fetchLeads(
-  pool: Pool,
   integrationId: string,
   options: { limit?: number; page?: number; with?: string } = {}
 ): Promise<{ _embedded: { leads: KommoLead[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   const query: Record<string, string | number> = {};
   if (options.limit) query.limit = options.limit;
@@ -470,11 +510,10 @@ export async function fetchLeads(
  * Fetch contacts from Kommo
  */
 export async function fetchContacts(
-  pool: Pool,
   integrationId: string,
   options: { limit?: number; page?: number } = {}
 ): Promise<{ _embedded: { contacts: KommoContact[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   const query: Record<string, string | number> = {};
   if (options.limit) query.limit = options.limit;
@@ -492,11 +531,10 @@ export async function fetchContacts(
  * Fetch companies from Kommo
  */
 export async function fetchCompanies(
-  pool: Pool,
   integrationId: string,
   options: { limit?: number; page?: number } = {}
 ): Promise<{ _embedded: { companies: KommoCompany[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   const query: Record<string, string | number> = {};
   if (options.limit) query.limit = options.limit;
@@ -514,10 +552,9 @@ export async function fetchCompanies(
  * Fetch pipelines and stages from Kommo
  */
 export async function fetchPipelines(
-  pool: Pool,
   integrationId: string
 ): Promise<{ _embedded: { pipelines: KommoPipeline[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest<{ _embedded: { pipelines: KommoPipeline[] } }>(
     apiDomain,
@@ -530,10 +567,9 @@ export async function fetchPipelines(
  * Fetch users from Kommo
  */
 export async function fetchUsers(
-  pool: Pool,
   integrationId: string
 ): Promise<{ _embedded: { users: KommoUser[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest<{ _embedded: { users: KommoUser[] } }>(
     apiDomain,
@@ -543,14 +579,58 @@ export async function fetchUsers(
 }
 
 /**
+ * Fetch lead custom fields from Kommo
+ */
+export async function fetchLeadsCustomFields(
+  integrationId: string
+): Promise<{ _embedded: { custom_fields: KommoCustomField[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest<{ _embedded: { custom_fields: KommoCustomField[] } }>(
+    apiDomain,
+    token,
+    '/api/v4/leads/custom_fields'
+  );
+}
+
+/**
+ * Fetch contact custom fields from Kommo
+ */
+export async function fetchContactsCustomFields(
+  integrationId: string
+): Promise<{ _embedded: { custom_fields: KommoCustomField[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest<{ _embedded: { custom_fields: KommoCustomField[] } }>(
+    apiDomain,
+    token,
+    '/api/v4/contacts/custom_fields'
+  );
+}
+
+/**
+ * Fetch task types from Kommo
+ */
+export async function fetchTaskTypes(
+  integrationId: string
+): Promise<{ _embedded: { task_types: KommoTaskType[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest<{ _embedded: { task_types: KommoTaskType[] } }>(
+    apiDomain,
+    token,
+    '/api/v4/tasks'
+  );
+}
+
+/**
  * Create a new lead in Kommo
  */
 export async function createLead(
-  pool: Pool,
   integrationId: string,
   leadData: Partial<KommoLead>
 ): Promise<{ _embedded: { leads: KommoLead[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest<{ _embedded: { leads: KommoLead[] } }>(
     apiDomain,
@@ -567,12 +647,11 @@ export async function createLead(
  * Update a lead in Kommo
  */
 export async function updateLead(
-  pool: Pool,
   integrationId: string,
   leadId: number,
   leadData: Partial<KommoLead>
 ): Promise<{ _embedded: { leads: KommoLead[] } }> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest<{ _embedded: { leads: KommoLead[] } }>(
     apiDomain,
@@ -589,12 +668,11 @@ export async function updateLead(
  * Create a note for a lead
  */
 export async function createLeadNote(
-  pool: Pool,
   integrationId: string,
   leadId: number,
   noteText: string
 ): Promise<any> {
-  const { token, apiDomain } = await getValidAccessToken(pool, integrationId);
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
 
   return kommoApiRequest(
     apiDomain,

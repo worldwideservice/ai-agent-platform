@@ -7,8 +7,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // Модель пользователя
@@ -18,19 +19,20 @@ model User {
   password  String
   name      String?
   role      String   @default("USER") // USER или ADMIN
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime? @updatedAt @map("updated_at")
 
   // Тарифные планы и лимиты
-  currentPlan     String   @default("trial") // trial, launch, scale, max
-  trialEndsAt     DateTime?
-  responsesUsed   Int      @default(0)
-  responsesLimit  Int      @default(5000)
+  currentPlan     String   @default("trial") @map("current_plan") // trial, launch, scale, max
+  trialEndsAt     DateTime? @map("trial_ends_at")
+  responsesUsed   Int      @default(0) @map("responses_used")
+  responsesLimit  Int      @default(5000) @map("responses_limit")
 
   // Связи
   agents      Agent[]
   kbCategories KbCategory[]
   kbArticles   KbArticle[]
+  kbImportJobs KbImportJob[]
 
   @@map("users")
 }
@@ -39,25 +41,25 @@ model User {
 model Agent {
   id                 String   @id @default(cuid())
   name               String
-  isActive           Boolean  @default(false)
+  isActive           Boolean  @default(false) @map("is_active")
   model              String   @default("Google Gemini 2.5 Flash")
-  systemInstructions String?
+  systemInstructions String?  @map("system_instructions")
 
   // Настройки воронок и каналов (JSON как STRING для SQLite)
-  pipelineSettings   String?  // JSON as string
-  channelSettings    String?  // JSON as string
-  kbSettings         String?  // JSON as string
+  pipelineSettings   String?  @map("pipeline_settings") // JSON as string
+  channelSettings    String?  @map("channel_settings") // JSON as string
+  kbSettings         String?  @map("kb_settings") // JSON as string
 
   // CRM интеграция
-  crmType            String?  // 'kommo', 'bitrix24', etc
-  crmConnected       Boolean  @default(false)
-  crmData            String?  // JSON as string
+  crmType            String?  @map("crm_type") // 'kommo', 'bitrix24', etc
+  crmConnected       Boolean  @default(false) @map("crm_connected")
+  crmData            String?  @map("crm_data") // JSON as string
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Связи
-  userId    String
+  userId    String @map("user_id")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("agents")
@@ -69,13 +71,13 @@ model Agent {
 model KbCategory {
   id        String   @id @default(cuid())
   name      String
-  parentId  String?
+  parentId  String? @map("parent_id")
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Связи
-  userId       String
+  userId       String @map("user_id")
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent       KbCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children     KbCategory[] @relation("CategoryHierarchy")
@@ -91,16 +93,16 @@ model KbArticle {
   id               Int      @id @default(autoincrement())
   title            String
   content          String
-  isActive         Boolean  @default(true)
+  isActive         Boolean  @default(true) @map("is_active")
 
   // Связанные статьи как строка с разделителями
-  relatedArticles  String?  // Comma-separated IDs: "1,2,3"
+  relatedArticles  String?  @map("related_articles") // Comma-separated IDs: "1,2,3"
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   // Связи
-  userId           String
+  userId           String @map("user_id")
   user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   articleCategories ArticleCategory[]
 
@@ -111,8 +113,8 @@ model KbArticle {
 
 // Связующая таблица для many-to-many между статьями и категориями
 model ArticleCategory {
-  articleId  Int
-  categoryId String
+  articleId  Int @map("article_id")
+  categoryId String @map("category_id")
 
   article  KbArticle  @relation(fields: [articleId], references: [id], onDelete: Cascade)
   category KbCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -153,4 +155,298 @@ model ChatLog {
   @@index([userId])
   @@index([agentId])
   @@index([createdAt])
+}
+
+// Модель триггера агента
+model Trigger {
+  id            String   @id @default(cuid())
+  agentId       String   @map("agent_id")
+  name          String
+  isActive      Boolean  @default(true) @map("is_active")
+  condition     String   // Условие срабатывания триггера
+  cancelMessage String?  @map("cancel_message") // Сообщение при отмене
+  runLimit      Int?     @map("run_limit") // Лимит запусков (0 = без лимита)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  actions       TriggerAction[]
+
+  @@map("triggers")
+  @@index([agentId])
+  @@index([isActive])
+}
+
+// Модель действия триггера
+model TriggerAction {
+  id        String   @id @default(cuid())
+  triggerId String   @map("trigger_id")
+  action    String   // send_message, generate_message, assign_tag, change_stage
+  order     Int      @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Связи
+  trigger   Trigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
+
+  @@map("trigger_actions")
+  @@index([triggerId])
+}
+
+// Модель цепочки сообщений
+model Chain {
+  id               String   @id @default(cuid())
+  agentId          String   @map("agent_id")
+  name             String
+  isActive         Boolean  @default(true) @map("is_active")
+  conditionType    String   @map("condition_type") // 'all' или 'specific'
+  conditionExclude String?  @map("condition_exclude") // Условия исключения
+  runLimit         Int?     @map("run_limit") // Лимит запусков (0 = без лимита)
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  conditions       ChainCondition[]
+  steps            ChainStep[]
+  schedules        ChainSchedule[]
+
+  @@map("chains")
+  @@index([agentId])
+  @@index([isActive])
+}
+
+// Модель условия запуска цепочки
+model ChainCondition {
+  id      String @id @default(cuid())
+  chainId String @map("chain_id")
+  stageId String @map("stage_id") // ID этапа CRM
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Связи
+  chain   Chain  @relation(fields: [chainId], references: [id], onDelete: Cascade)
+
+  @@map("chain_conditions")
+  @@index([chainId])
+}
+
+// Модель шага цепочки
+model ChainStep {
+  id         String @id @default(cuid())
+  chainId    String @map("chain_id")
+  stepOrder  Int    @map("step_order") // Порядок выполнения
+  delayValue Int    @map("delay_value") // Величина задержки
+  delayUnit  String @map("delay_unit") // 'minutes', 'hours', 'days'
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  chain      Chain             @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  actions    ChainStepAction[]
+
+  @@map("chain_steps")
+  @@index([chainId])
+  @@index([stepOrder])
+}
+
+// Модель действия шага цепочки
+model ChainStepAction {
+  id          String @id @default(cuid())
+  stepId      String @map("step_id")
+  actionType  String @map("action_type") // 'generate_message', 'send_message'
+  instruction String // Инструкция для AI
+  actionOrder Int    @default(0) @map("action_order")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Связи
+  step        ChainStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@map("chain_step_actions")
+  @@index([stepId])
+}
+
+// Модель расписания цепочки
+model ChainSchedule {
+  id         String  @id @default(cuid())
+  chainId    String  @map("chain_id")
+  dayOfWeek  Int     @map("day_of_week") // 0-6 (Понедельник-Воскресенье)
+  enabled    Boolean @default(true)
+  startTime  String  @map("start_time") // HH:MM формат
+  endTime    String  @map("end_time") // HH:MM формат
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  chain      Chain   @relation(fields: [chainId], references: [id], onDelete: Cascade)
+
+  @@map("chain_schedules")
+  @@index([chainId])
+  @@index([dayOfWeek])
+}
+
+// Модель интеграции
+// Модель интеграции
+model Integration {
+  id              String    @id @default(cuid())
+  agentId         String    @map("agent_id")
+  integrationType String    @map("integration_type") // 'kommo', 'google_calendar'
+  isActive        Boolean   @default(false) @map("is_active")
+  isConnected     Boolean   @default(false) @map("is_connected")
+  connectedAt     DateTime? @map("connected_at")
+  lastSynced      DateTime? @map("last_synced")
+  settings        String?   // JSON настройки интеграции
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("integrations")
+  @@index([agentId])
+  @@index([integrationType])
+}
+
+// Модель расширенных настроек агента
+model AgentAdvancedSettings {
+  id                   String  @id @default(cuid())
+  agentId              String  @unique
+  model                String  @default("OpenAI GPT-4.1")
+  autoDetectLanguage   Boolean @default(false)
+  responseLanguage     String?
+  scheduleEnabled      Boolean @default(false)
+  creativity           String  @default("balanced") // 'precise', 'balanced', 'creative'
+  responseDelaySeconds Int     @default(45)
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("agent_advanced_settings")
+}
+
+// Модель задания импорта базы знаний
+model KbImportJob {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  status        String   // pending, analyzing, building, completed, failed
+  progress      Int      @default(0)
+  currentStep   String?  @map("current_step")
+
+  // Входные данные
+  filesUploaded Int      @map("files_uploaded")
+  totalSize     Int      @map("total_size")
+
+  // Результаты
+  categoriesCreated   Int?  @map("categories_created")
+  articlesCreated     Int?  @map("articles_created")
+  embeddingsGenerated Int?  @map("embeddings_generated")
+
+  // Метаданные
+  analysis      String?  // JSON с результатами анализа
+  errors        String?  // JSON с ошибками
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  completedAt   DateTime? @map("completed_at")
+
+  // Связи
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files         KbUploadedFile[]
+
+  @@map("kb_import_jobs")
+  @@index([userId])
+  @@index([status])
+}
+
+// Модель загруженного файла
+model KbUploadedFile {
+  id            String   @id @default(cuid())
+  jobId         String   @map("job_id")
+  fileName      String   @map("file_name")
+  fileType      String   @map("file_type")
+  size          Int
+  storageKey    String   @map("storage_key")
+
+  extractedText String?  @map("extracted_text")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Связи
+  job           KbImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("kb_uploaded_files")
+  @@index([jobId])
+}
+
+// Модель контакта из CRM
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  email     String?
+  company   String?
+  position  String?
+  tags      String?  // JSON as string
+  crmId     String   @map("crm_id")
+  crmType   String   @map("crm_type") // 'Kommo', 'Bitrix24', etc
+  userId    String   @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  deals     Deal[]
+
+  @@map("contacts")
+  @@index([userId])
+  @@index([crmId])
+  @@unique([crmId, userId])
+}
+
+// Модель сделки из CRM
+model Deal {
+  id           String   @id @default(cuid())
+  name         String
+  price        Float?
+  currency     String?
+  status       String   // 'open', 'won', 'lost'
+  stage        String?
+  pipelineId   String?  @map("pipeline_id")
+  pipelineName String?  @map("pipeline_name")
+  contactId    String?  @map("contact_id")
+  tags         String?  // JSON as string
+  crmId        String   @map("crm_id")
+  crmType      String   @map("crm_type") // 'Kommo', 'Bitrix24', etc
+  userId       String   @map("user_id")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Связи
+  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@map("deals")
+  @@index([userId])
+  @@index([crmId])
+  @@index([contactId])
+  @@unique([crmId, userId])
+}
+
+// Модель для хранения токенов Kommo OAuth
+model KommoToken {
+  id            String   @id @default(cuid())
+  integrationId String   @unique @map("integration_id")
+  accessToken   String   @map("access_token")
+  refreshToken  String   @map("refresh_token")
+  expiresAt     DateTime @map("expires_at")
+  baseDomain    String   @map("base_domain")
+  apiDomain     String?  @map("api_domain")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("kommo_tokens")
+  @@index([integrationId])
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
 interface KbArticleCreateProps {
@@ -6,6 +6,7 @@ interface KbArticleCreateProps {
   onAddArticle: (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => void;
   onCreate: () => void;
   availableArticles: { id: number; title: string }[];
+  categories: { id: string; name: string; parentId: string | null }[];
   article?: {
     id: number;
     title: string;
@@ -26,13 +27,16 @@ interface KbArticleCreateProps {
   }) => void;
 }
 
-export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAddArticle, onCreate, availableArticles, article, onSave }) => {
+export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAddArticle, onCreate, availableArticles, categories, article, onSave }) => {
   const [title, setTitle] = useState('');
   const [isActive, setIsActive] = useState(true);
-  const [selectedCategories, setSelectedCategories] = useState(['Общее']);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [relatedArticles, setRelatedArticles] = useState<string[]>([]);
   const [content, setContent] = useState('');
+  const [showCategoriesDropdown, setShowCategoriesDropdown] = useState(false);
   const [showRelatedDropdown, setShowRelatedDropdown] = useState(false);
+  const categoriesDropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isEditMode = !!article;
 
@@ -46,8 +50,32 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
     }
   }, [article]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowRelatedDropdown(false);
+      }
+      if (categoriesDropdownRef.current && !categoriesDropdownRef.current.contains(event.target as Node)) {
+        setShowCategoriesDropdown(false);
+      }
+    };
+
+    if (showRelatedDropdown || showCategoriesDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showRelatedDropdown, showCategoriesDropdown]);
+
   const removeCategory = (cat: string) => {
     setSelectedCategories(selectedCategories.filter(c => c !== cat));
+  };
+
+  const toggleCategory = (categoryName: string) => {
+    if (selectedCategories.includes(categoryName)) {
+      setSelectedCategories(selectedCategories.filter(c => c !== categoryName));
+    } else {
+      setSelectedCategories([...selectedCategories, categoryName]);
+    }
   };
 
   const toggleRelatedArticle = (articleTitle: string) => {
@@ -101,7 +129,7 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
     // Clear form
     setTitle('');
     setIsActive(true);
-    setSelectedCategories(['Общее']);
+    setSelectedCategories([]);
     setRelatedArticles([]);
     setContent('');
   };
@@ -141,9 +169,9 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsActive(!isActive)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
             >
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${isActive ? 'translate-x-5 scale-110' : 'translate-x-0 scale-100'}`} />
             </button>
             <span className="text-sm font-medium text-gray-900 dark:text-white">Активно</span>
           </div>
@@ -154,25 +182,73 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
             Категории<span className="text-red-500">*</span>
           </label>
-          <div className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 min-h-[42px] flex items-center justify-between bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
-            <div className="flex flex-wrap gap-2">
-              {selectedCategories.map((cat) => (
-                <span key={cat} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm">
-                  {cat}
-                  <button onClick={() => removeCategory(cat)} className="hover:text-blue-900 dark:hover:text-blue-300">
-                    <X size={14} />
+          <div className="relative" ref={categoriesDropdownRef}>
+            <div
+              onClick={() => setShowCategoriesDropdown(!showCategoriesDropdown)}
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 min-h-[42px] flex items-center justify-between bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
+            >
+              <div className="flex flex-wrap gap-2 flex-1">
+                {selectedCategories.length > 0 ? (
+                  selectedCategories.map((cat) => (
+                    <span key={cat} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm">
+                      {cat}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeCategory(cat);
+                        }}
+                        className="hover:text-blue-900 dark:hover:text-blue-300"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-400 text-sm">Выберите категории...</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-gray-400">
+                {selectedCategories.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCategories([]);
+                    }}
+                    className="hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <X size={16} />
                   </button>
-                </span>
-              ))}
+                )}
+                <ChevronDown size={16} />
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-gray-400">
-              {selectedCategories.length > 0 && (
-                <button onClick={() => setSelectedCategories([])} className="hover:text-gray-600 dark:hover:text-gray-300">
-                  <X size={16} />
-                </button>
-              )}
-              <ChevronDown size={16} />
-            </div>
+
+            {/* Dropdown */}
+            {showCategoriesDropdown && (
+              <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-[300px] overflow-auto">
+                {categories.length > 0 ? (
+                  categories.map((cat) => (
+                    <div
+                      key={cat.id}
+                      onClick={() => toggleCategory(cat.name)}
+                      className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer flex items-center gap-2 text-sm text-gray-900 dark:text-white"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCategories.includes(cat.name)}
+                        onChange={() => { }}
+                        className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]"
+                      />
+                      {cat.name}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                    Нет доступных категорий
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -181,7 +257,7 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
             Связанные статьи
           </label>
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <div
               onClick={() => setShowRelatedDropdown(!showRelatedDropdown)}
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1.5 min-h-[42px] flex items-center justify-between bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
@@ -224,7 +300,7 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
 
             {/* Dropdown */}
             {showRelatedDropdown && (
-              <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
+              <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-[300px] overflow-auto">
                 {availableArticles.length > 0 ? (
                   availableArticles.map((article) => (
                     <div

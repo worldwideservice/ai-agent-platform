@@ -36,6 +36,16 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       const trialEndDate = new Date(user.trialEndsAt);
       const diffTime = trialEndDate.getTime() - now.getTime();
       daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+      console.log('🔍 Trial Debug:', {
+        now: now.toISOString(),
+        trialEndDate: trialEndDate.toISOString(),
+        diffTime,
+        daysRemaining,
+        user: { currentPlan: user.currentPlan, trialEndsAt: user.trialEndsAt }
+      });
+    } else {
+      console.log('⚠️ trialEndsAt is null for user:', userId);
     }
 
     // Вычисляем процент использования

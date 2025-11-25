@@ -1,42 +1,56 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
+import { Pool } from 'pg';
+import { fetchPipelines } from '../services/kommo.service';
+
+// PostgreSQL pool for Kommo service
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Mock data - в будущем заменим на реальные данные из Kommo API
 const MOCK_PIPELINES = [
   {
-    id: 'default_sales',
-    name: 'Продажи',
+    id: 'pipeline_1',
+    name: 'Воронка 1',
     stages: [
-      { id: 'new', name: 'Новый' },
-      { id: 'contact', name: 'Первичный контакт' },
-      { id: 'qualification', name: 'Квалификация' },
-      { id: 'proposal', name: 'Предложение' },
-      { id: 'negotiation', name: 'Переговоры' },
-      { id: 'closed_won', name: 'Успешно завершено' },
-      { id: 'closed_lost', name: 'Отказ' }
+      { id: 'stage_1_1', name: 'Этап 1' },
+      { id: 'stage_1_2', name: 'Этап 2' },
+      { id: 'stage_1_3', name: 'Этап 3' },
+      { id: 'stage_1_4', name: 'Этап 4' },
+      { id: 'stage_1_5', name: 'Этап 5' }
     ]
   },
   {
-    id: 'default_support',
-    name: 'Поддержка',
+    id: 'pipeline_2',
+    name: 'Воронка 2',
     stages: [
-      { id: 'new_request', name: 'Новый запрос' },
-      { id: 'in_progress', name: 'В работе' },
-      { id: 'waiting_response', name: 'Ожидание ответа' },
-      { id: 'resolved', name: 'Решено' },
-      { id: 'closed', name: 'Закрыто' }
+      { id: 'stage_2_1', name: 'Этап 1' },
+      { id: 'stage_2_2', name: 'Этап 2' },
+      { id: 'stage_2_3', name: 'Этап 3' },
+      { id: 'stage_2_4', name: 'Этап 4' }
     ]
   },
   {
-    id: 'default_onboarding',
-    name: 'Онбординг',
+    id: 'pipeline_3',
+    name: 'Воронка 3',
     stages: [
-      { id: 'new_client', name: 'Новый клиент' },
-      { id: 'documentation', name: 'Документы' },
-      { id: 'setup', name: 'Настройка' },
-      { id: 'training', name: 'Обучение' },
-      { id: 'active', name: 'Активен' }
+      { id: 'stage_3_1', name: 'Этап 1' },
+      { id: 'stage_3_2', name: 'Этап 2' },
+      { id: 'stage_3_3', name: 'Этап 3' }
+    ]
+  },
+  {
+    id: 'pipeline_4',
+    name: 'Воронка 4',
+    stages: [
+      { id: 'stage_4_1', name: 'Этап 1' },
+      { id: 'stage_4_2', name: 'Этап 2' },
+      { id: 'stage_4_3', name: 'Этап 3' },
+      { id: 'stage_4_4', name: 'Этап 4' },
+      { id: 'stage_4_5', name: 'Этап 5' },
+      { id: 'stage_4_6', name: 'Этап 6' }
     ]
   }
 ];
@@ -84,11 +98,45 @@ export async function syncCRM(req: AuthRequest, res: Response) {
       return;
     }
 
+    let pipelines = MOCK_PIPELINES;
+
+    // Проверяем есть ли подключенная интеграция Kommo
+    const kommoIntegration = await prisma.integration.findFirst({
+      where: {
+        agentId: agentId,
+        integrationType: 'kommo',
+        isConnected: true,
+      },
+    });
+
+    // Если Kommo интеграция подключена, получаем реальные воронки
+    if (kommoIntegration) {
+      try {
+        const pipelinesResponse = await fetchPipelines(pool, kommoIntegration.id);
+
+        // Трансформируем Kommo воронки в наш формат
+        pipelines = pipelinesResponse._embedded.pipelines.map((kp) => ({
+          id: `pipeline_${kp.id}`,
+          name: kp.name,
+          stages: kp._embedded.statuses.map((ks) => ({
+            id: `stage_${kp.id}_${ks.id}`,
+            name: ks.name,
+          })),
+        }));
+
+        console.log(`Fetched ${pipelines.length} pipelines from Kommo for agent ${agentId}`);
+      } catch (error) {
+        console.error('Error fetching Kommo pipelines:', error);
+        // Используем моковые данные при ошибке
+        console.log('Falling back to mock pipelines');
+      }
+    }
+
     // Подготавливаем данные CRM для сохранения
     const crmData = {
       syncedAt: new Date().toISOString(),
       status: 'active',
-      pipelines: MOCK_PIPELINES,
+      pipelines: pipelines,
       channels: MOCK_CHANNELS,
       dealFields: DEAL_FIELDS,
       contactFields: CONTACT_FIELDS,
@@ -221,10 +269,11 @@ export async function syncCRM(req: AuthRequest, res: Response) {
       message: 'CRM синхронизирована успешно',
       contacts: createdContacts.length,
       deals: createdDeals.length,
-      pipelines: MOCK_PIPELINES.length,
+      pipelines: pipelines.length,
       channels: MOCK_CHANNELS.length,
       crmType: crmType || 'Kommo',
       crmData: crmData,
+      isRealData: !!kommoIntegration, // Указывает использовали ли реальные данные Kommo
     });
   } catch (error) {
     console.error('Error syncing CRM:', error);

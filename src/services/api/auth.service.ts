@@ -12,6 +12,13 @@ class AuthService {
    * После регистрации пользователь НЕ логинится автоматически
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
+    // Очищаем данные предыдущего пользователя перед регистрацией
+    const currentUser = this.getUser();
+    if (currentUser) {
+      console.log('🔄 Clearing localStorage before registration');
+      this.logout();
+    }
+
     const response = await apiClient.post<AuthResponse>('/auth/register', data);
 
     // НЕ сохраняем токен - пользователь должен войти вручную
@@ -25,6 +32,16 @@ class AuthService {
    */
   async login(data: LoginRequest): Promise<AuthResponse> {
     console.log('🔐 authService.login - sending request to API');
+
+    // Проверяем, не логинится ли другой пользователь
+    const currentUser = this.getUser();
+    const isNewUser = !currentUser || currentUser.email !== data.email;
+
+    if (isNewUser && currentUser) {
+      console.log('🔄 Different user detected, clearing localStorage');
+      this.logout(); // Очищаем данные предыдущего пользователя
+    }
+
     const response = await apiClient.post<AuthResponse>('/auth/login', data);
     console.log('✅ API response received:', response.data);
 
@@ -42,8 +59,16 @@ class AuthService {
    * Выход из системы
    */
   logout(): void {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
+    // Сохраняем список ключей, которые НЕ нужно удалять (например, настройки темы)
+    const keysToKeep: string[] = [];
+
+    // Очищаем весь localStorage, кроме исключений
+    const allKeys = Object.keys(localStorage);
+    allKeys.forEach(key => {
+      if (!keysToKeep.includes(key)) {
+        localStorage.removeItem(key);
+      }
+    });
   }
 
   /**

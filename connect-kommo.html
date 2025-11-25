@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подключить Kommo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #f0f8ff;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4CAF50;
+        }
+        .token-box {
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔗 Подключение Kommo CRM</h1>
+
+        <div class="info">
+            <strong>Integration ID:</strong> 0ae81a45-b568-44ee-8480-7e72bd1abc1c
+        </div>
+
+        <p>Ваш долгосрочный токен (уже скопирован в буфер):</p>
+        <div class="token-box" id="token">eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjRmNjBkMWMyMTJkNDkwOTJlNTY3N2Y1YzFkMmI3MmFiOGI4YzE4MjVhODEwOWZiMGFjYWM2MTJlZDQwODk0YjFjMDY5ZTQwZjNmYTBiNGRiIn0.eyJhdWQiOiIyYTVjMTQ2My00M2RkLTRjY2MtYWJkMC03OTUxNmY3ODVlNTciLCJqdGkiOiI0ZjYwZDFjMjEyZDQ5MDkyZTU2NzdmNWMxZDJiNzJhYjhiOGMxODI1YTgxMDlmYjBhY2FjNjEyZWQ0MDg5NGIxYzA2OWU0MGYzZmEwYjRkYiIsImlhdCI6MTc2NDAxOTczNywibmJmIjoxNzY0MDE5NzM3LCJleHAiOjE4NDg3MDA4MDAsInN1YiI6IjEyNzYwMzgzIiwiZ3JhbnRfdHlwZSI6IiIsImFjY291bnRfaWQiOjM0MjEwMzA3LCJiYXNlX2RvbWFpbiI6ImtvbW1vLmNvbSIsInZlcnNpb24iOjIsInNjb3BlcyI6WyJjcm0iLCJmaWxlcyIsImZpbGVzX2RlbGV0ZSIsIm5vdGlmaWNhdGlvbnMiLCJwdXNoX25vdGlmaWNhdGlvbnMiXSwiaGFzaF91dWlkIjoiZmRmZWFiMmUtYTBmNC00NzljLWJiYmMtOTY0OThkN2U2NTNlIiwidXNlcl9mbGFncyI6MCwiYXBpX2RvbWFpbiI6ImFwaS1nLmtvbW1vLmNvbSJ9.gb1UkZnVBWRn2xDlkVNsVNRbFuGPoGakEfbqDGi-mkOFYSC4aX2FtAQFgo9xraZo8Mln3ult23qQfPjBk8uqzIlXfoXoPAgW8XjOHddBqhIn0QRRUdjMSgs_lHYEs61j2MLm5vSppJe07bi4kSegJqIdUCW2kKx3I5ZDLwPapmrByOrU1T9TCdGGVQXIdFACvmmxvOribpZOtBU75VtgQ-1Jmn7oqnWOMa6es0Ztw7b01raBXC_0sReOFLb7a0l1Rk93aAAkxJAQ2uuebwYcoE4mxZKrwOmH7YsevdtVti9XWtRK87NiRQBi-CVFsOGO63mp1VQK8HPpe4SPRN6GMA</div>
+
+        <button onclick="connectKommo()">
+            🚀 ПОДКЛЮЧИТЬ KOMMO
+        </button>
+
+        <div class="success" id="success">
+            ✅ Kommo успешно подключен! Вернитесь в приложение и обновите страницу.
+        </div>
+
+        <div class="error" id="error">
+            ❌ Ошибка подключения: <span id="errorMessage"></span>
+        </div>
+    </div>
+
+    <script>
+        async function connectKommo() {
+            const integrationId = '0ae81a45-b568-44ee-8480-7e72bd1abc1c';
+            const accessToken = document.getElementById('token').textContent;
+            const authToken = localStorage.getItem('token');
+
+            if (!authToken) {
+                alert('Сначала войдите в приложение на http://localhost:3000');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3001/api/kommo/connect-with-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify({
+                        integrationId: integrationId,
+                        accessToken: accessToken
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('success').style.display = 'block';
+                    document.getElementById('error').style.display = 'none';
+
+                    // Автоматически перейти обратно в приложение через 3 секунды
+                    setTimeout(() => {
+                        window.location.href = 'http://localhost:3000';
+                    }, 3000);
+                } else {
+                    throw new Error(data.message || 'Ошибка подключения');
+                }
+            } catch (error) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('success').style.display = 'none';
+                document.getElementById('errorMessage').textContent = error.message;
+            }
+        }
+
+        // Автоматически копировать токен в буфер обмена при загрузке
+        window.onload = function() {
+            const token = document.getElementById('token').textContent;
+            navigator.clipboard.writeText(token);
+        }
+    </script>
+</body>
+</html>

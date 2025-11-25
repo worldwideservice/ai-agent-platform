@@ -3,38 +3,45 @@ import { CrmPipeline, CrmField } from '../types';
 // Default pipelines shown before CRM synchronization
 export const MOCK_PIPELINES: CrmPipeline[] = [
   {
-    id: 'default_sales',
-    name: 'Продажи',
+    id: 'pipeline_1',
+    name: 'Воронка 1',
     stages: [
-      { id: 'new', name: 'Новый' },
-      { id: 'contact', name: 'Первичный контакт' },
-      { id: 'qualification', name: 'Квалификация' },
-      { id: 'proposal', name: 'Предложение' },
-      { id: 'negotiation', name: 'Переговоры' },
-      { id: 'closed_won', name: 'Успешно завершено' },
-      { id: 'closed_lost', name: 'Отказ' }
+      { id: 'stage_1_1', name: 'Этап 1' },
+      { id: 'stage_1_2', name: 'Этап 2' },
+      { id: 'stage_1_3', name: 'Этап 3' },
+      { id: 'stage_1_4', name: 'Этап 4' },
+      { id: 'stage_1_5', name: 'Этап 5' }
     ]
   },
   {
-    id: 'default_support',
-    name: 'Поддержка',
+    id: 'pipeline_2',
+    name: 'Воронка 2',
     stages: [
-      { id: 'new_request', name: 'Новый запрос' },
-      { id: 'in_progress', name: 'В работе' },
-      { id: 'waiting_response', name: 'Ожидание ответа' },
-      { id: 'resolved', name: 'Решено' },
-      { id: 'closed', name: 'Закрыто' }
+      { id: 'stage_2_1', name: 'Этап 1' },
+      { id: 'stage_2_2', name: 'Этап 2' },
+      { id: 'stage_2_3', name: 'Этап 3' },
+      { id: 'stage_2_4', name: 'Этап 4' }
     ]
   },
   {
-    id: 'default_onboarding',
-    name: 'Онбординг',
+    id: 'pipeline_3',
+    name: 'Воронка 3',
     stages: [
-      { id: 'new_client', name: 'Новый клиент' },
-      { id: 'documentation', name: 'Документы' },
-      { id: 'setup', name: 'Настройка' },
-      { id: 'training', name: 'Обучение' },
-      { id: 'active', name: 'Активен' }
+      { id: 'stage_3_1', name: 'Этап 1' },
+      { id: 'stage_3_2', name: 'Этап 2' },
+      { id: 'stage_3_3', name: 'Этап 3' }
+    ]
+  },
+  {
+    id: 'pipeline_4',
+    name: 'Воронка 4',
+    stages: [
+      { id: 'stage_4_1', name: 'Этап 1' },
+      { id: 'stage_4_2', name: 'Этап 2' },
+      { id: 'stage_4_3', name: 'Этап 3' },
+      { id: 'stage_4_4', name: 'Этап 4' },
+      { id: 'stage_4_5', name: 'Этап 5' },
+      { id: 'stage_4_6', name: 'Этап 6' }
     ]
   }
 ];
@@ -81,10 +88,14 @@ export const CONTACT_FIELDS: CrmField[] = [
 export const MOCK_CRM_FIELDS: CrmField[] = [...DEAL_FIELDS, ...CONTACT_FIELDS];
 
 export const CRM_ACTIONS = [
-  { id: 'move_stage', label: 'Сменить этап сделки' },
-  { id: 'add_tag', label: 'Добавить тег' },
-  { id: 'create_task', label: 'Создать задачу' },
-  { id: 'update_field', label: 'Обновить поле' },
+  { id: 'send_message', name: 'Отправить сообщение' },
+  { id: 'generate_message', name: 'Сгенерировать ответ ИИ' },
+  { id: 'change_stage', name: 'Изменить этап сделки' },
+  { id: 'assign_user', name: 'Изменить ответственного' },
+  { id: 'create_task', name: 'Создать задачу' },
+  { id: 'add_note', name: 'Добавить примечание' },
+  { id: 'assign_tag', name: 'Добавить тег' },
+  { id: 'change_budget', name: 'Изменить бюджет сделки' },
 ];
 
 export const MOCK_CHANNELS = [

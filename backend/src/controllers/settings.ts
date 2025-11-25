@@ -10,30 +10,61 @@ export const getSettings = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId;
 
+    console.log('⚙️ GET /api/settings - userId:', userId);
+
     if (!userId) {
+      console.log('❌ Unauthorized - no userId');
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    // Получаем или создаем настройки
+    // Получаем настройки или создаем, если их нет
     let settings = await prisma.userSettings.findUnique({
       where: { userId },
     });
 
-    // Если настроек нет, создаем с дефолтными значениями
     if (!settings) {
-      settings = await prisma.userSettings.create({
-        data: {
-          userId,
-          stopOnReply: false,
-          resumeTime: 30,
-          resumeUnit: 'дней',
-        },
+      try {
+        settings = await prisma.userSettings.create({
+          data: {
+            userId,
+            stopOnReply: false,
+            resumeTime: 30,
+            resumeUnit: 'дней',
+          },
+        });
+        console.log('✅ Created settings:', settings);
+
+        // If create returned null, query again
+        if (!settings) {
+          settings = await prisma.userSettings.findUnique({
+            where: { userId },
+          });
+          console.log('✅ Found settings after create:', settings);
+        }
+      } catch (createError) {
+        console.log('⚠️ Create failed, trying to find:', createError);
+        // Maybe it already exists due to race condition
+        settings = await prisma.userSettings.findUnique({
+          where: { userId },
+        });
+      }
+    } else {
+      console.log('✅ Found settings:', settings);
+    }
+
+    // If still no settings, return default values
+    if (!settings) {
+      console.log('⚠️ No settings found, returning defaults');
+      return res.json({
+        stopOnReply: false,
+        resumeTime: 30,
+        resumeUnit: 'дней',
       });
     }
 
     return res.json(settings);
   } catch (error) {
-    console.error('Error fetching settings:', error);
+    console.error('❌ Error fetching settings:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

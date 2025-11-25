@@ -44,7 +44,41 @@ const App: React.FC = () => {
   // State для KB Categories
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
     const saved = localStorage.getItem('kbCategories');
-    return saved ? JSON.parse(saved) : INITIAL_KB_CATEGORIES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Validate that all items have the correct structure and valid names
+        if (Array.isArray(parsed)) {
+          const validCategories = parsed.filter(cat => {
+            // Check structure
+            if (!cat || typeof cat !== 'object' ||
+                typeof cat.id !== 'string' ||
+                typeof cat.name !== 'string' ||
+                (cat.parentId !== null && typeof cat.parentId !== 'string')) {
+              return false;
+            }
+            // Filter out categories with suspicious names (only digits, very short names, etc.)
+            const name = cat.name.trim();
+            if (!name || name.length < 2 || /^\d+$/.test(name)) {
+              console.warn('Filtering out invalid category:', cat);
+              return false;
+            }
+            return true;
+          });
+
+          if (validCategories.length > 0) {
+            return validCategories;
+          }
+        }
+        // If validation fails or no valid categories, clear invalid data
+        console.warn('Invalid kbCategories data in localStorage, using defaults');
+        localStorage.removeItem('kbCategories');
+      } catch (e) {
+        console.error('Failed to parse kbCategories from localStorage:', e);
+        localStorage.removeItem('kbCategories');
+      }
+    }
+    return INITIAL_KB_CATEGORIES;
   });
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; parentId: string | null } | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(() => {
@@ -506,7 +540,39 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentPage) {
       case 'dashboard': return <Dashboard />;
-      case 'agents': return <Agents agents={agents} isLoading={isLoadingAgents} onToggleAgentStatus={handleToggleAgentStatus} onDeleteAgent={handleDeleteAgent} onCopyAgent={handleCopyAgent} onEditAgent={(agentId) => { const agent = agents.find(a => a.id === agentId); if (agent) { setEditingAgent(agent); setEditingAgentId(agentId); setCurrentPage('agent-editor'); } }} onCreateAgent={() => setCurrentPage('agent-create')} />;
+      case 'agents': {
+        // Защита от null/undefined и форматирование дат для отображения
+        const safeAgents = Array.isArray(agents) ? agents.map(agent => ({
+          ...agent,
+          // Форматируем дату в читабельный формат, если это строка ISO
+          createdAt: agent.createdAt && typeof agent.createdAt === 'string'
+            ? new Date(agent.createdAt).toLocaleString('ru-RU', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }).replace(',', '')
+            : 'Неизвестно'
+        })) : [];
+
+        return <Agents
+          agents={safeAgents}
+          isLoading={isLoadingAgents}
+          onToggleAgentStatus={handleToggleAgentStatus}
+          onDeleteAgent={handleDeleteAgent}
+          onCopyAgent={handleCopyAgent}
+          onEditAgent={(agentId) => {
+            const agent = agents.find(a => a.id === agentId);
+            if (agent) {
+              setEditingAgent(agent);
+              setEditingAgentId(agentId);
+              setCurrentPage('agent-editor');
+            }
+          }}
+          onCreateAgent={() => setCurrentPage('agent-create')}
+        />;
+      }
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
       case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setEditingAgentId(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
       case 'chat': return <Chat agents={agents} />;
@@ -515,7 +581,7 @@ const App: React.FC = () => {
       case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
       case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
       case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
-      case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} />;
+      case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} categories={kbCategories} />;
       default: return <Dashboard />;
     }
   };
@@ -548,7 +614,27 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-          {renderContent()}
+          {(() => {
+            try {
+              return renderContent();
+            } catch (error) {
+              console.error('❌ Error rendering content:', error);
+              return (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="text-red-500 text-xl mb-4">⚠️ Ошибка отображения</div>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {error instanceof Error ? error.message : 'Неизвестная ошибка'}
+                  </p>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
+                  >
+                    Обновить страницу
+                  </button>
+                </div>
+              );
+            }
+          })()}
         </main>
       </div>
 
