@@ -19,9 +19,22 @@ export interface SyncKommoResponse {
   lastSynced: Date;
   stats: {
     pipelines: number;
-    contacts: number;
-    leads: number;
+    dealFields: number;
+    contactFields: number;
+    users: number;
+    salesbots: number;
+    syncTime: string;
   };
+}
+
+export interface KommoSyncStats {
+  pipelines: number;
+  stages: number;
+  users: number;
+  dealFields: number;
+  contactFields: number;
+  channels: number;
+  lastSync: string | null;
 }
 
 export const integrationsService = {
@@ -61,7 +74,7 @@ export const integrationsService = {
     const response = await apiClient.post(
       `/agents/${agentId}/integrations/kommo/sync`,
       {},
-      { timeout: 60000 } // 60 секунд для синхронизации
+      { timeout: 120000 } // 2 минуты для синхронизации (первая синхронизация может занять 60+ секунд)
     );
     return response.data;
   },
@@ -75,5 +88,13 @@ export const integrationsService = {
       accessToken,
     });
     return response.data.integration;
+  },
+
+  /**
+   * Получить статистику синхронизации Kommo
+   */
+  async getKommoSyncStats(agentId: string): Promise<KommoSyncStats> {
+    const response = await apiClient.get(`/agents/${agentId}/integrations/kommo/stats`);
+    return response.data;
   },
 };

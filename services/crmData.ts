@@ -88,14 +88,48 @@ export const CONTACT_FIELDS: CrmField[] = [
 export const MOCK_CRM_FIELDS: CrmField[] = [...DEAL_FIELDS, ...CONTACT_FIELDS];
 
 export const CRM_ACTIONS = [
-  { id: 'send_message', name: 'Отправить сообщение' },
-  { id: 'generate_message', name: 'Сгенерировать ответ ИИ' },
   { id: 'change_stage', name: 'Изменить этап сделки' },
   { id: 'assign_user', name: 'Изменить ответственного' },
+  { id: 'stop_agents', name: 'Остановить агентов в этом чате' },
   { id: 'create_task', name: 'Создать задачу' },
-  { id: 'add_note', name: 'Добавить примечание' },
-  { id: 'assign_tag', name: 'Добавить тег' },
-  { id: 'change_budget', name: 'Изменить бюджет сделки' },
+  { id: 'run_salesbot', name: 'Запустить Salesbot' },
+  { id: 'add_deal_tags', name: 'Добавить теги сделки' },
+  { id: 'add_contact_tags', name: 'Добавить теги контакта' },
+  { id: 'add_deal_note', name: 'Добавить примечание к сделке' },
+  { id: 'add_contact_note', name: 'Добавить примечание к контакту' },
+  { id: 'send_email', name: 'Отправить email' },
+  { id: 'send_files', name: 'Отправить файлы' },
+  { id: 'send_kb_article', name: 'Отправить статью из базы знаний' },
+  { id: 'send_webhook', name: 'Отправить вебхук' },
+  // Legacy actions (kept for backwards compatibility)
+  { id: 'send_message', name: 'Отправить сообщение' },
+];
+
+// Trigger conditions - events from Kommo CRM
+export const TRIGGER_CONDITIONS = [
+  { id: 'lead_created', name: 'Создана сделка' },
+  { id: 'lead_updated', name: 'Обновлена сделка' },
+  { id: 'lead_status_changed', name: 'Смена этапа сделки' },
+  { id: 'contact_created', name: 'Создан контакт' },
+  { id: 'contact_updated', name: 'Обновлен контакт' },
+  { id: 'task_created', name: 'Создана задача' },
+  { id: 'task_updated', name: 'Обновлена задача' },
+  { id: 'any_lead_event', name: 'Любое событие сделки' },
+  { id: 'any_contact_event', name: 'Любое событие контакта' },
+];
+
+// Mock users for trigger actions
+export const MOCK_USERS = [
+  { id: 'user_1', name: 'Irakli Shukakidze' },
+  { id: 'user_2', name: 'Austin Odumuko' },
+  { id: 'user_3', name: 'Максим Головатый' },
+];
+
+// Mock salesbots for trigger actions
+export const MOCK_SALESBOTS = [
+  { id: 'salesbot_1', name: 'INST/FB/WA BOT' },
+  { id: 'salesbot_2', name: 'Telegram BOT' },
+  { id: 'salesbot_3', name: 'Email Follow-up' },
 ];
 
 export const MOCK_CHANNELS = [

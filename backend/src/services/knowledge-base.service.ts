@@ -12,6 +12,9 @@ interface KBSettings {
   selectedCategories?: string[];
   createTaskIfNotFound?: boolean;
   noAnswerMessage?: string;
+  // Настройки для отправки документов клиентам
+  allowAllArticlesForSending?: boolean;
+  selectedArticlesForSending?: number[];
 }
 
 /**

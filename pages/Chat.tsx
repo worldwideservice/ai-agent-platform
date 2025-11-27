@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Trash2 } from 'lucide-react';
-import { sendMessageToGemini } from '../services/geminiService';
+import { Send, Bot, User, Trash2, FlaskConical, Play, Pause, RefreshCw, Info } from 'lucide-react';
+import { apiClient } from '../src/services/api/apiClient';
+import { testService, AgentPauseStatus } from '../src/services/api/test.service';
+import { notificationsService } from '../src/services/api';
 import { Agent } from '../types';
 
 interface ChatProps {
@@ -13,6 +15,12 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Test Mode State
+  const [showTestPanel, setShowTestPanel] = useState(false);
+  const [testStatus, setTestStatus] = useState<AgentPauseStatus | null>(null);
+  const [testLoading, setTestLoading] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   // Автоматически выбираем первого активного агента при загрузке
   useEffect(() => {
@@ -52,18 +60,32 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setIsLoading(true);
 
-    // Передаем настройки агента в API
-    const response = await sendMessageToGemini({
-      message: userMsg,
-      history: messages,
-      agentConfig: {
-        model: selectedAgent.model,
-        systemInstructions: selectedAgent.systemInstructions || 'Вы - полезный помощник.',
-        agentName: selectedAgent.name
-      }
-    });
+    try {
+      // Вызываем бэкенд API для обработки сообщения (включая триггеры)
+      const result = await apiClient.post('/chat/message', {
+        agentId: selectedAgent.id,
+        message: userMsg,
+        history: messages.map(m => ({
+          role: m.role,
+          text: m.text
+        }))
+      });
 
-    setMessages(prev => [...prev, { role: 'model', text: response || 'Ошибка получения ответа.' }]);
+      const responseText = result.data.response || 'Ошибка получения ответа.';
+      setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+
+      // Логируем сработавшие триггеры
+      if (result.data.triggeredActions?.length > 0) {
+        console.log('🎯 Сработали триггеры:', result.data.triggeredActions);
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        text: `Ошибка: ${error.response?.data?.message || error.message}`
+      }]);
+    }
+
     setIsLoading(false);
   };
 
@@ -83,6 +105,87 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     }
   };
 
+  // === TEST MODE FUNCTIONS ===
+  const refreshTestStatus = async () => {
+    if (!selectedAgent) return;
+    setTestLoading(true);
+    try {
+      const status = await testService.getAgentStatus(selectedAgent.id);
+      setTestStatus(status);
+      setTestMessage(null);
+    } catch (error: any) {
+      setTestMessage(`Ошибка: ${error.message}`);
+    }
+    setTestLoading(false);
+  };
+
+  const handleSimulateEmployeeReply = async () => {
+    if (!selectedAgent) return;
+    setTestLoading(true);
+    try {
+      const result = await testService.simulateEmployeeReply(selectedAgent.id);
+      setTestMessage(`✅ ${result.message}`);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        text: `🧪 [ТЕСТ] Симуляция: Сотрудник ответил клиенту. Агент поставлен на паузу.`
+      }]);
+      await refreshTestStatus();
+    } catch (error: any) {
+      setTestMessage(`❌ Ошибка: ${error.message}`);
+    }
+    setTestLoading(false);
+  };
+
+  const handleSimulateClientMessage = async () => {
+    if (!selectedAgent) return;
+    setTestLoading(true);
+    try {
+      const result = await testService.simulateClientMessage(selectedAgent.id);
+      const statusText = result.canRespond ? 'МОЖЕТ отвечать' : 'НЕ может отвечать (на паузе)';
+      setTestMessage(`ℹ️ Агент ${statusText}`);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        text: `🧪 [ТЕСТ] Проверка: Агент ${statusText}`
+      }]);
+      await refreshTestStatus();
+    } catch (error: any) {
+      setTestMessage(`❌ Ошибка: ${error.message}`);
+    }
+    setTestLoading(false);
+  };
+
+  const handleForceResume = async () => {
+    if (!selectedAgent) return;
+    setTestLoading(true);
+    try {
+      const result = await testService.forceResumeAgent(selectedAgent.id);
+      setTestMessage(`✅ ${result.message}`);
+      setMessages(prev => [...prev, {
+        role: 'model',
+        text: `🧪 [ТЕСТ] Агент возобновлён принудительно`
+      }]);
+      await refreshTestStatus();
+      // Создаём уведомление о принудительном возобновлении
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: 'Агент возобновлён',
+          message: `Агент "${selectedAgent.name}" возобновлён принудительно`,
+        });
+      } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      setTestMessage(`❌ Ошибка: ${error.message}`);
+    }
+    setTestLoading(false);
+  };
+
+  // Обновляем статус при открытии панели или смене агента
+  useEffect(() => {
+    if (showTestPanel && selectedAgent) {
+      refreshTestStatus();
+    }
+  }, [showTestPanel, selectedAgent]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -100,17 +203,125 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
         </div>
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Тестовый чат</h1>
-          {selectedAgent && (
-            <button
-              onClick={handleClearChat}
-              className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-            >
-              <Trash2 size={16} />
-              Очистить чат
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {selectedAgent && (
+              <>
+                <button
+                  onClick={() => setShowTestPanel(!showTestPanel)}
+                  className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-md transition-colors ${
+                    showTestPanel
+                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  <FlaskConical size={16} />
+                  Test Mode
+                </button>
+                <button
+                  onClick={handleClearChat}
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  <Trash2 size={16} />
+                  Очистить
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Test Mode Panel */}
+      {showTestPanel && selectedAgent && (
+        <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <FlaskConical size={18} className="text-purple-600 dark:text-purple-400" />
+            <h3 className="font-medium text-purple-900 dark:text-purple-100">Test Mode: Симуляция интеграции</h3>
+          </div>
+
+          {/* Status */}
+          <div className="bg-white dark:bg-gray-800 rounded-md p-3 mb-3 text-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-600 dark:text-gray-400">Статус агента:</span>
+              <button
+                onClick={refreshTestStatus}
+                disabled={testLoading}
+                className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={testLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+            {testStatus ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {testStatus.paused ? (
+                    <>
+                      <Pause size={16} className="text-orange-500" />
+                      <span className="text-orange-600 dark:text-orange-400 font-medium">На паузе</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play size={16} className="text-green-500" />
+                      <span className="text-green-600 dark:text-green-400 font-medium">Активен</span>
+                    </>
+                  )}
+                </div>
+                {testStatus.pausedAt && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Пауза с: {new Date(testStatus.pausedAt).toLocaleString('ru-RU')}
+                  </p>
+                )}
+                {testStatus.settings && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Настройки: {testStatus.settings.stopOnReply ? 'Пауза при ответе вкл' : 'Пауза при ответе выкл'},
+                    возобновление через {testStatus.settings.resumeTime} {testStatus.settings.resumeUnit}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400 text-xs">Загрузка...</p>
+            )}
+          </div>
+
+          {/* Test message */}
+          {testMessage && (
+            <div className="bg-white dark:bg-gray-800 rounded-md p-2 mb-3 text-sm">
+              {testMessage}
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleSimulateEmployeeReply}
+              disabled={testLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded-md text-sm hover:bg-orange-200 dark:hover:bg-orange-900/50 disabled:opacity-50 transition-colors"
+            >
+              <Pause size={14} />
+              Сотрудник ответил
+            </button>
+            <button
+              onClick={handleSimulateClientMessage}
+              disabled={testLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-md text-sm hover:bg-blue-200 dark:hover:bg-blue-900/50 disabled:opacity-50 transition-colors"
+            >
+              <Info size={14} />
+              Проверить статус
+            </button>
+            <button
+              onClick={handleForceResume}
+              disabled={testLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-md text-sm hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 transition-colors"
+            >
+              <Play size={14} />
+              Снять паузу
+            </button>
+          </div>
+
+          <p className="text-xs text-purple-600 dark:text-purple-400 mt-3">
+            💡 Используйте эти кнопки для тестирования функции "Останавливать агента при ответе сотрудника" без реальной интеграции Kommo
+          </p>
+        </div>
+      )}
 
       <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm flex flex-col overflow-hidden transition-colors">
 

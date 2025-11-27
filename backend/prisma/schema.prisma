@@ -1,8 +1,5 @@
-// Prisma Schema для AI Agent Platform
-// Документация: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
 }
 
@@ -12,355 +9,339 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-// Модель пользователя
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  role      String   @default("USER") // USER или ADMIN
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime? @updatedAt @map("updated_at")
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  email          String    @unique
+  password       String
+  name           String?
+  company        String?
+  avatarUrl      String?   @map("avatar_url")
+  timezone       String    @default("Europe/Kiev")
+  language       String    @default("ru")
+  role           String    @default("USER")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  currentPlan    String    @default("trial") @map("current_plan")
+  trialEndsAt    DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  responsesUsed  Int       @default(0) @map("responses_used")
+  responsesLimit Int       @default(5000) @map("responses_limit")
 
-  // Тарифные планы и лимиты
-  currentPlan     String   @default("trial") @map("current_plan") // trial, launch, scale, max
-  trialEndsAt     DateTime? @map("trial_ends_at")
-  responsesUsed   Int      @default(0) @map("responses_used")
-  responsesLimit  Int      @default(5000) @map("responses_limit")
-
-  // Связи
-  agents      Agent[]
-  kbCategories KbCategory[]
-  kbArticles   KbArticle[]
-  kbImportJobs KbImportJob[]
-
+  @@index([email], map: "idx_users_email")
+  @@index([role], map: "idx_users_role")
   @@map("users")
 }
 
-// Модель AI агента
 model Agent {
-  id                 String   @id @default(cuid())
+  id                 String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name               String
   isActive           Boolean  @default(false) @map("is_active")
   model              String   @default("Google Gemini 2.5 Flash")
   systemInstructions String?  @map("system_instructions")
-
-  // Настройки воронок и каналов (JSON как STRING для SQLite)
-  pipelineSettings   String?  @map("pipeline_settings") // JSON as string
-  channelSettings    String?  @map("channel_settings") // JSON as string
-  kbSettings         String?  @map("kb_settings") // JSON as string
-
-  // CRM интеграция
-  crmType            String?  @map("crm_type") // 'kommo', 'bitrix24', etc
+  pipelineSettings   Json?    @map("pipeline_settings")
+  channelSettings    Json?    @map("channel_settings")
+  kbSettings         Json?    @map("kb_settings")
+  crmType            String?  @map("crm_type")
   crmConnected       Boolean  @default(false) @map("crm_connected")
-  crmData            String?  @map("crm_data") // JSON as string
+  crmData            Json?    @map("crm_data")
+  trainingRoleId     String?  @map("training_role_id")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId             String   @map("user_id")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  userId    String @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  @@index([isActive], map: "idx_agents_is_active")
+  @@index([userId], map: "idx_agents_user_id")
+  @@index([trainingRoleId], map: "idx_agents_training_role_id")
   @@map("agents")
-  @@index([userId])
-  @@index([isActive])
 }
 
-// Модель категории базы знаний (с поддержкой иерархии)
+// Документы агента для отправки клиентам
+model AgentDocument {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId       String   @map("agent_id")
+  fileName      String   @map("file_name")        // Оригинальное имя файла
+  fileType      String   @map("file_type")        // Расширение (pdf, docx, jpg и т.д.)
+  mimeType      String   @map("mime_type")        // MIME тип (application/pdf и т.д.)
+  fileSize      Int      @map("file_size")        // Размер в байтах
+  storageKey    String   @map("storage_key")      // Уникальное имя на диске
+  thumbnailKey  String?  @map("thumbnail_key")    // Путь к миниатюре
+  description   String?                           // Описание документа (опционально)
+  isEnabled     Boolean  @default(true) @map("is_enabled")  // Доступен для отправки
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([agentId], map: "idx_agent_documents_agent_id")
+  @@index([isEnabled], map: "idx_agent_documents_is_enabled")
+  @@map("agent_documents")
+}
+
 model KbCategory {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name      String
-  parentId  String? @map("parent_id")
+  parentId  String?  @map("parent_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId    String   @map("user_id")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  userId       String @map("user_id")
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent       KbCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children     KbCategory[] @relation("CategoryHierarchy")
   articleCategories ArticleCategory[]
 
+  @@index([parentId], map: "idx_kb_categories_parent_id")
+  @@index([userId], map: "idx_kb_categories_user_id")
   @@map("kb_categories")
-  @@index([userId])
-  @@index([parentId])
 }
 
-// Модель статьи базы знаний
 model KbArticle {
-  id               Int      @id @default(autoincrement())
-  title            String
-  content          String
-  isActive         Boolean  @default(true) @map("is_active")
+  id              Int      @id @default(autoincrement())
+  title           String
+  content         String
+  isActive        Boolean  @default(true) @map("is_active")
+  relatedArticles String?  @map("related_articles")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId          String   @map("user_id")
 
-  // Связанные статьи как строка с разделителями
-  relatedArticles  String?  @map("related_articles") // Comma-separated IDs: "1,2,3"
-
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  userId           String @map("user_id")
-  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   articleCategories ArticleCategory[]
 
+  @@index([isActive], map: "idx_kb_articles_is_active")
+  @@index([userId], map: "idx_kb_articles_user_id")
   @@map("kb_articles")
-  @@index([userId])
-  @@index([isActive])
 }
 
-// Связующая таблица для many-to-many между статьями и категориями
 model ArticleCategory {
-  articleId  Int @map("article_id")
+  articleId  Int    @map("article_id")
   categoryId String @map("category_id")
 
-  article  KbArticle  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  category KbCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  article    KbArticle  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  category   KbCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([articleId, categoryId])
+  @@index([articleId], map: "idx_article_categories_article_id")
+  @@index([categoryId], map: "idx_article_categories_category_id")
   @@map("article_categories")
-  @@index([articleId])
-  @@index([categoryId])
 }
 
-// Модель для хранения настроек пользователя
 model UserSettings {
-  id                 String  @id @default(cuid())
-  stopOnReply        Boolean @default(false)
-  resumeTime         Int     @default(30)
-  resumeUnit         String  @default("дней")
-
-  userId             String  @unique
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  stop_on_reply Boolean  @default(false)
+  resume_time   Int      @default(30)
+  resume_unit   String   @default("дней")
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  user_id       String   @unique
 
   @@map("user_settings")
 }
 
-// Модель для логов чатов (для аналитики)
-model ChatLog {
-  id        String   @id @default(cuid())
-  agentId   String
-  message   String
-  response  String
-  model     String
-  userId    String
+// Уведомления пользователя (история toast-сообщений)
+model Notification {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String   @map("user_id")
+  type      String   // success, error, warning, info
+  title     String   // Заголовок уведомления
+  message   String   // Текст уведомления
+  isRead    Boolean  @default(true) @map("is_read") // По умолчанию прочитано (т.к. toast уже показан)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdAt DateTime @default(now())
-
-  @@map("chat_logs")
-  @@index([userId])
-  @@index([agentId])
-  @@index([createdAt])
+  @@index([userId], map: "idx_notifications_user_id")
+  @@index([isRead], map: "idx_notifications_is_read")
+  @@index([createdAt], map: "idx_notifications_created_at")
+  @@map("notifications")
 }
 
-// Модель триггера агента
+model ChatLog {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agent_id   String
+  message    String
+  response   String
+  model      String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user_id    String
+
+  @@index([agent_id], map: "idx_chat_logs_agent_id")
+  @@index([created_at], map: "idx_chat_logs_created_at")
+  @@index([user_id], map: "idx_chat_logs_user_id")
+  @@map("chat_logs")
+}
+
 model Trigger {
-  id            String   @id @default(cuid())
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   agentId       String   @map("agent_id")
   name          String
   isActive      Boolean  @default(true) @map("is_active")
-  condition     String   // Условие срабатывания триггера
-  cancelMessage String?  @map("cancel_message") // Сообщение при отмене
-  runLimit      Int?     @map("run_limit") // Лимит запусков (0 = без лимита)
+  condition     String
+  cancelMessage String?  @map("cancel_message")
+  runLimit      Int?     @map("run_limit")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  // Связи
   actions       TriggerAction[]
 
+  @@index([agentId], map: "idx_triggers_agent_id")
+  @@index([isActive], map: "idx_triggers_is_active")
   @@map("triggers")
-  @@index([agentId])
-  @@index([isActive])
 }
 
-// Модель действия триггера
 model TriggerAction {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   triggerId String   @map("trigger_id")
-  action    String   // send_message, generate_message, assign_tag, change_stage
+  action    String
   order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  params    String?
 
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Связи
   trigger   Trigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
+  @@index([triggerId], map: "idx_trigger_actions_trigger_id")
   @@map("trigger_actions")
-  @@index([triggerId])
 }
 
-// Модель цепочки сообщений
 model Chain {
-  id               String   @id @default(cuid())
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   agentId          String   @map("agent_id")
   name             String
   isActive         Boolean  @default(true) @map("is_active")
-  conditionType    String   @map("condition_type") // 'all' или 'specific'
-  conditionExclude String?  @map("condition_exclude") // Условия исключения
-  runLimit         Int?     @map("run_limit") // Лимит запусков (0 = без лимита)
+  conditionType    String   @map("condition_type")
+  conditionExclude String?  @map("condition_exclude")
+  runLimit         Int?     @map("run_limit")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  // Связи
   conditions       ChainCondition[]
   steps            ChainStep[]
   schedules        ChainSchedule[]
 
+  @@index([agentId], map: "idx_chains_agent_id")
+  @@index([isActive], map: "idx_chains_is_active")
   @@map("chains")
-  @@index([agentId])
-  @@index([isActive])
 }
 
-// Модель условия запуска цепочки
 model ChainCondition {
-  id      String @id @default(cuid())
-  chainId String @map("chain_id")
-  stageId String @map("stage_id") // ID этапа CRM
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  chainId   String   @map("chain_id")
+  stageId   String   @map("stage_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdAt DateTime @default(now()) @map("created_at")
+  chain     Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 
-  // Связи
-  chain   Chain  @relation(fields: [chainId], references: [id], onDelete: Cascade)
-
+  @@index([chainId], map: "idx_chain_conditions_chain_id")
   @@map("chain_conditions")
-  @@index([chainId])
 }
 
-// Модель шага цепочки
 model ChainStep {
-  id         String @id @default(cuid())
-  chainId    String @map("chain_id")
-  stepOrder  Int    @map("step_order") // Порядок выполнения
-  delayValue Int    @map("delay_value") // Величина задержки
-  delayUnit  String @map("delay_unit") // 'minutes', 'hours', 'days'
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  chainId    String   @map("chain_id")
+  stepOrder  Int      @map("step_order")
+  delayValue Int      @map("delay_value")
+  delayUnit  String   @map("delay_unit")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  chain      Chain             @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  chain      Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
   actions    ChainStepAction[]
 
+  @@index([chainId], map: "idx_chain_steps_chain_id")
+  @@index([stepOrder], map: "idx_chain_steps_step_order")
   @@map("chain_steps")
-  @@index([chainId])
-  @@index([stepOrder])
 }
 
-// Модель действия шага цепочки
 model ChainStepAction {
-  id          String @id @default(cuid())
-  stepId      String @map("step_id")
-  actionType  String @map("action_type") // 'generate_message', 'send_message'
-  instruction String // Инструкция для AI
-  actionOrder Int    @default(0) @map("action_order")
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  stepId      String   @map("step_id")
+  actionType  String   @map("action_type")
+  instruction String
+  params      Json?    @default("{}")
+  actionOrder Int      @default(0) @map("action_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  // Связи
   step        ChainStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
 
+  @@index([stepId], map: "idx_chain_step_actions_step_id")
   @@map("chain_step_actions")
-  @@index([stepId])
 }
 
-// Модель расписания цепочки
 model ChainSchedule {
-  id         String  @id @default(cuid())
-  chainId    String  @map("chain_id")
-  dayOfWeek  Int     @map("day_of_week") // 0-6 (Понедельник-Воскресенье)
-  enabled    Boolean @default(true)
-  startTime  String  @map("start_time") // HH:MM формат
-  endTime    String  @map("end_time") // HH:MM формат
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  chainId   String   @map("chain_id")
+  dayOfWeek Int      @map("day_of_week")
+  enabled   Boolean  @default(true)
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  chain     Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 
-  // Связи
-  chain      Chain   @relation(fields: [chainId], references: [id], onDelete: Cascade)
-
+  @@index([chainId], map: "idx_chain_schedules_chain_id")
+  @@index([dayOfWeek], map: "idx_chain_schedules_day_of_week")
   @@map("chain_schedules")
-  @@index([chainId])
-  @@index([dayOfWeek])
 }
 
-// Модель интеграции
-// Модель интеграции
 model Integration {
-  id              String    @id @default(cuid())
+  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   agentId         String    @map("agent_id")
-  integrationType String    @map("integration_type") // 'kommo', 'google_calendar'
+  integrationType String    @map("integration_type")
   isActive        Boolean   @default(false) @map("is_active")
   isConnected     Boolean   @default(false) @map("is_connected")
-  connectedAt     DateTime? @map("connected_at")
-  lastSynced      DateTime? @map("last_synced")
-  settings        String?   // JSON настройки интеграции
+  connectedAt     DateTime? @map("connected_at") @db.Timestamptz(6)
+  lastSynced      DateTime? @map("last_synced") @db.Timestamptz(6)
+  settings        Json?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
+  @@index([agentId], map: "idx_integrations_agent_id")
+  @@index([integrationType], map: "idx_integrations_integration_type")
   @@map("integrations")
-  @@index([agentId])
-  @@index([integrationType])
 }
 
-// Модель расширенных настроек агента
 model AgentAdvancedSettings {
-  id                   String  @id @default(cuid())
-  agentId              String  @unique
-  model                String  @default("OpenAI GPT-4.1")
-  autoDetectLanguage   Boolean @default(false)
-  responseLanguage     String?
-  scheduleEnabled      Boolean @default(false)
-  creativity           String  @default("balanced") // 'precise', 'balanced', 'creative'
-  responseDelaySeconds Int     @default(45)
+  id                     String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId                String   @unique @map("agent_id")
+  model                  String   @default("OpenAI GPT-4.1")
+  autoDetectLanguage     Boolean  @default(false) @map("auto_detect_language")
+  responseLanguage       String?  @map("response_language")
+  scheduleEnabled        Boolean  @default(false) @map("schedule_enabled")
+  scheduleData           String?  @db.Text @map("schedule_data") // JSON: [{day: "Понедельник", enabled: true, start: "08:00", end: "22:00"}, ...]
+  responseDelaySeconds   Int      @default(45) @map("response_delay_seconds")
+  // Memory & Context Settings
+  memoryEnabled          Boolean  @default(true) @map("memory_enabled") // Долгосрочная память (факты о клиенте)
+  graphEnabled           Boolean  @default(true) @map("graph_enabled") // Граф связей между фактами
+  contextWindow          Int      @default(20) @map("context_window") // Количество фактов для контекста
+  semanticSearchEnabled  Boolean  @default(true) @map("semantic_search_enabled") // Семантический поиск по смыслу
+  // Internal AI Models Settings
+  factExtractionModel      String  @default("openai/gpt-4o-mini") @map("fact_extraction_model") // Модель для извлечения фактов
+  triggerEvaluationModel   String  @default("openai/gpt-4o-mini") @map("trigger_evaluation_model") // Модель для оценки триггеров
+  chainMessageModel        String  @default("openai/gpt-4o-mini") @map("chain_message_model") // Модель для AI сообщений в цепочках
+  emailGenerationModel     String  @default("openai/gpt-4o-mini") @map("email_generation_model") // Модель для генерации email
+  instructionParsingModel  String  @default("openai/gpt-4o-mini") @map("instruction_parsing_model") // Модель для парсинга инструкций
+  kbAnalysisModel          String  @default("anthropic/claude-3.5-sonnet") @map("kb_analysis_model") // Модель для анализа KB
+  createdAt              DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt              DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
+  @@index([agentId], map: "idx_agent_advanced_settings_agent_id")
   @@map("agent_advanced_settings")
 }
 
-// Модель задания импорта базы знаний
 model KbImportJob {
-  id            String   @id @default(cuid())
-  userId        String   @map("user_id")
-  status        String   // pending, analyzing, building, completed, failed
-  progress      Int      @default(0)
-  currentStep   String?  @map("current_step")
+  id                  String    @id @default(cuid())
+  userId              String    @map("user_id")
+  status              String
+  progress            Int       @default(0)
+  currentStep         String?   @map("current_step")
+  filesUploaded       Int       @map("files_uploaded")
+  totalSize           Int       @map("total_size")
+  categoriesCreated   Int?      @map("categories_created")
+  articlesCreated     Int?      @map("articles_created")
+  embeddingsGenerated Int?      @map("embeddings_generated")
+  analysis            String?
+  errors              String?
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamp(6)
 
-  // Входные данные
-  filesUploaded Int      @map("files_uploaded")
-  totalSize     Int      @map("total_size")
-
-  // Результаты
-  categoriesCreated   Int?  @map("categories_created")
-  articlesCreated     Int?  @map("articles_created")
-  embeddingsGenerated Int?  @map("embeddings_generated")
-
-  // Метаданные
-  analysis      String?  // JSON с результатами анализа
-  errors        String?  // JSON с ошибками
-
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  completedAt   DateTime? @map("completed_at")
-
-  // Связи
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  files         KbUploadedFile[]
-
-  @@map("kb_import_jobs")
   @@index([userId])
   @@index([status])
+  @@map("kb_import_jobs")
 }
 
-// Модель загруженного файла
 model KbUploadedFile {
   id            String   @id @default(cuid())
   jobId         String   @map("job_id")
@@ -368,85 +349,726 @@ model KbUploadedFile {
   fileType      String   @map("file_type")
   size          Int
   storageKey    String   @map("storage_key")
-
   extractedText String?  @map("extracted_text")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  createdAt     DateTime @default(now()) @map("created_at")
-
-  // Связи
-  job           KbImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-
-  @@map("kb_uploaded_files")
   @@index([jobId])
+  @@map("kb_uploaded_files")
 }
 
-// Модель контакта из CRM
 model Contact {
-  id        String   @id @default(cuid())
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name      String
   phone     String?
   email     String?
   company   String?
   position  String?
-  tags      String?  // JSON as string
+  tags      String?
   crmId     String   @map("crm_id")
-  crmType   String   @map("crm_type") // 'Kommo', 'Bitrix24', etc
+  crmType   String   @map("crm_type")
   userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  deals     Deal[]
-
-  @@map("contacts")
+  @@unique([crmId, userId])
   @@index([userId])
   @@index([crmId])
-  @@unique([crmId, userId])
+  @@index([crmId], map: "idx_contacts_crm_id")
+  @@index([userId], map: "idx_contacts_user_id")
+  @@map("contacts")
 }
 
-// Модель сделки из CRM
 model Deal {
-  id           String   @id @default(cuid())
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name         String
   price        Float?
   currency     String?
-  status       String   // 'open', 'won', 'lost'
+  status       String
   stage        String?
   pipelineId   String?  @map("pipeline_id")
   pipelineName String?  @map("pipeline_name")
   contactId    String?  @map("contact_id")
-  tags         String?  // JSON as string
+  tags         String?
   crmId        String   @map("crm_id")
-  crmType      String   @map("crm_type") // 'Kommo', 'Bitrix24', etc
+  crmType      String   @map("crm_type")
   userId       String   @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  // Связи
-  contact      Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
-
-  @@map("deals")
+  @@unique([crmId, userId])
   @@index([userId])
   @@index([crmId])
   @@index([contactId])
-  @@unique([crmId, userId])
+  @@index([contactId], map: "idx_deals_contact_id")
+  @@index([crmId], map: "idx_deals_crm_id")
+  @@index([pipelineId], map: "idx_deals_pipeline_id")
+  @@index([userId], map: "idx_deals_user_id")
+  @@map("deals")
 }
 
-// Модель для хранения токенов Kommo OAuth
 model KommoToken {
-  id            String   @id @default(cuid())
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   integrationId String   @unique @map("integration_id")
   accessToken   String   @map("access_token")
   refreshToken  String   @map("refresh_token")
-  expiresAt     DateTime @map("expires_at")
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
   baseDomain    String   @map("base_domain")
-  apiDomain     String?  @map("api_domain")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  apiDomain     String?  @default("api-g.kommo.com") @map("api_domain") @db.VarChar(255)
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
+  @@index([expiresAt], map: "idx_kommo_tokens_expires_at")
+  @@index([integrationId], map: "idx_kommo_tokens_integration_id")
   @@map("kommo_tokens")
-  @@index([integrationId])
+}
+
+model GoogleToken {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  integrationId String   @unique @map("integration_id")
+  accessToken   String   @map("access_token")
+  refreshToken  String   @map("refresh_token")
+  expiresAt     DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([expiresAt], map: "idx_google_tokens_expires_at")
+  @@index([integrationId], map: "idx_google_tokens_integration_id")
+  @@map("google_tokens")
+}
+
+model GoogleCalendarEmployee {
+  id              String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId         String    @map("agent_id")
+  crmUserId       String    @map("crm_user_id")
+  crmUserName     String    @map("crm_user_name")
+  googleEmail     String?   @map("google_email")
+  accessToken     String?   @map("access_token")
+  refreshToken    String?   @map("refresh_token")
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
+  inviteToken     String    @unique @map("invite_token")
+  inviteExpiresAt DateTime  @map("invite_expires_at") @db.Timestamptz(6)
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([agentId], map: "idx_google_calendar_employees_agent_id")
+  @@index([crmUserId], map: "idx_google_calendar_employees_crm_user_id")
+  @@index([inviteToken], map: "idx_google_calendar_employees_invite_token")
+  @@map("google_calendar_employees")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activity_logs {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id          String    @db.Uuid
+  user_id         String?   @db.Uuid
+  agent_id        String?   @db.Uuid
+  conversation_id String?   @db.Uuid
+  activity_type   String
+  title           String
+  description     String?
+  metadata        Json?     @default("{}")
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([activity_type], map: "idx_activity_logs_activity_type")
+  @@index([agent_id], map: "idx_activity_logs_agent_id")
+  @@index([created_at(sort: Desc)], map: "idx_activity_logs_created_at")
+  @@index([org_id, created_at(sort: Desc)], map: "idx_activity_logs_org_created")
+  @@index([org_id], map: "idx_activity_logs_org_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model agent_assets {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id         String    @db.Uuid
+  org_id           String    @db.Uuid
+  type             String
+  source_name      String?
+  storage_path     String?
+  status           String    @default("pending")
+  error            String?
+  file_size        BigInt?
+  mime_type        String?
+  chunks_count     Int?      @default(0)
+  processing_error String?
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  processed_at     DateTime? @db.Timestamptz(6)
+
+  @@index([agent_id], map: "idx_agent_assets_agent")
+  @@index([org_id], map: "idx_agent_assets_org_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model agent_conversations {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id                 String    @db.Uuid
+  org_id                   String    @db.Uuid
+  external_conversation_id String?
+  deal_id                  String?
+  contact_id               String?
+  channel                  String?
+  metadata                 Json?     @default("{}")
+  created_at               DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([agent_id], map: "idx_agent_conversations_agent_id")
+  @@index([org_id], map: "idx_agent_conversations_org_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model agent_integrations {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id         String    @db.Uuid
+  org_id           String    @db.Uuid
+  integration_type String
+  is_installed     Boolean   @default(false)
+  is_active        Boolean   @default(false)
+  settings         Json?     @default("{}")
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([agent_id, integration_type])
+  @@index([agent_id], map: "idx_agent_integrations_agent")
+  @@index([org_id], map: "idx_agent_integrations_org")
+  @@index([integration_type], map: "idx_agent_integrations_type")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model agent_memory {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id          String    @db.Uuid
+  agent_id        String    @db.Uuid
+  conversation_id String?   @db.Uuid
+  memory_type     String
+  content         String
+  context         Json?     @default("{}")
+  importance      Decimal?  @default(0.5) @db.Decimal(3, 2)
+  validated       Boolean?  @default(false)
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  expires_at      DateTime? @db.Timestamptz(6)
+
+  @@index([agent_id], map: "idx_agent_memory_agent")
+  @@index([conversation_id], map: "idx_agent_memory_conversation_id")
+  @@index([expires_at], map: "idx_agent_memory_expires")
+  @@index([importance(sort: Desc)], map: "idx_agent_memory_importance")
+  @@index([org_id], map: "idx_agent_memory_org")
+  @@index([memory_type], map: "idx_agent_memory_type")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model agent_pipeline_settings {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id             String    @db.Uuid
+  agent_id           String    @db.Uuid
+  pipeline_id        String
+  is_active          Boolean?  @default(false)
+  all_stages         Boolean?  @default(false)
+  selected_stages    String[]  @default([])
+  stage_instructions Json?     @default("{}")
+  created_at         DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([agent_id, pipeline_id])
+  @@index([agent_id], map: "idx_agent_pipeline_settings_agent")
+  @@index([org_id], map: "idx_agent_pipeline_settings_org")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model company_knowledge {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id            String    @db.Uuid
+  agent_id          String?   @db.Uuid
+  category          String
+  title             String
+  content           String
+  metadata          Json?     @default("{}")
+  pipeline_stage_id String?   @db.Uuid
+  is_global         Boolean?  @default(true)
+  priority          Int?      @default(0)
+  usage_count       Int?      @default(0)
+  created_at        DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([agent_id], map: "idx_company_knowledge_agent")
+  @@index([category], map: "idx_company_knowledge_category")
+  @@index([org_id], map: "idx_company_knowledge_org")
+  @@index([priority(sort: Desc)], map: "idx_company_knowledge_priority")
+  @@index([pipeline_stage_id], map: "idx_company_knowledge_stage")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_calls {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id      String   @db.Uuid
+  call_id     String
+  entity_id   String
+  entity_type String
+  direction   String
+  status      String
+  duration    Int?
+  source      String?
+  uniq        String?
+  metadata    Json?    @default("{}")
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, call_id])
+  @@index([call_id], map: "idx_crm_calls_call_id")
+  @@index([created_at(sort: Desc)], map: "idx_crm_calls_created_at")
+  @@index([org_id, direction], map: "idx_crm_calls_direction")
+  @@index([org_id, entity_type, entity_id], map: "idx_crm_calls_entity")
+  @@index([org_id], map: "idx_crm_calls_org_id")
+  @@index([org_id, status], map: "idx_crm_calls_status")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_connections {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id        String    @db.Uuid
+  provider      String    @default("kommo")
+  base_domain   String
+  access_token  String
+  refresh_token String?
+  expires_at    DateTime? @db.Timestamptz(6)
+  scope         String[]
+  account_id    String?
+  metadata      Json?     @default("{}")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, provider, base_domain])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_credentials {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id        String    @db.Uuid
+  provider      String    @default("kommo")
+  client_id     String
+  client_secret String
+  redirect_uri  String?
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, provider])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_pipeline_stages {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pipeline_id String    @db.Uuid
+  external_id String
+  name        String
+  sort_order  Int?      @default(0)
+  metadata    Json?     @default("{}")
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([pipeline_id, external_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_pipelines {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  connection_id String    @db.Uuid
+  external_id   String
+  name          String
+  is_active     Boolean?  @default(true)
+  sort_order    Int?      @default(0)
+  metadata      Json?     @default("{}")
+  created_at    DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([connection_id, external_id])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model crm_tasks {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id              String    @db.Uuid
+  task_id             String
+  entity_id           String
+  entity_type         String
+  task_text           String
+  task_type_id        Int?
+  complete_till       DateTime? @db.Timestamptz(6)
+  responsible_user_id Int?
+  is_completed        Boolean   @default(false)
+  metadata            Json?     @default("{}")
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, task_id])
+  @@index([org_id, is_completed], map: "idx_crm_tasks_completed")
+  @@index([created_at(sort: Desc)], map: "idx_crm_tasks_created_at")
+  @@index([org_id, entity_type, entity_id], map: "idx_crm_tasks_entity")
+  @@index([org_id], map: "idx_crm_tasks_org_id")
+  @@index([task_id], map: "idx_crm_tasks_task_id")
+}
+
+model embeddings {
+  id          String                 @id @default(dbgenerated("(gen_random_uuid())::text"))
+  content     String
+  source_type String
+  source_id   String
+  metadata    Json?
+  created_at  DateTime               @default(now()) @db.Timestamptz(6)
+  user_id     String
+  embedding   Unsupported("vector")?
+
+  @@index([source_type, source_id], map: "idx_embeddings_source")
+  @@index([user_id], map: "idx_embeddings_user_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model knowledge_base_articles {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id       String    @db.Uuid
+  category_id  String?   @db.Uuid
+  title        String
+  content      String
+  slug         String?
+  is_published Boolean?  @default(true)
+  views_count  Int?      @default(0)
+  created_at   DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, slug])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model knowledge_base_categories {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id      String    @db.Uuid
+  name        String
+  description String?
+  parent_id   String?   @db.Uuid
+  sort_order  Int?      @default(0)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@unique([org_id, name, parent_id])
+  @@index([org_id], map: "idx_kb_categories_org")
+  @@index([parent_id], map: "idx_kb_categories_parent")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model knowledge_chunks {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agent_id             String?                @db.Uuid
+  org_id               String                 @db.Uuid
+  asset_id             String?                @db.Uuid
+  article_id           String?                @db.Uuid
+  content              String
+  metadata             Json?                  @default("{}")
+  embedding            Unsupported("vector")?
+  created_at           DateTime?              @default(now()) @db.Timestamptz(6)
+  company_knowledge_id String?                @db.Uuid
+
+  @@index([agent_id], map: "idx_knowledge_chunks_agent")
+  @@index([article_id], map: "idx_knowledge_chunks_article")
+  @@index([asset_id], map: "idx_knowledge_chunks_asset_id")
+  @@index([company_knowledge_id], map: "idx_knowledge_chunks_company_knowledge")
+  @@index([org_id], map: "idx_knowledge_chunks_org_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model kommo_sync_cache {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id        String   @db.Uuid
+  data_type     String
+  data          Json
+  synced_at     DateTime @default(now()) @db.Timestamptz(6)
+  status        String   @default("success")
+  error_message String?
+
+  @@unique([org_id, data_type])
+  @@index([org_id], map: "idx_kommo_sync_cache_org")
+  @@index([org_id, data_type], map: "idx_kommo_sync_cache_org_type")
+  @@index([status], map: "idx_kommo_sync_cache_status")
+  @@index([data_type], map: "idx_kommo_sync_cache_type")
+}
+
+model memory_edges {
+  id                String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  from_node_id      String
+  to_node_id        String
+  relationship_type String
+  weight            Float?   @default(1.0)
+  metadata          Json?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([from_node_id], map: "idx_memory_edges_from")
+  @@index([to_node_id], map: "idx_memory_edges_to")
+  @@index([relationship_type], map: "idx_memory_edges_type")
+}
+
+model memory_nodes {
+  id         String                 @id @default(dbgenerated("(gen_random_uuid())::text"))
+  node_type  String
+  name       String
+  content    String?
+  properties Json?
+  importance Float?                 @default(0.5)
+  created_at DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at DateTime               @default(now()) @db.Timestamptz(6)
+  agent_id   String
+  user_id    String
+  embedding  Unsupported("vector")?
+
+  @@index([agent_id], map: "idx_memory_nodes_agent_id")
+  @@index([node_type], map: "idx_memory_nodes_type")
+  @@index([user_id], map: "idx_memory_nodes_user_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model objection_responses {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id              String    @db.Uuid
+  objection_type      String
+  objection_text      String?
+  response_script     String
+  context             Json?     @default("{}")
+  effectiveness_score Decimal?  @default(0.5) @db.Decimal(3, 2)
+  usage_count         Int?      @default(0)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([org_id], map: "idx_objection_responses_org")
+  @@index([objection_type], map: "idx_objection_responses_type")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model organization_members {
+  org_id     String    @db.Uuid
+  user_id    String    @db.Uuid
+  role       String    @default("member")
+  status     String    @default("active")
+  invited_by String?   @db.Uuid
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@id([org_id, user_id])
+  @@index([invited_by], map: "idx_organization_members_invited_by")
+  @@index([user_id], map: "idx_organization_members_user_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model organizations {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String
+  slug       String    @unique
+  country    String?
+  settings   Json?     @default("{}")
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model sales_scripts {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  org_id              String    @db.Uuid
+  agent_id            String?   @db.Uuid
+  pipeline_stage_id   String?   @db.Uuid
+  title               String
+  script_type         String    @default("greeting")
+  content             String
+  variables           Json?     @default("{}")
+  conditions          Json?     @default("{}")
+  effectiveness_score Decimal?  @default(0.5) @db.Decimal(3, 2)
+  usage_count         Int?      @default(0)
+  created_at          DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @default(now()) @db.Timestamptz(6)
+
+  @@index([agent_id], map: "idx_sales_scripts_agent_id")
+  @@index([org_id], map: "idx_sales_scripts_org")
+  @@index([pipeline_stage_id], map: "idx_sales_scripts_stage")
+  @@index([script_type], map: "idx_sales_scripts_type")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model schema_migrations {
+  version     String    @id
+  name        String
+  executed_at DateTime? @default(now()) @db.Timestamptz(6)
+  checksum    String?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model subscriptions {
+  org_id                 String    @id @db.Uuid
+  plan                   String
+  status                 String    @default("trialing")
+  token_quota            BigInt    @default(0)
+  token_used             BigInt    @default(0)
+  renews_at              DateTime? @db.Timestamptz(6)
+  created_at             DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime? @default(now()) @db.Timestamptz(6)
+  paddle_subscription_id String?
+  paddle_customer_id     String?
+  paddle_transaction_id  String?
+  price_id               String?
+
+  @@index([paddle_customer_id], map: "idx_subscriptions_paddle_customer_id")
+  @@index([paddle_subscription_id], map: "idx_subscriptions_paddle_subscription_id")
+  @@index([price_id], map: "idx_subscriptions_price_id")
+}
+
+// ============================================
+// CONVERSATIONAL AI MODELS
+// ============================================
+
+// Диалог с клиентом (привязан к сделке leadId)
+model LeadConversation {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentId       String    @map("agent_id")
+  integrationId String    @map("integration_id")
+  leadId        Int       @map("lead_id")
+
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
+  messageCount  Int       @default(0) @map("message_count")
+  summary       String?
+
+  // Пауза агента (когда отвечает сотрудник)
+  pausedAt      DateTime? @map("paused_at") @db.Timestamptz(6)
+  pausedByUserId Int?     @map("paused_by_user_id") // ID сотрудника Kommo
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  messages      LeadMessage[]
+
+  @@unique([leadId, integrationId])
+  @@index([agentId], map: "idx_lead_conversations_agent_id")
+  @@index([integrationId], map: "idx_lead_conversations_integration_id")
+  @@map("lead_conversations")
+}
+
+// Сообщение в диалоге (chat + email)
+model LeadMessage {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+
+  channel        String   // "chat" | "email"
+  role           String   // "user" | "assistant"
+  content        String
+
+  emailSubject   String?  @map("email_subject")
+  emailFrom      String?  @map("email_from")
+  emailTo        String?  @map("email_to")
+
+  chatId         String?  @map("chat_id")
+
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation   LeadConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt], map: "idx_lead_messages_conversation_created")
+  @@index([conversationId], map: "idx_lead_messages_conversation_id")
+  @@map("lead_messages")
+}
+
+
+// ============================================
+// TRAINING LIBRARY MODELS (Библиотека знаний)
+// ============================================
+
+// Источник знаний (книги, методологии, техники)
+model TrainingSource {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  author      String?
+  description String?
+  category    String   // 'sales' | 'negotiations' | 'psychology' | 'methodology' | 'custom'
+  content     String   @db.Text
+  isBuiltIn   Boolean  @default(false) @map("is_built_in")
+  userId      String?  @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "idx_training_sources_user_id")
+  @@index([category], map: "idx_training_sources_category")
+  @@index([isBuiltIn], map: "idx_training_sources_is_built_in")
+  @@map("training_sources")
+}
+
+// Роль для обучения агента (набор источников)
+model TrainingRole {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  icon        String   @default("briefcase")
+  sourceIds   String   @map("source_ids") @db.Text  // JSON array of source IDs
+  isBuiltIn   Boolean  @default(false) @map("is_built_in")
+  userId      String?  @map("user_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "idx_training_roles_user_id")
+  @@index([isBuiltIn], map: "idx_training_roles_is_built_in")
+  @@map("training_roles")
+}
+
+// ============================================
+// CHAIN EXECUTION TRACKING MODELS
+// ============================================
+
+// Запуск цепочки для конкретного лида
+model ChainRun {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chainId         String    @map("chain_id")
+  integrationId   String    @map("integration_id")
+  leadId          Int       @map("lead_id")
+  stageId         String    @map("stage_id") // Стейдж на момент запуска
+  chatId          String?   @map("chat_id")
+
+  status          String    @default("running") // "running" | "completed" | "cancelled" | "failed"
+  currentStep     Int       @default(1) @map("current_step")
+
+  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason    String?   @map("cancel_reason")
+
+  error           String?
+
+  scheduledSteps  ScheduledChainStep[]
+
+  @@unique([chainId, leadId], map: "unique_chain_run_per_lead")
+  @@index([chainId], map: "idx_chain_runs_chain_id")
+  @@index([integrationId], map: "idx_chain_runs_integration_id")
+  @@index([leadId], map: "idx_chain_runs_lead_id")
+  @@index([status], map: "idx_chain_runs_status")
+  @@map("chain_runs")
+}
+
+// Отложенный шаг цепочки для выполнения
+model ScheduledChainStep {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chainRunId  String   @map("chain_run_id") @db.Uuid
+  stepId      String   @map("step_id") // ID из ChainStep
+  stepOrder   Int      @map("step_order")
+
+  executeAt   DateTime @map("execute_at") @db.Timestamptz(6)
+  status      String   @default("pending") // "pending" | "executed" | "cancelled" | "failed"
+
+  context     String?  @db.Text // JSON: {leadId, chatId, stageId, ...}
+  result      String?  @db.Text // Результат выполнения
+  error       String?
+
+  executedAt  DateTime? @map("executed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  chainRun    ChainRun @relation(fields: [chainRunId], references: [id], onDelete: Cascade)
+
+  @@index([chainRunId], map: "idx_scheduled_steps_chain_run_id")
+  @@index([executeAt], map: "idx_scheduled_steps_execute_at")
+  @@index([status], map: "idx_scheduled_steps_status")
+  @@map("scheduled_chain_steps")
 }

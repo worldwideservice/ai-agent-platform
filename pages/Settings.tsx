@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { settingsService } from '../src/services/api';
+import { settingsService, notificationsService } from '../src/services/api';
 import { Toast } from '../components/Toast';
-import { Link as LinkIcon } from 'lucide-react';
 
 interface SettingsProps {
   showToast: (type: Toast['type'], message: string) => void;
@@ -44,7 +43,17 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
         resumeUnit,
       });
 
-      showToast('success', 'Настройки успешно сохранены');
+      const stopText = stopOnReply ? 'вкл' : 'выкл';
+      showToast('success', `Настройки аккаунта сохранены (пауза при ответе: ${stopText}, возобновление: ${resumeTime} ${resumeUnit})`);
+
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          title: 'Настройки изменены',
+          message: `Пауза при ответе сотрудника: ${stopText}, возобновление через ${resumeTime} ${resumeUnit}`,
+        });
+      } catch (e) { /* ignore */ }
     } catch (err: any) {
       console.error('Failed to save settings:', err);
       showToast('error', err.response?.data?.message || 'Не удалось сохранить настройки');
@@ -131,33 +140,6 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
          </button>
        </div>
 
-       {/* CRM Integration Section */}
-       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 mt-8 transition-colors">
-         <div className="flex items-center gap-3 mb-6">
-           <LinkIcon className="text-gray-500 dark:text-gray-400" size={20} />
-           <div>
-             <h2 className="text-lg font-medium text-gray-900 dark:text-white">Интеграции CRM</h2>
-             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-               Подключение CRM выполняется отдельно для каждого агента на странице "Интеграции" в редакторе агента
-             </p>
-           </div>
-         </div>
-
-         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-lg p-4">
-           <p className="text-sm text-blue-800 dark:text-blue-300">
-             <strong>Как подключить CRM:</strong>
-           </p>
-           <ol className="list-decimal list-inside mt-2 space-y-1 text-sm text-blue-700 dark:text-blue-300">
-             <li>Перейдите на страницу "Агенты"</li>
-             <li>Выберите агента и откройте редактор</li>
-             <li>Перейдите на вкладку "Интеграции"</li>
-             <li>Подключите Kommo CRM и синхронизируйте данные</li>
-           </ol>
-           <p className="text-xs text-blue-600 dark:text-blue-400 mt-3">
-             После подключения данные CRM (воронки, этапы, поля сделок и контактов, действия) будут доступны для этого агента.
-           </p>
-         </div>
-       </div>
     </div>
   );
 };

@@ -12,6 +12,10 @@ export { default as chainsService } from './chains.service';
 export { default as memoryService } from './memory.service';
 export { integrationsService } from './integrations.service';
 export * as kommoService from './kommo.service';
+export { googleService } from './google.service';
+export { default as profileService } from './profile.service';
+export { default as notificationsService } from './notifications.service';
+export { testService } from './test.service';
 
 // Re-export для удобства
 export * from './apiClient';
@@ -27,3 +31,7 @@ export * from './chains.service';
 export * from './memory.service';
 export * from './integrations.service';
 export * from './kommo.service';
+export * from './google.service';
+export * from './profile.service';
+export * from './notifications.service';
+export * from './test.service';

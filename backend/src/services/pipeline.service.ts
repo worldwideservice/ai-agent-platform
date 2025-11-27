@@ -7,7 +7,8 @@
 interface PipelineConfig {
   name: string;
   active: boolean;
-  stages: string[];
+  allStages: boolean; // true = все этапы активны
+  stages: string[];   // массив включенных этапов (если allStages = false)
   stageInstructions?: Record<string, string>; // { stageId: "instructions" }
 }
 
@@ -30,10 +31,26 @@ export function parsePipelineSettings(pipelineSettingsJson: string | null): Pipe
 }
 
 /**
+ * Нормализует ID воронки к формату с префиксом pipeline_
+ */
+function normalizePipelineId(pipelineId: string): string {
+  if (pipelineId.startsWith('pipeline_')) return pipelineId;
+  return `pipeline_${pipelineId}`;
+}
+
+/**
+ * Нормализует ID этапа к формату с префиксом stage_
+ */
+function normalizeStageId(stageId: string): string {
+  if (stageId.startsWith('stage_')) return stageId;
+  return `stage_${stageId}`;
+}
+
+/**
  * Получает инструкции для конкретного этапа
  * @param pipelineSettings - Настройки процессов агента
- * @param pipelineId - ID процесса (например, 'sales_funnel_1', 'support_workflow', 'hiring_process')
- * @param stageId - ID этапа (например, 'new_lead', 'initial_contact', 'interview')
+ * @param pipelineId - ID процесса (raw ID или с префиксом pipeline_)
+ * @param stageId - ID этапа (raw ID или с префиксом stage_)
  * @returns Инструкции для этапа или null если не найдены
  */
 export function getStageInstructions(
@@ -43,18 +60,21 @@ export function getStageInstructions(
 ): string | null {
   if (!pipelineSettings?.pipelines) return null;
 
-  const pipeline = pipelineSettings.pipelines[pipelineId];
+  const normalizedPipelineId = normalizePipelineId(pipelineId);
+  const normalizedStageId = normalizeStageId(stageId);
+
+  const pipeline = pipelineSettings.pipelines[normalizedPipelineId];
   if (!pipeline || !pipeline.active) return null;
 
   if (!pipeline.stageInstructions) return null;
 
-  return pipeline.stageInstructions[stageId] || null;
+  return pipeline.stageInstructions[normalizedStageId] || null;
 }
 
 /**
  * Проверяет, активен ли процесс для агента
  * @param pipelineSettings - Настройки процессов агента
- * @param pipelineId - ID процесса
+ * @param pipelineId - ID процесса (raw ID или с префиксом pipeline_)
  * @returns true если процесс активен
  */
 export function isPipelineActive(
@@ -63,15 +83,16 @@ export function isPipelineActive(
 ): boolean {
   if (!pipelineSettings?.pipelines) return false;
 
-  const pipeline = pipelineSettings.pipelines[pipelineId];
+  const normalizedPipelineId = normalizePipelineId(pipelineId);
+  const pipeline = pipelineSettings.pipelines[normalizedPipelineId];
   return pipeline?.active === true;
 }
 
 /**
  * Проверяет, работает ли агент на конкретном этапе процесса
  * @param pipelineSettings - Настройки процессов агента
- * @param pipelineId - ID процесса
- * @param stageId - ID этапа
+ * @param pipelineId - ID процесса (raw ID или с префиксом pipeline_)
+ * @param stageId - ID этапа (raw ID или с префиксом stage_)
  * @returns true если агент активен на этом этапе
  */
 export function isStageEnabled(
@@ -81,13 +102,46 @@ export function isStageEnabled(
 ): boolean {
   if (!pipelineSettings?.pipelines) return false;
 
-  const pipeline = pipelineSettings.pipelines[pipelineId];
+  const normalizedPipelineId = normalizePipelineId(pipelineId);
+  const normalizedStageId = normalizeStageId(stageId);
+
+  const pipeline = pipelineSettings.pipelines[normalizedPipelineId];
   if (!pipeline || !pipeline.active) return false;
 
-  // Если stages пустой массив, значит выбраны все этапы
-  if (!pipeline.stages || pipeline.stages.length === 0) return true;
+  // Если allStages = true, агент работает на всех этапах
+  if (pipeline.allStages) return true;
 
-  return pipeline.stages.includes(stageId);
+  // Иначе проверяем что этап в списке выбранных
+  if (!pipeline.stages || pipeline.stages.length === 0) return false;
+
+  return pipeline.stages.includes(normalizedStageId);
+}
+
+/**
+ * Проверяет, активен ли агент на данной воронке и этапе
+ * Это главная проверка перед тем как агент начнёт работать
+ * @param pipelineSettingsJson - JSON строка с настройками процессов агента
+ * @param currentPipelineId - ID текущего процесса (raw ID или с префиксом)
+ * @param currentStageId - ID текущего этапа (raw ID или с префиксом)
+ * @returns true если агент должен работать на этом этапе
+ */
+export function isAgentEnabledForStage(
+  pipelineSettingsJson: string | null,
+  currentPipelineId: string | null,
+  currentStageId: string | null
+): boolean {
+  if (!pipelineSettingsJson || !currentPipelineId || !currentStageId) return false;
+
+  const pipelineSettings = parsePipelineSettings(pipelineSettingsJson);
+  if (!pipelineSettings) return false;
+
+  // Проверяем что воронка активна
+  if (!isPipelineActive(pipelineSettings, currentPipelineId)) {
+    return false;
+  }
+
+  // Проверяем что этап включён
+  return isStageEnabled(pipelineSettings, currentPipelineId, currentStageId);
 }
 
 /**
@@ -96,7 +150,7 @@ export function isStageEnabled(
  * @param pipelineSettingsJson - JSON строка с настройками процессов агента
  * @param currentPipelineId - ID текущего процесса (из CRM или другой системы)
  * @param currentStageId - ID текущего этапа процесса
- * @returns Специфичные инструкции для этапа или null
+ * @returns Специфичные инструкции для этапа или null (если нет инструкций)
  */
 export function getInstructionsForCurrentStage(
   pipelineSettingsJson: string | null,
@@ -108,47 +162,50 @@ export function getInstructionsForCurrentStage(
   const pipelineSettings = parsePipelineSettings(pipelineSettingsJson);
   if (!pipelineSettings) return null;
 
-  // Проверяем что воронка активна
-  if (!isPipelineActive(pipelineSettings, currentPipelineId)) return null;
-
-  // Проверяем что агент работает на этом этапе
-  if (!isStageEnabled(pipelineSettings, currentPipelineId, currentStageId)) {
-    return null;
-  }
-
-  // Получаем инструкции для конкретного этапа
+  // Получаем инструкции для конкретного этапа (может быть null если нет инструкций)
   return getStageInstructions(pipelineSettings, currentPipelineId, currentStageId);
 }
 
 /**
  * Формирует расширенный системный промпт с контекстно-зависимыми инструкциями
+ * @param roleKnowledge - Знания из роли (методологии продаж, навыки, техники)
  * @param baseSystemInstructions - Базовые системные инструкции агента (кто вы, личность)
  * @param stageInstructions - Специфичные инструкции для текущего этапа (что делать)
- * @param knowledgeContext - Контекст из базы знаний (факты и знания агента)
+ * @param knowledgeContext - Контекст из базы знаний (факты о продукте)
  * @returns Объединенный промпт с контекстом текущего этапа и базой знаний
  */
 export function buildEnhancedSystemPrompt(
+  roleKnowledge: string | null,
   baseSystemInstructions: string | null,
   stageInstructions: string | null,
   knowledgeContext: string | null = null
 ): string {
-  const base = baseSystemInstructions || 'Вы - полезный помощник.';
-
   // Собираем промпт по частям
-  let prompt = base;
+  const parts: string[] = [];
 
-  // Добавляем базу знаний если есть
-  if (knowledgeContext) {
-    prompt += `\n\n${knowledgeContext}`;
+  // 1. Знания роли (КАК продавать - методологии, техники, навыки)
+  if (roleKnowledge) {
+    parts.push(`## Методологии и навыки
+
+${roleKnowledge}`);
   }
 
-  // Добавляем инструкции этапа если есть
+  // 2. Базовые инструкции (личность агента, дополнительные указания)
+  const base = baseSystemInstructions || 'Вы - полезный помощник.';
+  parts.push(base);
+
+  // 3. База знаний (ЧТО продавать - информация о продукте)
+  if (knowledgeContext) {
+    parts.push(knowledgeContext);
+  }
+
+  // 4. Инструкции этапа (контекст текущего этапа процесса)
   if (stageInstructions) {
-    prompt += `\n\n## Контекст текущего этапа
+    parts.push(`## Контекст текущего этапа
 ${stageInstructions}
 
-ВАЖНО: Строго следуйте инструкциям для текущего этапа. Адаптируйте свое поведение, тон и подход в соответствии с этими специфичными указаниями.`;
+ВАЖНО: Строго следуйте инструкциям для текущего этапа. Адаптируйте свое поведение, тон и подход в соответствии с этими специфичными указаниями.`);
   }
 
-  return prompt;
+  return parts.join('\n\n');
 }

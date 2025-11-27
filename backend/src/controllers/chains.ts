@@ -58,8 +58,9 @@ export const createChain = async (req: AuthRequest, res: Response) => {
             delayUnit: step.delayUnit,
             actions: {
               create: step.actions?.map((action: any, actionIndex: number) => ({
-                actionType: action.type,
+                actionType: action.actionType || action.type,
                 instruction: action.instruction || '',
+                params: action.params || {},
                 actionOrder: actionIndex,
               })) || [],
             },
@@ -221,8 +222,9 @@ export const updateChain = async (req: AuthRequest, res: Response) => {
             delayUnit: step.delayUnit,
             actions: {
               create: step.actions?.map((action: any, actionIndex: number) => ({
-                actionType: action.type,
+                actionType: action.actionType || action.type,
                 instruction: action.instruction || '',
+                params: action.params || {},
                 actionOrder: actionIndex,
               })) || [],
             },

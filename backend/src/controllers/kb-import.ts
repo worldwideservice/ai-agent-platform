@@ -63,7 +63,18 @@ export const analyzeFiles = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: 'No files uploaded' });
     }
 
-    const { autoCreate = false, language = 'ru' } = req.body;
+    const { autoCreate = false, language = 'ru', agentId } = req.body;
+
+    // Получаем модель для анализа KB из настроек агента (если указан)
+    let kbAnalysisModel = 'anthropic/claude-3.5-sonnet';
+    if (agentId) {
+      const advancedSettings = await prisma.agentAdvancedSettings.findUnique({
+        where: { agentId },
+      });
+      if (advancedSettings?.kbAnalysisModel) {
+        kbAnalysisModel = advancedSettings.kbAnalysisModel;
+      }
+    }
 
     // Create import job
     const job = await prisma.kbImportJob.create({
@@ -125,8 +136,8 @@ export const analyzeFiles = async (req: AuthRequest, res: Response) => {
     });
 
     // Analyze with AI
-    console.log('Analyzing content with AI...');
-    const analysis = await analyzeContentWithAI(extractedTexts, language as 'ru' | 'en');
+    console.log(`Analyzing content with AI (model: ${kbAnalysisModel})...`);
+    const analysis = await analyzeContentWithAI(extractedTexts, language as 'ru' | 'en', kbAnalysisModel);
 
     console.log(
       `AI Analysis complete: ${analysis.suggestedCategories.length} categories, ${analysis.articles.length} articles`

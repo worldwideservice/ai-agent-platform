@@ -467,6 +467,14 @@ export interface KommoTaskType {
   icon_id: number | null;
 }
 
+export interface KommoSalesbot {
+  id: number;
+  name: string;
+  pipeline_id: number;
+  status_id: number | null;
+  is_active: boolean;
+}
+
 /**
  * Fetch a specific lead by ID from Kommo
  */
@@ -480,6 +488,23 @@ export async function fetchLeadById(
     apiDomain,
     token,
     `/api/v4/leads/${leadId}`,
+    {}
+  );
+}
+
+/**
+ * Fetch a specific contact by ID from Kommo
+ */
+export async function fetchContactById(
+  integrationId: string,
+  contactId: number
+): Promise<KommoContact> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest<KommoContact>(
+    apiDomain,
+    token,
+    `/api/v4/contacts/${contactId}`,
     {}
   );
 }
@@ -609,6 +634,190 @@ export async function fetchContactsCustomFields(
 }
 
 /**
+ * Kommo Source/Channel interface
+ */
+export interface KommoSource {
+  id: number;
+  name: string;
+  pipeline_id: number;
+  external_id?: string;
+  default?: boolean;
+  origin_code?: string;
+  type?: string;
+  services?: Array<{
+    type: string;
+    pages?: Array<{
+      id: string;
+      name: string;
+    }>;
+  }>;
+}
+
+/**
+ * Fetch sources/channels from Kommo (WhatsApp, Telegram, etc.)
+ * Tries multiple endpoints: /api/v4/sources, /api/v4/account with amojo
+ */
+export async function fetchSources(
+  integrationId: string
+): Promise<{ _embedded: { sources: KommoSource[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  console.log(`🔍 Fetching sources/channels from Kommo`);
+
+  // Try 1: Get account info with amojo_id (chat system)
+  try {
+    const accountUrl = `https://${apiDomain}/api/v4/account?with=amojo_id,amojo_rights`;
+    console.log(`📡 Trying account endpoint: ${accountUrl}`);
+
+    const accountResponse = await fetch(accountUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (accountResponse.ok) {
+      const accountData = await accountResponse.json();
+      console.log(`📊 Account data:`, JSON.stringify(accountData, null, 2));
+
+      // If account has amojo_id, try to get chat channels
+      if (accountData.amojo_id) {
+        console.log(`🔗 Found amojo_id: ${accountData.amojo_id}`);
+
+        // Try amojo API for chat sources
+        const amojoUrl = `https://amojo.kommo.com/v2/origin/custom/${accountData.amojo_id}/connect`;
+        console.log(`📡 Checking amojo channels...`);
+      }
+    }
+  } catch (accountError: any) {
+    console.log(`⚠️ Account endpoint error: ${accountError.message}`);
+  }
+
+  // Try 2: Direct sources endpoint
+  try {
+    const sourcesUrl = `https://${apiDomain}/api/v4/sources`;
+    const response = await fetch(sourcesUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    console.log(`📡 Sources response status: ${response.status}`);
+
+    if (response.ok && response.status !== 204) {
+      const text = await response.text();
+      if (text && text.trim()) {
+        const result = JSON.parse(text);
+        console.log(`✅ Found ${result._embedded?.sources?.length || 0} sources from /api/v4/sources`);
+        return result;
+      }
+    }
+  } catch (error: any) {
+    console.log(`⚠️ Sources endpoint error: ${error.message}`);
+  }
+
+  // Try 3: Get pipelines with sources (sources can be attached to pipelines)
+  try {
+    const pipelinesUrl = `https://${apiDomain}/api/v4/leads/pipelines?with=sources`;
+    const response = await fetch(pipelinesUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const sources: KommoSource[] = [];
+      const seenIds = new Set<number>();
+
+      // Extract sources from pipelines
+      for (const pipeline of data._embedded?.pipelines || []) {
+        if (pipeline._embedded?.sources) {
+          for (const source of pipeline._embedded.sources) {
+            if (!seenIds.has(source.id)) {
+              seenIds.add(source.id);
+              sources.push({
+                id: source.id,
+                name: source.name,
+                pipeline_id: pipeline.id,
+                external_id: source.external_id,
+                origin_code: source.origin_code,
+                type: source.type,
+                services: source.services,
+              });
+            }
+          }
+        }
+      }
+
+      if (sources.length > 0) {
+        console.log(`✅ Found ${sources.length} sources from pipelines`);
+        return { _embedded: { sources } };
+      }
+    }
+  } catch (error: any) {
+    console.log(`⚠️ Pipelines with sources error: ${error.message}`);
+  }
+
+  // Try 4: Get chats and extract unique channel types
+  try {
+    const chatsUrl = `https://${apiDomain}/api/v4/chats?limit=50`;
+    console.log(`📡 Trying chats endpoint: ${chatsUrl}`);
+
+    const response = await fetch(chatsUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const chats = data._embedded?.chats || [];
+      console.log(`💬 Found ${chats.length} chats`);
+
+      // Extract unique channel types from chats
+      const channelMap = new Map<string, { id: string; name: string; type: string }>();
+
+      for (const chat of chats) {
+        // Each chat has origin info
+        const origin = chat.origin || {};
+        const sourceId = origin.source_id || chat.source_id;
+        const sourceName = origin.source_name || chat.source_name || origin.origin || 'Unknown';
+        const sourceType = origin.origin || chat.origin_type || 'unknown';
+
+        if (sourceId && !channelMap.has(sourceId)) {
+          channelMap.set(sourceId, {
+            id: sourceId,
+            name: sourceName,
+            type: sourceType,
+          });
+        }
+      }
+
+      if (channelMap.size > 0) {
+        const sources: KommoSource[] = Array.from(channelMap.values()).map(ch => ({
+          id: parseInt(ch.id) || 0,
+          name: ch.name,
+          pipeline_id: 0,
+          origin_code: ch.type,
+          type: ch.type,
+        }));
+        console.log(`✅ Found ${sources.length} unique channels from chats:`, sources.map(s => s.name));
+        return { _embedded: { sources } };
+      }
+    }
+  } catch (error: any) {
+    console.log(`⚠️ Chats endpoint error: ${error.message}`);
+  }
+
+  console.log(`⚠️ No sources found from any endpoint`);
+  return { _embedded: { sources: [] } };
+}
+
+/**
  * Fetch task types from Kommo
  */
 export async function fetchTaskTypes(
@@ -621,6 +830,40 @@ export async function fetchTaskTypes(
     token,
     '/api/v4/tasks'
   );
+}
+
+/**
+ * Fetch salesbots from Kommo
+ * Endpoint: /api/v4/bots (согласно библиотеке ufee/amoapi)
+ * Структура ответа: { _embedded: { items: [...] } }
+ */
+export async function fetchSalesbots(
+  integrationId: string
+): Promise<{ _embedded: { bots: KommoSalesbot[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  try {
+    console.log(`🔍 Fetching salesbots from /api/v4/bots`);
+    const result = await kommoApiRequest<any>(
+      apiDomain,
+      token,
+      '/api/v4/bots',
+      'GET',
+      undefined,
+      { page: 1, limit: 250 }
+    );
+
+    console.log('🤖 Salesbots raw response:', JSON.stringify(result, null, 2));
+
+    // Согласно библиотеке ufee/amoapi, данные в _embedded.items
+    const bots = result?._embedded?.items || result?._embedded?.bots || [];
+
+    console.log(`✅ Salesbots loaded: ${bots.length}`);
+    return { _embedded: { bots } };
+  } catch (error: any) {
+    console.log('⚠️ Salesbots endpoint error:', error?.message || error);
+    return { _embedded: { bots: [] } };
+  }
 }
 
 /**
@@ -688,6 +931,409 @@ export async function createLeadNote(
           },
         },
       ],
+    }
+  );
+}
+
+// ============================================================================
+// Trigger Action Functions
+// ============================================================================
+
+/**
+ * Update a contact in Kommo
+ */
+export async function updateContact(
+  integrationId: string,
+  contactId: number,
+  contactData: Partial<any>
+): Promise<{ _embedded: { contacts: any[] } }> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest<{ _embedded: { contacts: any[] } }>(
+    apiDomain,
+    token,
+    `/api/v4/contacts/${contactId}`,
+    {
+      method: 'PATCH',
+      body: contactData,
+    }
+  );
+}
+
+/**
+ * Create a note for a contact
+ */
+export async function createContactNote(
+  integrationId: string,
+  contactId: number,
+  noteText: string
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/contacts/${contactId}/notes`,
+    {
+      method: 'POST',
+      body: [
+        {
+          note_type: 'common',
+          params: {
+            text: noteText,
+          },
+        },
+      ],
+    }
+  );
+}
+
+/**
+ * Create a task in Kommo
+ */
+export async function createTask(
+  integrationId: string,
+  taskData: {
+    text: string;
+    complete_till: number; // Unix timestamp
+    entity_id: number;
+    entity_type: 'leads' | 'contacts' | 'companies';
+    responsible_user_id?: number;
+    task_type_id?: number;
+  }
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    '/api/v4/tasks',
+    {
+      method: 'POST',
+      body: [taskData],
+    }
+  );
+}
+
+/**
+ * Add tags to a lead/deal in Kommo
+ */
+export async function addLeadTags(
+  integrationId: string,
+  leadId: number,
+  tags: string[]
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  // Kommo expects tags as array of objects with name
+  const tagsData = tags.map(tag => ({ name: tag }));
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/leads/${leadId}`,
+    {
+      method: 'PATCH',
+      body: {
+        _embedded: {
+          tags: tagsData,
+        },
+      },
+    }
+  );
+}
+
+/**
+ * Add tags to a contact in Kommo
+ */
+export async function addContactTags(
+  integrationId: string,
+  contactId: number,
+  tags: string[]
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  const tagsData = tags.map(tag => ({ name: tag }));
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/contacts/${contactId}`,
+    {
+      method: 'PATCH',
+      body: {
+        _embedded: {
+          tags: tagsData,
+        },
+      },
+    }
+  );
+}
+
+/**
+ * Run a salesbot for a lead
+ * Note: This uses the Salesbot API which may require specific permissions
+ */
+export async function runSalesbot(
+  integrationId: string,
+  salesbotId: number,
+  leadId: number
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/bots/${salesbotId}/trigger`,
+    {
+      method: 'POST',
+      body: {
+        entity_id: leadId,
+        entity_type: 'lead',
+      },
+    }
+  );
+}
+
+/**
+ * Send a message via Kommo Chat API
+ * Note: This requires the Chats API and a connected chat channel
+ */
+export async function sendChatMessage(
+  integrationId: string,
+  chatId: string,
+  message: string
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/chats/${chatId}/messages`,
+    {
+      method: 'POST',
+      body: {
+        text: message,
+      },
+    }
+  );
+}
+
+/**
+ * Send a file message via Kommo Chat API
+ * @param integrationId ID интеграции
+ * @param chatId ID чата
+ * @param fileUrl Публичный URL файла (доступный Kommo серверам)
+ * @param fileName Имя файла
+ * @param fileSize Размер файла в байтах
+ * @param mimeType MIME тип файла
+ */
+export async function sendChatFileMessage(
+  integrationId: string,
+  chatId: string,
+  fileUrl: string,
+  fileName: string,
+  fileSize: number,
+  mimeType: string
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  // Определяем тип сообщения на основе MIME типа
+  let messageType: 'file' | 'picture' | 'video' = 'file';
+  if (mimeType.startsWith('image/')) {
+    messageType = 'picture';
+  } else if (mimeType.startsWith('video/')) {
+    messageType = 'video';
+  }
+
+  console.log(`📤 Sending ${messageType} message to chat ${chatId}: ${fileName}`);
+  console.log(`   URL: ${fileUrl}`);
+  console.log(`   Size: ${fileSize} bytes, Type: ${mimeType}`);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/chats/${chatId}/messages`,
+    {
+      method: 'POST',
+      body: {
+        type: messageType,
+        media: fileUrl,
+        file_name: fileName,
+        file_size: fileSize,
+      },
+    }
+  );
+}
+
+/**
+ * Get contact's email from lead's linked contacts
+ */
+export async function getLeadContactEmail(
+  integrationId: string,
+  leadId: number
+): Promise<string | null> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  try {
+    // Fetch lead with contacts
+    const lead = await kommoApiRequest<any>(
+      apiDomain,
+      token,
+      `/api/v4/leads/${leadId}`,
+      { query: { with: 'contacts' } }
+    );
+
+    const contacts = lead._embedded?.contacts || [];
+    if (contacts.length === 0) {
+      console.log(`⚠️ Lead ${leadId} has no linked contacts`);
+      return null;
+    }
+
+    // Get first contact's details
+    const contactId = contacts[0].id;
+    const contact = await kommoApiRequest<KommoContact>(
+      apiDomain,
+      token,
+      `/api/v4/contacts/${contactId}`
+    );
+
+    // Find email in custom fields
+    const emailField = contact.custom_fields_values?.find(
+      (f: any) => f.field_code === 'EMAIL' || f.field_name?.toLowerCase().includes('email')
+    );
+
+    if (emailField && emailField.values?.[0]?.value) {
+      return emailField.values[0].value;
+    }
+
+    console.log(`⚠️ Contact ${contactId} has no email field`);
+    return null;
+  } catch (error: any) {
+    console.error('❌ Failed to get contact email:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Send an email via Kommo Notes API
+ * Creates an outgoing email note attached to a lead or contact
+ */
+export async function sendEmail(
+  integrationId: string,
+  options: {
+    entityId: number;
+    entityType: 'leads' | 'contacts';
+    to: string;
+    subject: string;
+    text: string;
+    from?: string;
+  }
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  // Kommo note types for email:
+  // - 4 = incoming email
+  // - 5 = outgoing email
+  const noteData = {
+    note_type: 'mail_message', // or use numeric type 5
+    params: {
+      text: options.text,
+      subject: options.subject,
+      to: options.to,
+      from: options.from || '',
+      service: 'email',
+      content_summary: options.text.substring(0, 200),
+    },
+  };
+
+  console.log(`📧 Sending email via Kommo to ${options.to}`);
+  console.log(`   Subject: ${options.subject}`);
+  console.log(`   Entity: ${options.entityType} #${options.entityId}`);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/${options.entityType}/${options.entityId}/notes`,
+    {
+      method: 'POST',
+      body: [noteData],
+    }
+  );
+}
+
+/**
+ * Change lead status/stage
+ */
+export async function changeLeadStage(
+  integrationId: string,
+  leadId: number,
+  statusId: number,
+  pipelineId?: number
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  const updateData: any = {
+    status_id: statusId,
+  };
+
+  if (pipelineId) {
+    updateData.pipeline_id = pipelineId;
+  }
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/leads/${leadId}`,
+    {
+      method: 'PATCH',
+      body: updateData,
+    }
+  );
+}
+
+/**
+ * Change responsible user for a lead
+ */
+export async function changeLeadResponsible(
+  integrationId: string,
+  leadId: number,
+  userId: number
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/leads/${leadId}`,
+    {
+      method: 'PATCH',
+      body: {
+        responsible_user_id: userId,
+      },
+    }
+  );
+}
+
+/**
+ * Change responsible user for a contact
+ */
+export async function changeContactResponsible(
+  integrationId: string,
+  contactId: number,
+  userId: number
+): Promise<any> {
+  const { token, apiDomain } = await getValidAccessToken(integrationId);
+
+  return kommoApiRequest(
+    apiDomain,
+    token,
+    `/api/v4/contacts/${contactId}`,
+    {
+      method: 'PATCH',
+      body: {
+        responsible_user_id: userId,
+      },
     }
   );
 }

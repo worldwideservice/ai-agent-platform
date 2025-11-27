@@ -24,7 +24,8 @@ export interface ContentAnalysis {
  */
 export async function analyzeContentWithAI(
   extractedTexts: string[],
-  language: 'ru' | 'en' = 'ru'
+  language: 'ru' | 'en' = 'ru',
+  model: string = 'anthropic/claude-3.5-sonnet'
 ): Promise<ContentAnalysis> {
   const openai = new OpenAI({
     baseURL: 'https://openrouter.ai/api/v1',
@@ -123,7 +124,7 @@ Return the result in JSON format:
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'anthropic/claude-3.5-sonnet',
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: textToAnalyze },

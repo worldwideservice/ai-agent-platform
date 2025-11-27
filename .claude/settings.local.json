@@ -20,9 +20,17 @@
       "Bash(npx tsx:*)",
       "Bash(sqlite3:*)",
       "Bash(git cherry-pick:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npx localtunnel:*)",
+      "Bash(brew install:*)",
+      "Bash(cloudflared tunnel:*)"
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "sequential-thinking",
+    "playwright",
+    "shadcn"
+  ]
 }

@@ -1,8 +1,45 @@
 import apiClient from './apiClient';
 
+export interface TriggerActionParams {
+  // change_stage
+  stageId?: string;
+  pipelineId?: string;
+  // assign_user
+  applyTo?: 'deal' | 'contact' | 'both';
+  userId?: string;
+  // create_task
+  taskDescription?: string;
+  taskUserId?: string;
+  taskTypeId?: string;
+  // run_salesbot
+  salesbotId?: string;
+  // add_deal_tags, add_contact_tags
+  tags?: string[];
+  // add_deal_note, add_contact_note
+  noteText?: string;
+  // send_message
+  messageText?: string;
+  // send_files
+  fileUrls?: string[];
+  // send_email
+  emailInstructions?: string;
+  emailAttachments?: string[]; // Вложения для email
+  // send_webhook
+  webhookUrl?: string;
+  webhookMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  webhookHeaders?: { key: string; value: string }[];
+  webhookBodyType?: 'form' | 'json' | 'raw';
+  webhookBody?: { key: string; value: string }[] | string;
+  webhookPassToAI?: boolean;
+  // send_kb_article
+  articleId?: number;
+  channel?: 'chat' | 'email';
+}
+
 export interface TriggerAction {
   id: string;
   action: string;
+  params?: TriggerActionParams;
 }
 
 export interface Trigger {
@@ -22,7 +59,7 @@ export interface CreateTriggerRequest {
   name: string;
   isActive: boolean;
   condition: string;
-  actions: Omit<TriggerAction, 'id'>[];
+  actions: { action: string; params?: TriggerActionParams }[];
   cancelMessage?: string;
   runLimit?: number;
 }
@@ -34,8 +71,8 @@ class TriggersService {
    * Получить все триггеры агента
    */
   async getTriggers(agentId: string): Promise<Trigger[]> {
-    const response = await apiClient.get<{ triggers: Trigger[] }>(`/agents/${agentId}/triggers`);
-    return response.data.triggers;
+    const response = await apiClient.get<Trigger[]>(`/agents/${agentId}/triggers`);
+    return response.data;
   }
 
   /**

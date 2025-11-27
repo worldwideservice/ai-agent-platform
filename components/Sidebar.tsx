@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  Bot, 
-  MessageSquare, 
-  Settings, 
-  CreditCard, 
-  ChevronDown, 
+import {
+  LayoutDashboard,
+  Bot,
+  MessageSquare,
+  Settings,
+  CreditCard,
+  ChevronDown,
   ChevronRight,
   ChevronLeft,
   Folder,
-  FileText
+  FileText,
+  Library,
+  Users,
+  BookOpen
 } from 'lucide-react';
 import { Page } from '../types';
 
@@ -22,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
   // Section toggle states
   const [isAgentsOpen, setIsAgentsOpen] = useState(true);
   const [isKbOpen, setIsKbOpen] = useState(true);
+  const [isTrainingOpen, setIsTrainingOpen] = useState(true);
   const [isAccountOpen, setIsAccountOpen] = useState(true);
   
   // Global sidebar collapsed state
@@ -108,15 +112,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
 
         {/* Knowledge Base Section */}
         <div>
-          <GroupHeader 
-            label="База знаний" 
-            isOpen={isKbOpen} 
-            toggle={() => setIsKbOpen(!isKbOpen)} 
+          <GroupHeader
+            label="База знаний"
+            isOpen={isKbOpen}
+            toggle={() => setIsKbOpen(!isKbOpen)}
           />
           {(isKbOpen || isSidebarCollapsed) && (
             <div className="space-y-1">
               <NavItem page="kb-categories" icon={Folder} label="Категории" />
               <NavItem page="kb-articles" icon={FileText} label="Статьи" />
+            </div>
+          )}
+        </div>
+
+        {/* Training Library Section */}
+        <div>
+          <GroupHeader
+            label="Библиотека знаний"
+            isOpen={isTrainingOpen}
+            toggle={() => setIsTrainingOpen(!isTrainingOpen)}
+          />
+          {(isTrainingOpen || isSidebarCollapsed) && (
+            <div className="space-y-1">
+              <NavItem page="training-roles" icon={Users} label="Роли агентов" />
+              <NavItem page="training-sources" icon={BookOpen} label="Источники знаний" />
             </div>
           )}
         </div>

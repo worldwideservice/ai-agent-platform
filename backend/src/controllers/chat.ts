@@ -4,6 +4,10 @@ import { prisma, pool } from '../config/database';
 import { chatCompletion, ChatMessage } from '../services/openrouter.service';
 import { getInstructionsForCurrentStage, buildEnhancedSystemPrompt } from '../services/pipeline.service';
 import { getRelevantKnowledge, buildKnowledgeContext } from '../services/knowledge-base.service';
+import { evaluateTriggerConditions, TriggerCondition } from '../services/ai-trigger.service';
+import { executeTriggerActions } from '../services/trigger-executor.service';
+import { getAgentRoleKnowledge } from '../services/training.service';
+import { systemNotifications } from '../services/system-notifications.service';
 
 /**
  * POST /api/chat/message
@@ -38,6 +42,11 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
+    // Получаем расширенные настройки агента
+    const advancedSettings = await prisma.agentAdvancedSettings.findUnique({
+      where: { agentId },
+    });
+
     // Получаем контекстно-зависимые инструкции для текущего этапа (если они есть)
     const stageInstructions = getInstructionsForCurrentStage(
       agent.pipelineSettings,
@@ -61,14 +70,30 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
         if (knowledgeContext) {
           console.log(`📚 Using ${knowledgeArticles.length} knowledge base articles for context`);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching knowledge base:', error);
+        // Уведомляем пользователя об ошибке базы знаний
+        await systemNotifications.knowledgeBaseError(userId, agent.name, error.message || 'Неизвестная ошибка');
         // Продолжаем без БЗ если произошла ошибка
+      }
+    }
+
+    // Получаем знания из роли (методологии продаж, техники)
+    let roleKnowledge: string | null = null;
+    if (agent.trainingRoleId) {
+      try {
+        roleKnowledge = await getAgentRoleKnowledge(agent.trainingRoleId, userId);
+        if (roleKnowledge) {
+          console.log(`📖 Using role knowledge (${roleKnowledge.length} chars)`);
+        }
+      } catch (error) {
+        console.error('Error fetching role knowledge:', error);
       }
     }
 
     // Формируем расширенный системный промпт с контекстом текущего этапа и базой знаний
     const systemPrompt = buildEnhancedSystemPrompt(
+      roleKnowledge,
       agent.systemInstructions,
       stageInstructions,
       knowledgeContext
@@ -126,22 +151,125 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Обновляем счетчик использованных ответов
-    await prisma.user.update({
+    // Обновляем счетчик использованных ответов и проверяем лимиты
+    const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         responsesUsed: {
           increment: 1,
         },
       },
+      select: {
+        responsesUsed: true,
+        responsesLimit: true,
+      },
     });
+
+    // Проверяем лимиты и отправляем уведомления
+    if (updatedUser.responsesLimit > 0) {
+      const percentage = Math.round((updatedUser.responsesUsed / updatedUser.responsesLimit) * 100);
+
+      if (updatedUser.responsesUsed >= updatedUser.responsesLimit) {
+        // Лимит исчерпан
+        await systemNotifications.messageLimitExceeded(userId, updatedUser.responsesLimit);
+      } else if (percentage >= 90 && percentage < 100) {
+        // 90% использовано - критическое предупреждение
+        await systemNotifications.messageLimitWarning(userId, updatedUser.responsesUsed, updatedUser.responsesLimit);
+      } else if (percentage >= 80 && percentage < 90) {
+        // 80% использовано - первое предупреждение (только если это ровно 80%)
+        const prev = updatedUser.responsesUsed - 1;
+        const prevPercentage = Math.round((prev / updatedUser.responsesLimit) * 100);
+        if (prevPercentage < 80) {
+          await systemNotifications.messageLimitWarning(userId, updatedUser.responsesUsed, updatedUser.responsesLimit);
+        }
+      }
+    }
+
+    // Оцениваем AI триггеры на основе сообщения пользователя
+    let triggeredActions: string[] = [];
+    try {
+      console.log(`🔍 Looking for triggers for agent: ${agent.id}`);
+
+      const triggers = await prisma.trigger.findMany({
+        where: {
+          agentId: agent.id,
+          isActive: true,
+        },
+        include: {
+          actions: {
+            orderBy: { order: 'asc' },
+          },
+        },
+      });
+
+      console.log(`📋 Found ${triggers.length} active triggers`);
+
+      if (triggers.length > 0) {
+        // Формируем условия для AI оценки
+        const triggerConditions: TriggerCondition[] = triggers.map(t => ({
+          id: t.id,
+          name: t.name,
+          condition: t.condition,
+        }));
+
+        // Контекст предыдущих сообщений
+        const conversationContext = history?.map((msg: any) =>
+          `${msg.role === 'user' ? 'Клиент' : 'Агент'}: ${msg.text || msg.content}`
+        ) || [];
+
+        // Оцениваем триггеры через AI
+        const evaluationResults = await evaluateTriggerConditions(
+          message,
+          conversationContext,
+          triggerConditions,
+          advancedSettings?.triggerEvaluationModel || 'openai/gpt-4o-mini'
+        );
+
+        console.log('🎯 Trigger evaluation results:', evaluationResults);
+
+        // Выполняем действия для сработавших триггеров
+        for (const result of evaluationResults) {
+          if (result.matched) {
+            console.log(`✅ Trigger matched: ${result.triggerName} (confidence: ${result.confidence})`);
+            triggeredActions.push(result.triggerName);
+
+            const trigger = triggers.find(t => t.id === result.triggerId);
+            if (trigger) {
+              // Парсим параметры действий
+              const actionsWithParams = trigger.actions.map((a: any) => ({
+                id: a.id,
+                action: a.action,
+                params: a.params ? JSON.parse(a.params) : {},
+                order: a.order,
+              }));
+
+              // Выполняем действия триггера (без реального CRM для внутреннего чата)
+              console.log(`🚀 Would execute ${actionsWithParams.length} actions for trigger: ${trigger.name}`);
+              // TODO: для интеграции с реальным CRM передать integration и leadId
+              // await executeTriggerActions(integration, actionsWithParams, { leadId, contactId });
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error evaluating triggers:', error);
+      // Не прерываем ответ пользователю, просто логируем ошибку
+    }
 
     return res.json({
       response,
       message: 'Message sent successfully',
+      triggeredActions: triggeredActions.length > 0 ? triggeredActions : undefined,
     });
   } catch (error: any) {
     console.error('Error sending chat message:', error);
+
+    // Уведомляем пользователя об ошибке AI модели
+    if (userId) {
+      const agentName = req.body.agentId ? 'Агент' : 'Неизвестный агент';
+      await systemNotifications.aiModelError(userId, agentName, error.message || 'Не удалось обработать запрос');
+    }
+
     return res.status(500).json({
       message: error.message || 'Internal server error',
     });

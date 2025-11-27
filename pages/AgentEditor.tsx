@@ -5,12 +5,15 @@ import {
   GripVertical, Trash2, Plus, Search, LayoutGrid, Edit, ArrowUp, ArrowDown, CheckCircle,
   XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
 } from 'lucide-react';
-import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS } from '../services/crmData';
+import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS, MOCK_USERS, MOCK_SALESBOTS } from '../services/crmData';
 import { AgentDealsContacts, AgentDealsContactsRef } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
 import { Agent } from '../types';
 import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
-import { integrationsService } from '../src/services/api';
+import { integrationsService, triggersService, chainsService, googleService, agentService, notificationsService } from '../src/services/api';
+import { useToast } from '../src/contexts/ToastContext';
+import type { KommoSyncStats } from '../src/services/api/integrations.service';
+import googleCalendarService, { GoogleCalendarEmployee } from '../src/services/api/google-calendar.service';
 import { apiClient } from '../src/services/api/apiClient';
 // import Toggle from '../components/Toggle'; // Removed: Defined internally
 import { ConfirmationModal } from '../components/ConfirmationModal';
@@ -26,7 +29,6 @@ interface AgentEditorProps {
 
 type Tab = 'main' | 'deals' | 'triggers' | 'chains' | 'integrations' | 'advanced';
 type IntegrationView = 'list' | 'kommo' | 'google_calendar';
-type CreativityLevel = 'precise' | 'balanced' | 'creative';
 
 // --- Types ---
 interface UpdateRule {
@@ -36,9 +38,46 @@ interface UpdateRule {
   overwrite: boolean;
 }
 
+interface TriggerActionParams {
+  // change_stage
+  stageId?: string;
+  // assign_user
+  applyTo?: 'deal' | 'contact' | 'both';
+  userId?: string;
+  // create_task
+  taskDescription?: string;
+  taskUserId?: string;
+  // run_salesbot
+  salesbotId?: string;
+  // add_deal_tags, add_contact_tags
+  tags?: string[];
+  // add_deal_note, add_contact_note
+  noteText?: string;
+  // send_message
+  messageText?: string;
+  // send_files
+  fileUrls?: string[]; // URLs файлов после загрузки
+  // send_email
+  templateId?: string;
+  emailSource?: 'contact' | 'custom';
+  emailInstructions?: string;
+  emailAttachments?: string[]; // Вложения для email
+  // send_webhook
+  webhookUrl?: string;
+  webhookMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  webhookHeaders?: { key: string; value: string }[];
+  webhookBodyType?: 'form' | 'json' | 'raw';
+  webhookBody?: { key: string; value: string }[] | string;
+  webhookPassToAI?: boolean;
+  // send_kb_article
+  articleId?: number;
+  channel?: 'chat' | 'email';
+}
+
 interface TriggerAction {
   id: string;
   action: string;
+  params?: TriggerActionParams;
 }
 
 interface Trigger {
@@ -55,6 +94,7 @@ interface ChainAction {
   id: string;
   type: string;
   instruction: string;
+  params?: Record<string, any>;
 }
 
 interface ChainStep {
@@ -103,6 +143,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   });
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
   const dealsContactsRef = useRef<AgentDealsContactsRef>(null);
+  const { showToast } = useToast();
 
   // --- Loading and Error States ---
   const [isSaving, setIsSaving] = useState(false);
@@ -120,25 +161,45 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [kommoConnected, setKommoConnected] = useState(false);
   const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
+  const [kommoSyncStats, setKommoSyncStats] = useState<KommoSyncStats | null>(null);
+
+  // Google Calendar Employees State
+  const [calendarEmployees, setCalendarEmployees] = useState<GoogleCalendarEmployee[]>([]);
+  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [selectedCrmUser, setSelectedCrmUser] = useState<{ id: string; name: string } | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [isCreatingInvite, setIsCreatingInvite] = useState(false);
 
   // --- Advanced Tab State ---
-  const [advancedModel, setAdvancedModel] = useState('OpenAI GPT-4.1');
+  const [advancedModel, setAdvancedModel] = useState('openai/gpt-4o');
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [autoLanguage, setAutoLanguage] = useState(false);
   const [responseLanguage, setResponseLanguage] = useState('');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [agentSchedule, setAgentSchedule] = useState<WorkingDay[]>(DEFAULT_WORKING_HOURS);
-  const [creativity, setCreativity] = useState<CreativityLevel>('balanced');
   const [responseDelay, setResponseDelay] = useState(45);
+  const [advancedSettingsLoaded, setAdvancedSettingsLoaded] = useState(false);
 
   // --- Memory & Context State ---
   const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [graphEnabled, setGraphEnabled] = useState(true);
   const [contextWindow, setContextWindow] = useState(20);
   const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(true);
 
+  // --- Internal AI Models State ---
+  const [factExtractionModel, setFactExtractionModel] = useState('openai/gpt-4o-mini');
+  const [triggerEvaluationModel, setTriggerEvaluationModel] = useState('openai/gpt-4o-mini');
+  const [chainMessageModel, setChainMessageModel] = useState('openai/gpt-4o-mini');
+  const [emailGenerationModel, setEmailGenerationModel] = useState('openai/gpt-4o-mini');
+  const [instructionParsingModel, setInstructionParsingModel] = useState('openai/gpt-4o-mini');
+  const [kbAnalysisModel, setKbAnalysisModel] = useState('anthropic/claude-3.5-sonnet');
+
   // --- Triggers Data ---
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+
+  // --- KB Articles for Stage Instructions ---
+  const [kbArticles, setKbArticles] = useState<Array<{ id: number; title: string; isActive: boolean }>>([]);
 
   // Parse CRM data from agent (handles double-encoded JSON)
   const parseCrmData = () => {
@@ -163,14 +224,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const crmData = parseCrmData();
   const availablePipelines = crmData?.pipelines || MOCK_PIPELINES;
   const availableChannels = crmData?.channels || MOCK_CHANNELS;
-  const availableActions = crmData?.actions || CRM_ACTIONS;
-
-  // Загружаем модель из агента при монтировании компонента
-  React.useEffect(() => {
-    if (agent?.model) {
-      setAdvancedModel(agent.model);
-    }
-  }, [agent]);
+  // Всегда используем статический список действий - динамические данные (pipelines, users, salesbots) берутся из crmData
+  const availableActions = CRM_ACTIONS;
 
   // Загружаем список моделей с сервера
   useEffect(() => {
@@ -179,22 +234,61 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       try {
         const response = await apiClient.get('/models');
         if (response.data.success && response.data.models) {
-          setAvailableModels(response.data.models);
+          const models = response.data.models;
+          setAvailableModels(models);
+
+          // Если у агента есть модель, проверяем что она существует в списке
+          if (agent?.model) {
+            const modelExists = models.some((m: { id: string }) => m.id === agent.model);
+            if (modelExists) {
+              setAdvancedModel(agent.model);
+            } else {
+              // Если модель не найдена, используем первую из списка
+              console.warn(`Model "${agent.model}" not found in available models, using default`);
+              setAdvancedModel(models[0]?.id || 'openai/gpt-4o');
+            }
+          }
         }
       } catch (error) {
         console.error('Failed to fetch models:', error);
         // Если не удалось загрузить модели, используем модели по умолчанию
-        setAvailableModels([
+        const defaultModels = [
           { id: 'openai/gpt-4o', name: 'OpenAI GPT-4o' },
           { id: 'openai/gpt-4-turbo', name: 'OpenAI GPT-4 Turbo' },
           { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-        ]);
+        ];
+        setAvailableModels(defaultModels);
+
+        if (agent?.model) {
+          const modelExists = defaultModels.some(m => m.id === agent.model);
+          setAdvancedModel(modelExists ? agent.model : 'openai/gpt-4o');
+        }
       } finally {
         setModelsLoading(false);
       }
     };
 
     fetchModels();
+  }, [agent]);
+
+  // Загружаем статьи KB для выбора в инструкциях этапов
+  useEffect(() => {
+    const fetchKbArticles = async () => {
+      try {
+        const response = await apiClient.get('/kb/articles');
+        if (response.data && Array.isArray(response.data)) {
+          setKbArticles(response.data.map((article: any) => ({
+            id: article.id,
+            title: article.title,
+            isActive: article.isActive
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch KB articles:', error);
+      }
+    };
+
+    fetchKbArticles();
   }, []);
 
   // Сохраняем активную вкладку в localStorage
@@ -218,7 +312,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
         if (kommo) {
           setKommoConnected(kommo.isConnected || false);
-          setKommoActive(kommo.isActive || false);
+          // Автовключаем если подключено но не активно
+          if (kommo.isConnected && !kommo.isActive) {
+            setKommoActive(true);
+            integrationsService.upsertIntegration(agent.id, 'kommo', true, true)
+              .catch(err => console.error('Failed to auto-enable Kommo:', err));
+          } else {
+            setKommoActive(kommo.isActive || false);
+          }
         } else {
           setKommoConnected(false);
           setKommoActive(false);
@@ -226,7 +327,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
         if (googleCalendar) {
           setGoogleCalendarConnected(googleCalendar.isConnected || false);
-          setGoogleCalendarActive(googleCalendar.isActive || false);
+          // Автовключаем если подключено но не активно
+          if (googleCalendar.isConnected && !googleCalendar.isActive) {
+            setGoogleCalendarActive(true);
+            integrationsService.upsertIntegration(agent.id, 'google_calendar', true, true)
+              .catch(err => console.error('Failed to auto-enable Google Calendar:', err));
+          } else {
+            setGoogleCalendarActive(googleCalendar.isActive || false);
+          }
         } else {
           setGoogleCalendarConnected(false);
           setGoogleCalendarActive(false);
@@ -245,6 +353,206 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
     fetchIntegrations();
   }, [agent?.id]);
+
+  // Загружаем статистику Kommo при подключении
+  useEffect(() => {
+    const fetchKommoStats = async () => {
+      if (!agent?.id || !kommoConnected) {
+        setKommoSyncStats(null);
+        return;
+      }
+
+      try {
+        const stats = await integrationsService.getKommoSyncStats(agent.id);
+        setKommoSyncStats(stats);
+      } catch (error) {
+        console.error('Failed to fetch Kommo stats:', error);
+      }
+    };
+
+    fetchKommoStats();
+  }, [agent?.id, kommoConnected]);
+
+  // Загружаем сотрудников Google Calendar при монтировании компонента
+  useEffect(() => {
+    const fetchCalendarEmployees = async () => {
+      if (!agent?.id) return;
+
+      try {
+        const employees = await googleCalendarService.getEmployees(agent.id);
+        setCalendarEmployees(employees);
+        // Считаем интеграцию подключенной, если есть хотя бы один connected сотрудник
+        const hasConnected = employees.some(e => e.status === 'connected');
+        if (hasConnected) {
+          setGoogleCalendarConnected(true);
+          setGoogleCalendarActive(true);
+          // Сохраняем в БД и обновляем интеграции
+          try {
+            await integrationsService.upsertIntegration(agent.id, 'google_calendar', true, true);
+            await refreshIntegrations();
+          } catch (err) {
+            console.error('Failed to auto-enable Google Calendar:', err);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch calendar employees:', error);
+      }
+    };
+
+    fetchCalendarEmployees();
+  }, [agent?.id]);
+
+  // Загружаем триггеры при монтировании компонента
+  useEffect(() => {
+    const fetchTriggers = async () => {
+      if (!agent?.id) return;
+
+      try {
+        const data = await triggersService.getTriggers(agent.id);
+        // Map backend format to frontend format
+        const formattedTriggers: Trigger[] = data.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          isActive: t.isActive,
+          condition: t.condition,
+          actions: t.actions.map((a: any) => ({
+            id: a.id,
+            action: a.action,
+            params: a.params || {},
+          })),
+          cancelMessage: t.cancelMessage,
+          runLimit: t.runLimit,
+        }));
+        setTriggers(formattedTriggers);
+      } catch (error) {
+        console.error('Failed to fetch triggers:', error);
+        // На случай ошибки просто оставляем пустой массив
+      }
+    };
+
+    fetchTriggers();
+  }, [agent?.id]);
+
+  // Загружаем цепочки при монтировании компонента
+  useEffect(() => {
+    const fetchChains = async () => {
+      if (!agent?.id) return;
+
+      try {
+        const data = await chainsService.getChains(agent.id);
+        // Map backend format to frontend format
+        const formattedChains: Chain[] = data.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          isActive: c.isActive,
+          conditionType: c.conditionType || 'all',
+          conditionStages: c.conditions?.map((cond: any) => cond.stageId) || [],
+          conditionExclude: c.conditionExclude || '',
+          steps: c.steps?.map((s: any) => ({
+            id: s.id,
+            delayValue: s.delayValue,
+            delayUnit: s.delayUnit,
+            actions: s.actions?.map((a: any) => ({
+              id: a.id,
+              type: a.actionType,
+              instruction: a.instruction,
+              params: a.params || {},
+            })) || [],
+          })) || [],
+          schedule: c.schedules?.map((sch: any) => ({
+            day: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][sch.dayOfWeek] || 'Пн',
+            enabled: true,
+            start: sch.startTime || '09:00',
+            end: sch.endTime || '22:00',
+          })) || DEFAULT_WORKING_HOURS,
+          runLimit: c.runLimit || 0,
+        }));
+        setChains(formattedChains);
+      } catch (error) {
+        console.error('Failed to fetch chains:', error);
+      }
+    };
+
+    fetchChains();
+  }, [agent?.id]);
+
+  // Загружаем расширенные настройки агента при монтировании
+  useEffect(() => {
+    const fetchAdvancedSettings = async () => {
+      if (!agent?.id) return;
+
+      try {
+        setAdvancedSettingsLoaded(false);
+        const settings = await agentService.getAdvancedSettings(agent.id);
+        // Устанавливаем все значения из загруженных настроек
+        if (settings.model) setAdvancedModel(settings.model);
+        setAutoLanguage(settings.autoDetectLanguage ?? false);
+        setResponseLanguage(settings.responseLanguage ?? '');
+        setScheduleEnabled(settings.scheduleEnabled ?? false);
+        if (settings.scheduleData && Array.isArray(settings.scheduleData)) {
+          setAgentSchedule(settings.scheduleData);
+        }
+        setResponseDelay(settings.responseDelaySeconds ?? 45);
+        // Memory & Context Settings
+        setMemoryEnabled(settings.memoryEnabled ?? true);
+        setGraphEnabled(settings.graphEnabled ?? true);
+        setContextWindow(settings.contextWindow ?? 20);
+        setSemanticSearchEnabled(settings.semanticSearchEnabled ?? true);
+        // Internal AI Models Settings
+        setFactExtractionModel(settings.factExtractionModel ?? 'openai/gpt-4o-mini');
+        setTriggerEvaluationModel(settings.triggerEvaluationModel ?? 'openai/gpt-4o-mini');
+        setChainMessageModel(settings.chainMessageModel ?? 'openai/gpt-4o-mini');
+        setEmailGenerationModel(settings.emailGenerationModel ?? 'openai/gpt-4o-mini');
+        setInstructionParsingModel(settings.instructionParsingModel ?? 'openai/gpt-4o-mini');
+        setKbAnalysisModel(settings.kbAnalysisModel ?? 'anthropic/claude-3.5-sonnet');
+        console.log('✅ Advanced settings loaded:', settings);
+        // Устанавливаем флаг после небольшой задержки, чтобы пропустить первый save
+        setTimeout(() => setAdvancedSettingsLoaded(true), 600);
+      } catch (error) {
+        console.error('Failed to fetch advanced settings:', error);
+        // В случае ошибки разрешаем сохранение
+        setAdvancedSettingsLoaded(true);
+      }
+    };
+
+    fetchAdvancedSettings();
+  }, [agent?.id]);
+
+  // Сохраняем расширенные настройки агента при изменении
+  useEffect(() => {
+    // Не сохраняем пока не загружены настройки
+    if (!agent?.id || !advancedSettingsLoaded) return;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        await agentService.updateAdvancedSettings(agent.id, {
+          model: advancedModel,
+          autoDetectLanguage: autoLanguage,
+          responseLanguage: responseLanguage,
+          scheduleEnabled: scheduleEnabled,
+          scheduleData: agentSchedule,
+          responseDelaySeconds: responseDelay,
+          // Memory & Context Settings
+          memoryEnabled: memoryEnabled,
+          graphEnabled: graphEnabled,
+          contextWindow: contextWindow,
+          semanticSearchEnabled: semanticSearchEnabled,
+          // Internal AI Models Settings
+          factExtractionModel: factExtractionModel,
+          triggerEvaluationModel: triggerEvaluationModel,
+          chainMessageModel: chainMessageModel,
+          emailGenerationModel: emailGenerationModel,
+          instructionParsingModel: instructionParsingModel,
+          kbAnalysisModel: kbAnalysisModel,
+        });
+        console.log('✅ Advanced settings saved');
+      } catch (error) {
+        console.error('Failed to save advanced settings:', error);
+      }
+    }, 500); // debounce 500ms
+
+    return () => clearTimeout(timeoutId);
+  }, [agent?.id, advancedSettingsLoaded, advancedModel, autoLanguage, responseLanguage, scheduleEnabled, agentSchedule, responseDelay, memoryEnabled, graphEnabled, contextWindow, semanticSearchEnabled, factExtractionModel, triggerEvaluationModel, chainMessageModel, emailGenerationModel, instructionParsingModel, kbAnalysisModel]);
 
   // Функция для обновления списка интеграций
   const refreshIntegrations = async () => {
@@ -330,8 +638,35 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.log('Calling onSave...');
       await onSave(updatedAgent);
       console.log('onSave completed successfully');
+
+      // Показываем toast об успешном сохранении с названием агента
+      showToast('success', `Настройки агента "${updatedAgent.name}" сохранены`);
+
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          title: 'Настройки агента сохранены',
+          message: `Настройки агента "${updatedAgent.name}" обновлены`,
+        });
+      } catch (e) { /* ignore */ }
+
+      // Commit pending document changes (uploads and deletes)
+      if (basicSettingsRef.current?.hasPendingDocumentChanges?.()) {
+        console.log('Committing pending document changes...');
+        try {
+          await basicSettingsRef.current.commitDocumentChanges(agent.id);
+          console.log('Document changes committed successfully');
+        } catch (docError: any) {
+          console.error('Error committing document changes:', docError);
+          // Don't fail the entire save, just show a warning
+          setSaveError(docError.message || 'Некоторые документы не удалось обработать');
+        }
+      }
     } catch (error: any) {
-      setSaveError(error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.');
+      const errorMessage = error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.';
+      setSaveError(errorMessage);
+      showToast('error', errorMessage);
       console.error('Failed to save agent:', error);
     } finally {
       setIsSaving(false);
@@ -353,6 +688,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       // Обновляем массив интеграций после успешного создания
       await refreshIntegrations();
+
+      // Создаём уведомление
+      const status = isActive ? 'включена' : 'выключена';
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: 'Интеграция Kommo',
+          message: `Интеграция Kommo ${status} для агента "${agent.name}"`,
+        });
+      } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to update Kommo integration:', error);
       // Откатываем изменение в случае ошибки
@@ -375,6 +720,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       // Обновляем массив интеграций после успешного создания
       await refreshIntegrations();
+
+      // Создаём уведомление
+      const status = isActive ? 'включена' : 'выключена';
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: 'Интеграция Google Calendar',
+          message: `Интеграция Google Calendar ${status} для агента "${agent.name}"`,
+        });
+      } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to update Google Calendar integration:', error);
       // Откатываем изменение в случае ошибки
@@ -405,11 +760,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.log('CRM синхронизирована:', result);
 
       alert(
-        `CRM успешно синхронизирована!\n\n` +
+        `Синхронизация завершена успешно!\n\n` +
         `Воронок: ${result.stats.pipelines}\n` +
-        `Контактов: ${result.stats.contacts}\n` +
-        `Сделок: ${result.stats.leads}\n\n` +
-        `Последняя синхронизация: ${new Date(result.lastSynced).toLocaleString('ru-RU')}`
+        `Пользователей: ${result.stats.users}\n` +
+        `Время: ${result.stats.syncTime}\n\n` +
+        `Дата: ${new Date(result.lastSynced).toLocaleString('ru-RU')}`
       );
 
       // Reload page to update agent with new crmData
@@ -461,7 +816,6 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [systemInstructions, setSystemInstructions] = useState(
     `ОТВЕЧАЙ ТОЛЬКО НА АНГЛИЙСКОМ ЯЗЫКЕ - ВСЕГДА !!`
   );
-  const [checkBeforeSend, setCheckBeforeSend] = useState(false);
 
   // Pipelines State
   const [activePipelines, setActivePipelines] = useState<Record<string, boolean>>({ 'sales_funnel_1': true });
@@ -533,6 +887,21 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     }));
   };
 
+  const updateChainActionParams = (stepId: string, actionId: string, params: Record<string, any>) => {
+    setChainSteps(prev => prev.map(step =>
+      step.id === stepId
+        ? {
+            ...step,
+            actions: step.actions.map(action =>
+              action.id === actionId
+                ? { ...action, params: { ...action.params, ...params } }
+                : action
+            )
+          }
+        : step
+    ));
+  };
+
   const toggleWorkingDay = (day: string) => {
     setChainSchedule(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
   };
@@ -541,8 +910,28 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     setAgentSchedule(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
   };
 
-  const toggleChainStatus = (id: string) => {
-    setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c));
+  const toggleChainStatus = async (id: string) => {
+    if (!agent?.id) return;
+    const chain = chains.find(c => c.id === id);
+    try {
+      await chainsService.toggleChain(agent.id, id);
+      const wasActive = chain?.isActive;
+      setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c));
+      // Создаём уведомление
+      if (chain) {
+        const status = wasActive ? 'выключена' : 'включена';
+        try {
+          await notificationsService.createNotification({
+            type: 'info',
+            title: 'Статус цепочки изменён',
+            message: `Цепочка "${chain.name}" ${status}`,
+          });
+        } catch (e) { /* ignore */ }
+      }
+    } catch (error) {
+      console.error('Failed to toggle chain:', error);
+      alert('Ошибка переключения статуса цепочки');
+    }
   };
 
   const handleCreateChain = () => {
@@ -576,30 +965,82 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     setIsChainModalOpen(true);
   };
 
-  const handleSaveChain = () => {
-    const chainData: Chain = {
-      id: editingChainId || Math.random().toString(36).substr(2, 9),
+  const handleSaveChain = async () => {
+    if (!agent?.id) return;
+
+    // Маппинг frontend -> backend
+    const backendData = {
       name: chainName,
       isActive: chainActive,
-      conditionType: chainAllStages ? 'all' : 'specific',
+      conditionType: (chainAllStages ? 'all' : 'specific') as 'all' | 'specific',
       conditionStages: chainStages,
       conditionExclude: chainExcludeCondition,
-      steps: chainSteps,
+      steps: chainSteps.map(s => ({
+        delayValue: s.delayValue,
+        delayUnit: s.delayUnit,
+        actions: s.actions.map(a => ({
+          actionType: a.type,
+          instruction: a.instruction,
+          params: a.params || {},
+        })),
+      })),
       schedule: chainSchedule,
-      runLimit: chainRunLimit
+      runLimit: chainRunLimit,
     };
 
-    if (editingChainId) {
-      setChains(prev => prev.map(c => c.id === editingChainId ? chainData : c));
-    } else {
-      setChains(prev => [...prev, chainData]);
+    try {
+      if (editingChainId) {
+        await chainsService.updateChain(agent.id, editingChainId, backendData);
+      } else {
+        await chainsService.createChain(agent.id, backendData);
+      }
+
+      // Перезагружаем список цепочек
+      const data = await chainsService.getChains(agent.id);
+      const formattedChains: Chain[] = data.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        isActive: c.isActive,
+        conditionType: c.conditionType || 'all',
+        conditionStages: c.conditions?.map((cond: any) => cond.stageId) || [],
+        conditionExclude: c.conditionExclude || '',
+        steps: c.steps?.map((s: any) => ({
+          id: s.id,
+          delayValue: s.delayValue,
+          delayUnit: s.delayUnit,
+          actions: s.actions?.map((a: any) => ({
+            id: a.id,
+            type: a.actionType,
+            instruction: a.instruction,
+            params: a.params || {},
+          })) || [],
+        })) || [],
+        schedule: c.schedules?.map((sch: any) => ({
+          day: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][sch.dayOfWeek] || 'Пн',
+          enabled: true,
+          start: sch.startTime || '09:00',
+          end: sch.endTime || '22:00',
+        })) || DEFAULT_WORKING_HOURS,
+        runLimit: c.runLimit || 0,
+      }));
+      setChains(formattedChains);
+      setIsChainModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save chain:', error);
+      alert('Ошибка сохранения цепочки');
     }
-    setIsChainModalOpen(false);
   };
 
-  const handleDeleteChain = (id: string) => {
-    if (confirm('Вы уверены, что хотите удалить эту цепочку?')) {
+  const handleDeleteChain = async (id: string) => {
+    if (!agent?.id) return;
+    if (!confirm('Вы уверены, что хотите удалить эту цепочку?')) return;
+
+    try {
+      await chainsService.deleteChain(agent.id, id);
       setChains(prev => prev.filter(c => c.id !== id));
+    } catch (error) {
+      console.error('Failed to delete chain:', error);
+      alert('Ошибка удаления цепочки');
     }
   };
 
@@ -607,21 +1048,67 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [triggerName, setTriggerName] = useState('');
   const [triggerActive, setTriggerActive] = useState(true);
   const [triggerCondition, setTriggerCondition] = useState('');
-  const [triggerActions, setTriggerActions] = useState<Array<{ id: string, action: string }>>([{ id: '1', action: '' }]);
+  const [triggerActions, setTriggerActions] = useState<TriggerAction[]>([{ id: '1', action: '', params: {} }]);
   const [triggerCancelMessage, setTriggerCancelMessage] = useState('');
   const [triggerRunLimit, setTriggerRunLimit] = useState(0);
   const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
   const [triggerLimit, setTriggerLimit] = useState(0);
-  const addTriggerAction = () => setTriggerActions(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), action: '' }]);
+  const [newTagInput, setNewTagInput] = useState<{ [key: string]: string }>({});
+  const [selectedFiles, setSelectedFiles] = useState<{ [key: string]: { name: string; size: number }[] }>({});
+
+  const addTriggerAction = () => setTriggerActions(prev => [...prev, { id: Math.random().toString(36).substr(2, 9), action: '', params: {} }]);
   const removeTriggerAction = (id: string) => setTriggerActions(prev => prev.filter(a => a.id !== id));
-  const updateTriggerAction = (id: string, val: string) => setTriggerActions(prev => prev.map(a => a.id === id ? { ...a, action: val } : a));
-  const toggleTriggerStatus = (id: string) => setTriggers(prev => prev.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t));
+  const updateTriggerAction = (id: string, val: string) => setTriggerActions(prev => prev.map(a => a.id === id ? { ...a, action: val, params: {} } : a));
+  const updateTriggerActionParams = (id: string, params: Partial<TriggerActionParams>) => {
+    setTriggerActions(prev => prev.map(a => a.id === id ? { ...a, params: { ...a.params, ...params } } : a));
+  };
+  const moveTriggerAction = (index: number, direction: 'up' | 'down') => {
+    setTriggerActions(prev => {
+      const newActions = [...prev];
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= newActions.length) return prev;
+      [newActions[index], newActions[newIndex]] = [newActions[newIndex], newActions[index]];
+      return newActions;
+    });
+  };
+  const toggleTriggerStatus = async (id: string) => {
+    if (!agent?.id) return;
+    const trigger = triggers.find(t => t.id === id);
+    const wasActive = trigger?.isActive;
+
+    // Оптимистичное обновление UI
+    setTriggers(prev => prev.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t));
+
+    try {
+      await triggersService.toggleTrigger(agent.id, id);
+      // Создаём уведомление
+      if (trigger) {
+        const status = wasActive ? 'выключен' : 'включен';
+        try {
+          await notificationsService.createNotification({
+            type: 'info',
+            title: 'Статус триггера изменён',
+            message: `Триггер "${trigger.name}" ${status}`,
+          });
+        } catch (e) { /* ignore */ }
+      }
+    } catch (error) {
+      console.error('Failed to toggle trigger:', error);
+      // Откатываем изменения при ошибке
+      setTriggers(prev => prev.map(t => t.id === id ? { ...t, isActive: !t.isActive } : t));
+    }
+  };
 
   const handleCreateTrigger = () => {
     setEditingTriggerId(null);
     setTriggerName('');
     setTriggerActive(true);
     setTriggerCondition('');
+    setTriggerActions([{ id: '1', action: '', params: {} }]);
+    setTriggerCancelMessage('');
+    setTriggerRunLimit(0);
+    setNewTagInput({});
+    setSelectedFiles({});
     setIsTriggerModalOpen(true);
   };
 
@@ -630,37 +1117,189 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     setTriggerName(trigger.name);
     setTriggerActive(trigger.isActive);
     setTriggerCondition(trigger.condition);
+    // Ensure backwards compatibility with old trigger format
+    setTriggerActions(trigger.actions.map(a => ({
+      ...a,
+      params: a.params || {}
+    })));
+    setTriggerCancelMessage(trigger.cancelMessage || '');
+    setTriggerRunLimit(trigger.runLimit || 0);
+    setNewTagInput({});
+    setSelectedFiles({});
     setIsTriggerModalOpen(true);
   };
 
-  const handleDeleteTrigger = (id: string) => {
+  const handleDeleteTrigger = async (id: string) => {
+    if (!agent?.id) return;
+
     if (confirm('Вы уверены, что хотите удалить этот триггер?')) {
-      setTriggers(prev => prev.filter(t => t.id !== id));
+      try {
+        await triggersService.deleteTrigger(agent.id, id);
+        setTriggers(prev => prev.filter(t => t.id !== id));
+      } catch (error) {
+        console.error('Failed to delete trigger:', error);
+        alert('Не удалось удалить триггер');
+      }
     }
   };
 
-  const handleSaveTrigger = () => {
-    const triggerData: Trigger = {
-      id: editingTriggerId || Math.random().toString(36).substr(2, 9),
-      name: triggerName,
+  const handleSaveTrigger = async () => {
+    if (!agent?.id) return;
+
+    // Валидация обязательных полей
+    if (!triggerName.trim()) {
+      alert('Пожалуйста, введите название триггера');
+      return;
+    }
+    if (!triggerCondition.trim()) {
+      alert('Пожалуйста, введите условие срабатывания');
+      return;
+    }
+    // Проверяем что есть хотя бы одно действие с выбранным типом
+    const validActions = triggerActions.filter(a => a.action && a.action.trim() !== '');
+    if (validActions.length === 0) {
+      alert('Пожалуйста, добавьте хотя бы одно действие');
+      return;
+    }
+
+    // Валидация обязательных параметров для каждого действия
+    for (const action of validActions) {
+      switch (action.action) {
+        case 'change_stage':
+          if (!action.params?.stageId) {
+            alert('Пожалуйста, выберите этап сделки для действия "Изменить этап сделки"');
+            return;
+          }
+          break;
+        case 'assign_user':
+          if (!action.params?.userId) {
+            alert('Пожалуйста, выберите пользователя для действия "Изменить ответственного"');
+            return;
+          }
+          break;
+        case 'create_task':
+          if (!action.params?.taskDescription?.trim()) {
+            alert('Пожалуйста, введите описание задачи');
+            return;
+          }
+          break;
+        case 'run_salesbot':
+          if (!action.params?.salesbotId) {
+            alert('Пожалуйста, выберите Salesbot');
+            return;
+          }
+          break;
+        case 'add_deal_tags':
+        case 'add_contact_tags':
+          if (!action.params?.tags || action.params.tags.length === 0) {
+            alert('Пожалуйста, добавьте хотя бы один тег');
+            return;
+          }
+          break;
+        case 'add_deal_note':
+        case 'add_contact_note':
+          if (!action.params?.noteText?.trim()) {
+            alert('Пожалуйста, введите текст примечания');
+            return;
+          }
+          break;
+        case 'send_message':
+          if (!action.params?.messageText?.trim()) {
+            alert('Пожалуйста, введите текст сообщения');
+            return;
+          }
+          break;
+        case 'send_email':
+          if (!action.params?.emailInstructions?.trim()) {
+            alert('Пожалуйста, введите инструкции для email');
+            return;
+          }
+          break;
+        case 'send_files':
+          if (!action.params?.fileUrls || action.params.fileUrls.length === 0) {
+            alert('Пожалуйста, выберите файлы для отправки');
+            return;
+          }
+          break;
+        case 'send_webhook':
+          if (!action.params?.webhookUrl?.trim()) {
+            alert('Пожалуйста, введите URL вебхука');
+            return;
+          }
+          break;
+        case 'send_kb_article':
+          if (!action.params?.articleId) {
+            alert('Пожалуйста, выберите статью из базы знаний');
+            return;
+          }
+          break;
+      }
+    }
+
+    const triggerRequest = {
+      name: triggerName.trim(),
       isActive: triggerActive,
-      condition: triggerCondition,
-      actions: triggerActions,
-      cancelMessage: triggerCancelMessage,
-      runLimit: triggerRunLimit
+      condition: triggerCondition.trim(),
+      actions: validActions.map(a => ({
+        action: a.action,
+        params: a.params,
+      })),
+      cancelMessage: triggerCancelMessage || undefined,
+      runLimit: triggerRunLimit || undefined,
     };
 
-    if (editingTriggerId) {
-      setTriggers(prev => prev.map(t => t.id === editingTriggerId ? triggerData : t));
-    } else {
-      setTriggers(prev => [...prev, triggerData]);
+    try {
+      if (editingTriggerId) {
+        // Обновляем существующий триггер
+        const updated = await triggersService.updateTrigger(agent.id, editingTriggerId, triggerRequest);
+        const formattedTrigger: Trigger = {
+          id: updated.id,
+          name: updated.name,
+          isActive: updated.isActive,
+          condition: updated.condition,
+          actions: updated.actions.map((a: any) => ({
+            id: a.id,
+            action: a.action,
+            params: a.params || {},
+          })),
+          cancelMessage: updated.cancelMessage,
+          runLimit: updated.runLimit,
+        };
+        setTriggers(prev => prev.map(t => t.id === editingTriggerId ? formattedTrigger : t));
+      } else {
+        // Создаем новый триггер
+        const created = await triggersService.createTrigger(agent.id, triggerRequest);
+        const formattedTrigger: Trigger = {
+          id: created.id,
+          name: created.name,
+          isActive: created.isActive,
+          condition: created.condition,
+          actions: created.actions.map((a: any) => ({
+            id: a.id,
+            action: a.action,
+            params: a.params || {},
+          })),
+          cancelMessage: created.cancelMessage,
+          runLimit: created.runLimit,
+        };
+        setTriggers(prev => [...prev, formattedTrigger]);
+      }
+      setIsTriggerModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save trigger:', error);
+      alert('Не удалось сохранить триггер');
     }
-    setIsTriggerModalOpen(false);
   };
 
   const TabButton = ({ id, label, icon: Icon }: { id: Tab, label: string, icon: any }) => (
     <button
-      onClick={() => setActiveTab(id)}
+      onClick={() => {
+        setActiveTab(id);
+        // При клике на вкладку "Интеграции" возвращаемся к списку интеграций
+        if (id === 'integrations') {
+          setIntegrationView('list');
+        }
+      }}
       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === id
         ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
         : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -819,17 +1458,19 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <Toggle checked={autoLanguage} onChange={setAutoLanguage} />
                   <span className="text-sm text-gray-900 dark:text-white">Автоматически определять язык пользователя</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Язык ответа</label>
-                  <input
-                    type="text"
-                    value={responseLanguage}
-                    onChange={(e) => setResponseLanguage(e.target.value)}
-                    placeholder="например, Английский"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Язык, который агент будет использовать для ответов пользователям</p>
-                </div>
+                {!autoLanguage && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Язык ответа</label>
+                    <input
+                      type="text"
+                      value={responseLanguage}
+                      onChange={(e) => setResponseLanguage(e.target.value)}
+                      placeholder="например, Английский"
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Язык, который агент будет использовать для ответов пользователям</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -855,32 +1496,26 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           <span className={`text-sm ${day.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{day.day}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <div className="relative">
-                            <input
-                              type="time"
-                              value={day.start}
-                              disabled={!day.enabled}
-                              onChange={(e) => {
-                                const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
-                                setAgentSchedule(newSchedule);
-                              }}
-                              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                          </div>
-                          <div className="relative">
-                            <input
-                              type="time"
-                              value={day.end}
-                              disabled={!day.enabled}
-                              onChange={(e) => {
-                                const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
-                                setAgentSchedule(newSchedule);
-                              }}
-                              className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                          </div>
+                          <input
+                            type="time"
+                            value={day.start}
+                            disabled={!day.enabled}
+                            onChange={(e) => {
+                              const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
+                              setAgentSchedule(newSchedule);
+                            }}
+                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <input
+                            type="time"
+                            value={day.end}
+                            disabled={!day.enabled}
+                            onChange={(e) => {
+                              const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
+                              setAgentSchedule(newSchedule);
+                            }}
+                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
                         </div>
                       </div>
                     ))}
@@ -896,45 +1531,6 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки ответа</h2>
               </div>
               <div className="p-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-white mb-3">Креативность</label>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setCreativity('precise')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'precise'
-                        ? 'border-[#0078D4] bg-[#0078D4] text-white'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                      <CheckCircle size={16} />
-                      Точный
-                    </button>
-                    <button
-                      onClick={() => setCreativity('balanced')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'balanced'
-                        ? 'border-[#0078D4] bg-[#0078D4] text-white'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                      <SlidersHorizontal size={16} />
-                      Сбалансированный
-                    </button>
-                    <button
-                      onClick={() => setCreativity('creative')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border transition-all ${creativity === 'creative'
-                        ? 'border-[#0078D4] bg-[#0078D4] text-white'
-                        : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                        }`}
-                    >
-                      <Sparkles size={16} />
-                      Креативный
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Управляйте стилем ответов агента. Точный: последовательный и предсказуемый, может звучать сухо. Сбалансированный: естественный и легко читаемый. Креативный: выразительный и разнообразный.
-                  </p>
-                </div>
-
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Задержка ответа (секунд)</label>
                   <input
@@ -955,15 +1551,29 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <h2 className="text-base font-medium text-gray-900 dark:text-white">Память и Контекст</h2>
               </div>
               <div className="p-6 space-y-6">
+                {/* Memory Toggle */}
                 <div className="flex items-center gap-3">
                   <Toggle checked={memoryEnabled} onChange={setMemoryEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Включить долговременную память</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">Долговременная память</span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Агент будет запоминать факты из разговоров и использовать Knowledge Graph для связывания информации.
-                  Это делает агента "сознательным" - он понимает контекст и связи между данными.
+                  Агент запоминает факты о каждом клиенте: имя, бюджет, потребности, возражения.
+                  Эти факты используются в следующих разговорах для персонализации.
                 </p>
 
+                {/* Graph Toggle */}
+                <div className="flex items-center gap-3">
+                  <Toggle checked={graphEnabled} onChange={setGraphEnabled} disabled={!memoryEnabled} />
+                  <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
+                    Граф связей
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Строить связи между клиентами, компаниями и фактами. Позволяет агенту видеть паттерны:
+                  "Иван из Альфа-Строй, которые партнёры Бета-Логистик - нашего клиента".
+                </p>
+
+                {/* Context Window */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Размер контекстного окна
@@ -974,36 +1584,194 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     onChange={(e) => setContextWindow(Number(e.target.value))}
                     min="5"
                     max="50"
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    disabled={!memoryEnabled}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Количество важных фактов и воспоминаний, которые агент будет учитывать при ответе (5-50)
+                    Количество фактов которые агент учитывает при ответе (5-50)
                   </p>
                 </div>
 
+                {/* Semantic Search Toggle */}
                 <div className="flex items-center gap-3">
-                  <Toggle checked={semanticSearchEnabled} onChange={setSemanticSearchEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Семантический поиск</span>
+                  <Toggle checked={semanticSearchEnabled} onChange={setSemanticSearchEnabled} disabled={!memoryEnabled} />
+                  <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
+                    Семантический поиск
+                  </span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Использовать векторные embeddings для поиска релевантной информации по смыслу, а не только по ключевым словам.
-                  Агент будет понимать запросы на более глубоком уровне.
+                  Поиск фактов по смыслу, а не по ключевым словам. Агент найдёт "бюджет ограничен"
+                  даже если клиент говорил "денег мало".
+                </p>
+              </div>
+            </div>
+
+            {/* Internal AI Models Card */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+                <Cpu size={20} className="text-gray-400" />
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">Внутренние модели ИИ</h2>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Настройте модели для внутренних операций агента. Эти модели используются для служебных задач
+                  и не влияют на основной диалог с клиентом.
                 </p>
 
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-4">
-                  <div className="flex items-start gap-3">
-                    <Sparkles size={18} className="text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <h3 className="text-sm font-medium text-blue-900 dark:text-blue-200 mb-1">
-                        Интеллектуальная память
-                      </h3>
-                      <p className="text-xs text-blue-700 dark:text-blue-300">
-                        Агент создает граф знаний из разговоров с клиентами, автоматически извлекает факты
-                        и связывает их с CRM данными. Это позволяет агенту быть "осознанным" и давать
-                        персонализированные ответы на основе всей истории взаимодействий.
-                      </p>
-                    </div>
-                  </div>
+                {/* Fact Extraction Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Извлечение фактов
+                  </label>
+                  <select
+                    value={factExtractionModel}
+                    onChange={(e) => setFactExtractionModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для извлечения фактов о клиенте из диалога
+                  </p>
+                </div>
+
+                {/* Trigger Evaluation Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Оценка триггеров
+                  </label>
+                  <select
+                    value={triggerEvaluationModel}
+                    onChange={(e) => setTriggerEvaluationModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для определения срабатывания AI-триггеров
+                  </p>
+                </div>
+
+                {/* Chain Message Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    AI сообщение в цепочке
+                  </label>
+                  <select
+                    value={chainMessageModel}
+                    onChange={(e) => setChainMessageModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для генерации AI-сообщений в цепочках действий
+                  </p>
+                </div>
+
+                {/* Email Generation Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Генерация email
+                  </label>
+                  <select
+                    value={emailGenerationModel}
+                    onChange={(e) => setEmailGenerationModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для генерации email-сообщений в триггерах
+                  </p>
+                </div>
+
+                {/* Instruction Parsing Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Парсинг инструкций
+                  </label>
+                  <select
+                    value={instructionParsingModel}
+                    onChange={(e) => setInstructionParsingModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для разбора инструкций этапов воронки
+                  </p>
+                </div>
+
+                {/* KB Analysis Model */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Анализ базы знаний
+                  </label>
+                  <select
+                    value={kbAnalysisModel}
+                    onChange={(e) => setKbAnalysisModel(e.target.value)}
+                    disabled={modelsLoading}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
+                  >
+                    {modelsLoading ? (
+                      <option>Загрузка моделей...</option>
+                    ) : (
+                      availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Модель для анализа контента базы знаний (рекомендуется мощная модель)
+                  </p>
                 </div>
               </div>
             </div>
@@ -1120,210 +1888,218 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             {/* Kommo Settings View */}
             {integrationView === 'kommo' && (
               <>
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Подключение</h3>
-
                 {!kommoConnected ? (
-                  <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 mb-4">
-                    <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <label htmlFor="kommoTokenInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Долгосрочный токен Kommo:
-                      </label>
-                      <textarea
-                        id="kommoTokenInput"
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-300"
-                        rows={3}
-                        placeholder="Вставьте токен сюда..."
-                        defaultValue="eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0aSI6IjRmNjBkMWMyMTJkNDkwOTJlNTY3N2Y1YzFkMmI3MmFiOGI4YzE4MjVhODEwOWZiMGFjYWM2MTJlZDQwODk0YjFjMDY5ZTQwZjNmYTBiNGRiIn0.eyJhdWQiOiIyYTVjMTQ2My00M2RkLTRjY2MtYWJkMC03OTUxNmY3ODVlNTciLCJqdGkiOiI0ZjYwZDFjMjEyZDQ5MDkyZTU2NzdmNWMxZDJiNzJhYjhiOGMxODI1YTgxMDlmYjBhY2FjNjEyZWQ0MDg5NGIxYzA2OWU0MGYzZmEwYjRkYiIsImlhdCI6MTc2NDAxOTczNywibmJmIjoxNzY0MDE5NzM3LCJleHAiOjE4NDg3MDA4MDAsInN1YiI6IjEyNzYwMzgzIiwiZ3JhbnRfdHlwZSI6IiIsImFjY291bnRfaWQiOjM0MjEwMzA3LCJiYXNlX2RvbWFpbiI6ImtvbW1vLmNvbSIsInZlcnNpb24iOjIsInNjb3BlcyI6WyJjcm0iLCJmaWxlcyIsImZpbGVzX2RlbGV0ZSIsIm5vdGlmaWNhdGlvbnMiLCJwdXNoX25vdGlmaWNhdGlvbnMiXSwiaGFzaF91dWlkIjoiZmRmZWFiMmUtYTBmNC00NzljLWJiYmMtOTY0OThkN2U2NTNlIiwidXNlcl9mbGFncyI6MCwiYXBpX2RvbWFpbiI6ImFwaS1nLmtvbW1vLmNvbSJ9.gb1UkZnVBWRn2xDlkVNsVNRbFuGPoGakEfbqDGi-mkOFYSC4aX2FtAQFgo9xraZo8Mln3ult23qQfPjBk8uqzIlXfoXoPAgW8XjOHddBqhIn0QRRUdjMSgs_lHYEs61j2MLm5vSppJe07bi4kSegJqIdUCW2kKx3I5ZDLwPapmrByOrU1T9TCdGGVQXIdFACvmmxvOribpZOtBU75VtgQ-1Jmn7oqnWOMa6es0Ztw7b01raBXC_0sReOFLb7a0l1Rk93aAAkxJAQ2uuebwYcoE4mxZKrwOmH7YsevdtVti9XWtRK87NiRQBi-CVFsOGO63mp1VQK8HPpe4SPRN6GMA"
-                      />
-                      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        ☝️ Токен уже вставлен. Просто нажмите кнопку "Подключить через токен".
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={async () => {
-                        if (!agent) return;
-
-                        const tokenInput = document.getElementById('kommoTokenInput') as HTMLTextAreaElement;
-                        const token = tokenInput?.value.trim();
-
-                        if (!token) {
-                          alert('Вставьте токен в поле выше!');
-                          return;
-                        }
-
-                        try {
-                          console.log('🔑 Connecting Kommo with long-lived token...');
-
-                          // Find or create kommo integration
-                          let kommoIntegration = integrations.find((i: any) => i.integrationType === 'kommo');
-
-                          if (!kommoIntegration) {
-                            console.log('🔵 Creating new Kommo integration...');
-                            kommoIntegration = await integrationsService.upsertIntegration(
-                              agent.id,
-                              'kommo',
-                              kommoActive,
-                              false
-                            );
-                            await refreshIntegrations();
-                            console.log('✅ Integration created:', kommoIntegration.id);
-                          }
-
-                          // Connect with token
-                          await integrationsService.connectKommoWithToken(kommoIntegration.id, token);
-
-                          console.log('✅ Kommo connected with token!');
-                          setKommoConnected(true);
-                          await refreshIntegrations();
-                          alert('Kommo успешно подключен через токен!');
-                          tokenInput.value = ''; // Clear token after success
-                        } catch (error: any) {
-                          console.error('❌ Failed to connect with token:', error);
-                          alert(`Не удалось подключить Kommo: ${error.response?.data?.message || error.message}`);
-                        }
-                      }}
-                      className="flex items-center gap-3 bg-green-600 hover:bg-green-700 text-white rounded-md px-4 py-2.5 transition-colors font-medium text-sm shadow-sm w-full justify-center mb-3"
-                    >
-                      🔑 Подключить через токен
-                    </button>
-
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t border-gray-300 dark:border-gray-600"></span>
+                  /* Секция "Не подключено" - современный дизайн */
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                        <LinkIcon size={20} className="text-blue-600 dark:text-blue-400" />
                       </div>
-                      <div className="relative flex justify-center text-xs">
-                        <span className="px-2 bg-white dark:bg-gray-800 text-gray-500">или используйте OAuth (не работает)</span>
+                      <div>
+                        <h3 className="text-base font-medium text-gray-900 dark:text-white">Подключение Kommo CRM</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Синхронизируйте воронки, этапы и пользователей</p>
                       </div>
                     </div>
 
-                    <button
-                      onClick={async () => {
-                        if (!agent) return;
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Как получить токен:</h4>
+                      <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+                        <li className="flex items-start gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">1</span>
+                          <span>Войдите в Kommo → Настройки → Интеграции</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">2</span>
+                          <span>Создайте приватную интеграцию</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">3</span>
+                          <span>Скопируйте долгосрочный токен</span>
+                        </li>
+                      </ol>
+                    </div>
 
-                        try {
-                          console.log('🔵 Starting Kommo OAuth flow...');
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="kommoTokenInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Долгосрочный токен
+                        </label>
+                        <textarea
+                          id="kommoTokenInput"
+                          className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300 resize-none"
+                          rows={3}
+                          placeholder="Вставьте токен сюда..."
+                        />
+                      </div>
 
-                          // Find or create kommo integration
-                          let kommoIntegration = integrations.find((i: any) => i.integrationType === 'kommo');
-
-                          if (!kommoIntegration) {
-                            console.log('🔵 Creating new Kommo integration...');
-                            // Create integration first
-                            kommoIntegration = await integrationsService.upsertIntegration(
-                              agent.id,
-                              'kommo',
-                              kommoActive,
-                              false
-                            );
-                            await refreshIntegrations();
-                            console.log('✅ Integration created:', kommoIntegration.id);
+                      <button
+                        onClick={async () => {
+                          if (!agent) {
+                            alert('Ошибка: агент не загружен');
+                            return;
                           }
 
-                          // Get OAuth URL (baseDomain is taken from .env on backend)
-                          console.log('🔵 Fetching OAuth URL for integration:', kommoIntegration.id);
-                          const response = await apiClient.get('/kommo/auth', {
-                            params: {
-                              integrationId: kommoIntegration.id,
-                            },
-                          });
+                          const tokenInput = document.getElementById('kommoTokenInput') as HTMLTextAreaElement;
+                          const token = tokenInput?.value.trim();
 
-                          console.log('🔵 OAuth URL response:', response.data);
+                          if (!token) {
+                            alert('Вставьте токен в поле выше!');
+                            return;
+                          }
 
-                          if (response.data.authUrl) {
-                            console.log('🔵 Opening popup:', response.data.authUrl);
+                          setIsSaving(true);
+                          try {
+                            let kommoIntegration = integrations.find((i: any) => i.integrationType === 'kommo');
 
-                            // Open OAuth URL in popup
-                            const width = 600;
-                            const height = 700;
-                            const left = window.screen.width / 2 - width / 2;
-                            const top = window.screen.height / 2 - height / 2;
-
-                            const popup = window.open(
-                              response.data.authUrl,
-                              'Kommo Authorization',
-                              `width=${width},height=${height},left=${left},top=${top}`
-                            );
-
-                            if (!popup) {
-                              alert('Popup заблокирован! Разрешите всплывающие окна для этого сайта.');
-                              return;
+                            if (!kommoIntegration) {
+                              kommoIntegration = await integrationsService.upsertIntegration(
+                                agent.id,
+                                'kommo',
+                                true,
+                                false
+                              );
+                              await refreshIntegrations();
                             }
 
-                            // Listen for postMessage from popup
-                            const messageHandler = (event: MessageEvent) => {
-                              console.log('🔵 Received postMessage:', event.data);
+                            await integrationsService.connectKommoWithToken(kommoIntegration.id, token);
 
-                              if (event.data.type === 'kommo_oauth_success') {
-                                console.log('✅ OAuth success!');
-                                window.removeEventListener('message', messageHandler);
-                                setKommoConnected(true);
-                                refreshIntegrations();
-                                alert('Kommo успешно подключен!');
-                              }
-                            };
+                            // Auto-enable toggle
+                            setKommoConnected(true);
+                            setKommoActive(true);
+                            await integrationsService.upsertIntegration(agent.id, 'kommo', true, true);
+                            await refreshIntegrations();
 
-                            window.addEventListener('message', messageHandler);
-
-                            // Also refresh after 5 seconds as fallback
-                            setTimeout(async () => {
-                              console.log('🔵 Timeout refresh...');
-                              await refreshIntegrations();
-                              const updated = integrations.find((i: any) => i.integrationType === 'kommo');
-                              if (updated?.isConnected) {
-                                setKommoConnected(true);
-                                console.log('✅ Kommo connected via timeout check');
-                              }
-                            }, 5000);
-                          } else {
-                            console.error('❌ No authUrl in response');
-                            alert('Не удалось получить URL авторизации');
+                            tokenInput.value = '';
+                            alert('Kommo успешно подключен!');
+                          } catch (error: any) {
+                            console.error('Failed to connect with token:', error);
+                            alert(`Ошибка: ${error.response?.data?.message || error.message}`);
+                          } finally {
+                            setIsSaving(false);
                           }
-                        } catch (error: any) {
-                          console.error('❌ Failed to initiate Kommo OAuth:', error);
-                          alert(`Не удалось подключить Kommo: ${error.response?.data?.message || error.message}`);
-                        }
                         }}
-                        className="flex items-center gap-3 bg-gray-400 hover:bg-gray-500 text-white rounded-md px-4 py-2.5 transition-colors font-medium text-sm shadow-sm w-full justify-center mt-3 opacity-50 cursor-not-allowed"
-                        disabled
+                        disabled={isSaving}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-3 transition-colors font-medium text-sm shadow-sm"
                       >
-                        OAuth подключение (временно недоступно)
+                        {isSaving ? (
+                          <>
+                            <RefreshCw size={18} className="animate-spin" />
+                            Подключение...
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon size={18} />
+                            Подключить Kommo
+                          </>
+                        )}
                       </button>
                     </div>
-                  ) : (
-                    <div className="border border-green-200 dark:border-green-600 bg-green-50 dark:bg-green-900/20 rounded-lg p-4 mb-6">
-                      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                        <CheckCircle size={20} />
-                        <span className="font-medium">Kommo аккаунт подключен</span>
+                  </div>
+                ) : (
+                  /* Секция "Подключено" - статус и статистика */
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                          <CheckCircle size={20} className="text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-base font-medium text-gray-900 dark:text-white">Kommo CRM подключен</h3>
+                          <p className="text-sm text-green-600 dark:text-green-400">Интеграция активна</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                      <button
+                        onClick={async () => {
+                          if (!agent) return;
+                          if (!confirm('Отключить Kommo CRM?')) return;
 
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Общие настройки</h3>
-
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <Toggle checked={kommoActive} onChange={handleKommoActiveChange} />
-                      <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                          try {
+                            setKommoConnected(false);
+                            setKommoActive(false);
+                            setKommoSyncStats(null);
+                            await integrationsService.upsertIntegration(agent.id, 'kommo', false, false);
+                            await refreshIntegrations();
+                          } catch (error) {
+                            console.error('Failed to disconnect Kommo:', error);
+                          }
+                        }}
+                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
+                      >
+                        Отключить
+                      </button>
                     </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Включить или отключить эту интеграцию</p>
+
+                    {/* Синхронизированные данные */}
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Синхронизированные данные:</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Воронки продаж</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.pipelines || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Этапы воронок</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.stages || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Пользователи CRM</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.users || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Поля сделок</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.dealFields || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Поля контактов</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.contactFields || 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Каналы связи</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.channels || 0}</span>
+                        </div>
+                      </div>
+                      {kommoSyncStats?.lastSync && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
+                          Последняя синхронизация: {new Date(kommoSyncStats.lastSync).toLocaleString('ru-RU')}
+                        </div>
+                      )}
+                    </div>
 
                     <button
-                      onClick={handleSyncCRM}
-                      disabled={isSaving || !kommoConnected}
-                      className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2 w-fit disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={async () => {
+                        if (!agent) return;
+                        setIsSaving(true);
+                        try {
+                          await integrationsService.syncKommo(agent.id, '');
+                          const stats = await integrationsService.getKommoSyncStats(agent.id);
+                          setKommoSyncStats(stats);
+                          alert(`Синхронизация завершена\n${new Date().toLocaleString('ru-RU')}`);
+                        } catch (error: any) {
+                          console.error('Failed to sync:', error);
+                          alert(`Ошибка синхронизации: ${error.message}`);
+                        } finally {
+                          setIsSaving(false);
+                        }
+                      }}
+                      disabled={isSaving}
+                      className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-2.5 transition-colors font-medium text-sm shadow-sm"
                     >
                       <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
-                      {isSaving ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
+                      {isSaving ? 'Синхронизация...' : 'Синхронизировать'}
                     </button>
-                    {!kommoConnected && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        Сначала подключите Kommo аккаунт для синхронизации данных
-                      </p>
-                    )}
+                  </div>
+                )}
+
+                {/* Общие настройки */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
+                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">Общие настройки</h3>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm text-gray-900 dark:text-white">Интеграция активна</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Включить или отключить использование данных CRM</p>
+                    </div>
+                    <Toggle checked={kommoActive} onChange={handleKommoActiveChange} />
                   </div>
                 </div>
 
@@ -1348,40 +2124,278 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             {integrationView === 'google_calendar' && (
               <>
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-6">Подключение</h3>
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-base font-medium text-gray-900 dark:text-white">Подключенные сотрудники</h3>
+                    <div className="flex items-center gap-3">
+                      <Toggle checked={googleCalendarActive} onChange={handleGoogleCalendarActiveChange} />
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {googleCalendarActive ? 'Активно' : 'Неактивно'}
+                      </span>
+                    </div>
+                  </div>
 
-                  <div className="border border-gray-200 dark:border-gray-600 rounded-lg p-6 mb-4">
+                  {/* Employees List */}
+                  <div className="space-y-3 mb-6">
+                    {calendarEmployees.length === 0 ? (
+                      <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
+                        <Calendar className="mx-auto mb-3 text-gray-400" size={32} />
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Нет подключенных сотрудников</p>
+                        <p className="text-gray-400 dark:text-gray-500 text-xs">Добавьте сотрудников CRM для синхронизации их календарей</p>
+                      </div>
+                    ) : (
+                      calendarEmployees.map((employee) => (
+                        <div
+                          key={employee.id}
+                          className="flex items-center justify-between border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-750"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              employee.status === 'connected'
+                                ? 'bg-green-100 dark:bg-green-900/30'
+                                : 'bg-amber-100 dark:bg-amber-900/30'
+                            }`}>
+                              <User size={20} className={
+                                employee.status === 'connected'
+                                  ? 'text-green-600 dark:text-green-400'
+                                  : 'text-amber-600 dark:text-amber-400'
+                              } />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 dark:text-white text-sm">{employee.crmUserName}</p>
+                              {employee.status === 'connected' ? (
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{employee.googleEmail}</p>
+                              ) : (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">Ожидает авторизации</p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {employee.status === 'connected' ? (
+                              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
+                                Подключен
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  // Regenerate invite and show URL
+                                  setSelectedCrmUser({ id: employee.crmUserId, name: employee.crmUserName });
+                                  googleCalendarService.createInvite(agent!.id, employee.crmUserId, employee.crmUserName)
+                                    .then(response => {
+                                      setInviteUrl(response.inviteUrl);
+                                    })
+                                    .catch(err => console.error('Failed to regenerate invite:', err));
+                                }}
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs"
+                              >
+                                Получить ссылку
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (confirm('Удалить этого сотрудника?')) {
+                                  try {
+                                    await googleCalendarService.deleteEmployee(employee.id);
+                                    const newEmployees = calendarEmployees.filter(e => e.id !== employee.id);
+                                    setCalendarEmployees(newEmployees);
+
+                                    // Если удалён последний connected сотрудник - автовыключаем интеграцию
+                                    const hasConnected = newEmployees.some(e => e.status === 'connected');
+                                    if (!hasConnected && googleCalendarActive) {
+                                      setGoogleCalendarActive(false);
+                                      setGoogleCalendarConnected(false);
+                                      integrationsService.upsertIntegration(agent!.id, 'google_calendar', false, false)
+                                        .catch(err => console.error('Failed to disable Google Calendar:', err));
+                                    }
+                                  } catch (error) {
+                                    console.error('Failed to delete employee:', error);
+                                  }
+                                }
+                              }}
+                              className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Add Employee Button */}
+                  <button
+                    onClick={() => setIsAddEmployeeModalOpen(true)}
+                    className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
+                  >
+                    <Plus size={18} />
+                    Добавить сотрудника
+                  </button>
+                </div>
+
+                {/* Invite URL Display */}
+                {inviteUrl && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
+                      Ссылка для авторизации ({selectedCrmUser?.name})
+                    </h4>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={inviteUrl}
+                        className="flex-1 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteUrl);
+                          alert('Ссылка скопирована!');
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium"
+                      >
+                        Копировать
+                      </button>
+                    </div>
+                    <p className="text-xs text-blue-700 dark:text-blue-400 mt-2">
+                      Отправьте эту ссылку сотруднику. Он должен перейти по ней и авторизоваться через Google.
+                    </p>
                     <button
                       onClick={() => {
-                        setGoogleCalendarConnected(true);
-                        setGoogleCalendarActive(true);
+                        setInviteUrl(null);
+                        setSelectedCrmUser(null);
                       }}
-                      className="flex items-center gap-3 border border-gray-300 dark:border-gray-500 rounded-md px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors bg-white dark:bg-gray-600 text-gray-700 dark:text-white font-medium text-sm shadow-sm"
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2"
                     >
-                      <GoogleIcon />
-                      Войти через Google
+                      Закрыть
                     </button>
                   </div>
-
-                  <div className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    Подключая аккаунт Google, вы предоставляете доступ к своим календарям для бронирования. Вы можете отозвать доступ в любое время в настройках аккаунта Google. <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Политика конфиденциальности</a>.
-                  </div>
-                </div>
+                )}
 
                 <div className="flex items-center gap-4 pt-2">
                   <button
                     className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                     onClick={() => setIntegrationView('list')}
                   >
-                    Сохранить изменения
+                    Готово
                   </button>
                   <button
                     onClick={() => setIntegrationView('list')}
                     className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                   >
-                    Отменить
+                    Назад
                   </button>
                 </div>
+
+                {/* Add Employee Modal */}
+                {isAddEmployeeModalOpen && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
+                      setIsAddEmployeeModalOpen(false);
+                      setSelectedCrmUser(null);
+                      setInviteUrl(null);
+                    }} />
+                    <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
+                      <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Добавить сотрудника</h3>
+                        <button
+                          onClick={() => {
+                            setIsAddEmployeeModalOpen(false);
+                            setSelectedCrmUser(null);
+                            setInviteUrl(null);
+                          }}
+                          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="p-5">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Выберите сотрудника из CRM
+                        </label>
+                        <select
+                          value={selectedCrmUser?.id || ''}
+                          onChange={(e) => {
+                            const users = crmData?.users || MOCK_USERS;
+                            const user = users.find((u: any) => u.id === e.target.value);
+                            if (user) {
+                              setSelectedCrmUser({ id: user.id, name: user.name });
+                            }
+                          }}
+                          className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                        >
+                          <option value="">Выберите сотрудника...</option>
+                          {(crmData?.users || MOCK_USERS).map((user: any) => (
+                            <option key={user.id} value={user.id}>{user.name}</option>
+                          ))}
+                        </select>
+
+                        {selectedCrmUser && !inviteUrl && (
+                          <button
+                            onClick={async () => {
+                              if (!agent?.id || !selectedCrmUser) return;
+                              setIsCreatingInvite(true);
+                              try {
+                                const response = await googleCalendarService.createInvite(
+                                  agent.id,
+                                  selectedCrmUser.id,
+                                  selectedCrmUser.name
+                                );
+                                setInviteUrl(response.inviteUrl);
+                                // Refresh employees list
+                                const employees = await googleCalendarService.getEmployees(agent.id);
+                                setCalendarEmployees(employees);
+                              } catch (error: any) {
+                                alert(error.response?.data?.message || 'Не удалось создать приглашение');
+                              } finally {
+                                setIsCreatingInvite(false);
+                              }
+                            }}
+                            disabled={isCreatingInvite}
+                            className="mt-4 w-full bg-[#0078D4] hover:bg-[#006cbd] disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
+                          >
+                            {isCreatingInvite ? 'Создание...' : 'Создать ссылку-приглашение'}
+                          </button>
+                        )}
+
+                        {inviteUrl && (
+                          <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
+                            <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">Ссылка создана!</p>
+                            <div className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                readOnly
+                                value={inviteUrl}
+                                className="flex-1 bg-white dark:bg-gray-800 border border-green-200 dark:border-green-600 rounded px-2 py-1.5 text-xs text-gray-700 dark:text-gray-300"
+                              />
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(inviteUrl);
+                                  alert('Ссылка скопирована!');
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-medium"
+                              >
+                                Копировать
+                              </button>
+                            </div>
+                            <p className="text-xs text-green-700 dark:text-green-400">
+                              Отправьте эту ссылку сотруднику {selectedCrmUser?.name}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex justify-end gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          onClick={() => {
+                            setIsAddEmployeeModalOpen(false);
+                            setSelectedCrmUser(null);
+                            setInviteUrl(null);
+                          }}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                          Закрыть
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1399,6 +2413,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
               onCancel={handleCancel}
               crmConnected={kommoConnected}
               kbCategories={kbCategories}
+              kbArticles={kbArticles}
               onNavigateToKbArticles={() => onNavigate('kb-articles')}
               onSyncCRM={handleSyncCRM}
             />
@@ -1475,7 +2490,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           </button>
                         </td>
                         <td className="p-4"><Toggle checked={t.isActive} onChange={() => toggleTriggerStatus(t.id)} /></td>
-                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">{t.condition}</td>
+                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs" title={t.condition}>{t.condition}</td>
                         <td className="p-4 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-4">
                             <button onClick={() => handleEditTrigger(t)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
@@ -1519,28 +2534,49 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     {/* Условие */}
                     <div>
                       <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Условие<span className="text-red-500">*</span></label>
-                      <input
-                        type="text"
+                      <textarea
                         value={triggerCondition}
                         onChange={(e) => setTriggerCondition(e.target.value)}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                        placeholder="Например, если клиент просит оплатить"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 min-h-[80px]"
+                        placeholder="Опишите условие на естественном языке, например: клиент просит оплатить, клиент интересуется ценой, клиент хочет отменить заказ"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Укажите, когда этот триггер должен срабатывать</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">AI проанализирует сообщение и определит, выполнено ли условие</p>
                     </div>
 
                     {/* Действия */}
                     <div>
                       <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Действия<span className="text-red-500">*</span></label>
                       <div className="space-y-4">
-                        {triggerActions.map((action, index) => (
+                        {triggerActions.map((action, index) => {
+                          const actionName = availableActions.find((a: any) => a.id === action.action)?.name || '';
+                          return (
                           <div key={action.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
                             <div className="flex items-center justify-between mb-3">
-                              <div className="text-gray-400 cursor-move">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M7 15l5 5 5-5" />
-                                  <path d="M7 9l5-5 5 5" />
-                                </svg>
+                              <div className="flex items-center gap-2">
+                                {triggerActions.length > 1 && (
+                                  <div className="flex flex-col gap-0.5">
+                                    <button
+                                      onClick={() => moveTriggerAction(index, 'up')}
+                                      disabled={index === 0}
+                                      className={`p-0.5 rounded ${index === 0 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                      type="button"
+                                      title="Переместить вверх"
+                                    >
+                                      <ArrowUp size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => moveTriggerAction(index, 'down')}
+                                      disabled={index === triggerActions.length - 1}
+                                      className={`p-0.5 rounded ${index === triggerActions.length - 1 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                      type="button"
+                                      title="Переместить вниз"
+                                    >
+                                      <ArrowDown size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                                <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">#{index + 1}</span>
+                                {action.action && <span className="text-sm font-medium text-gray-900 dark:text-white">{actionName}</span>}
                               </div>
                               {triggerActions.length > 1 && (
                                 <button
@@ -1553,32 +2589,559 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               )}
                             </div>
 
-                            <div>
-                              <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Выберите действие<span className="text-red-500">*</span></label>
-                              <select
-                                value={action.action}
-                                onChange={(e) => {
-                                  const newActions = [...triggerActions];
-                                  newActions[index].action = e.target.value;
-                                  setTriggerActions(newActions);
-                                }}
-                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
-                                style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
-                              >
-                                <option value="">Выбрать вариант</option>
-                                {availableActions.map((actionOption: any) => (
-                                  <option key={actionOption.id} value={actionOption.id}>
-                                    {actionOption.name}
-                                  </option>
-                                ))}
-                              </select>
+                            <div className="space-y-4">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Выберите действие<span className="text-red-500">*</span></label>
+                                <select
+                                  value={action.action}
+                                  onChange={(e) => updateTriggerAction(action.id, e.target.value)}
+                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                  style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                >
+                                  <option value="">Выбрать вариант</option>
+                                  {availableActions.map((actionOption: any) => (
+                                    <option key={actionOption.id} value={actionOption.id}>
+                                      {actionOption.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Dynamic fields based on action type */}
+                              {action.action === 'change_stage' && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Этап сделки<span className="text-red-500">*</span></label>
+                                  <select
+                                    value={action.params?.stageId || ''}
+                                    onChange={(e) => updateTriggerActionParams(action.id, { stageId: e.target.value })}
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                    style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                  >
+                                    <option value="">Выберите этап</option>
+                                    {availablePipelines.map((pipeline: any) => (
+                                      <optgroup key={pipeline.id} label={pipeline.name}>
+                                        {pipeline.stages.map((stage: any) => (
+                                          <option key={stage.id} value={stage.id}>{pipeline.name} - {stage.name}</option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {action.action === 'assign_user' && (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Применить к<span className="text-red-500">*</span></label>
+                                    <select
+                                      value={action.params?.applyTo || 'deal'}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { applyTo: e.target.value as 'deal' | 'contact' | 'both' })}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                      style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                    >
+                                      <option value="deal">Сделка</option>
+                                      <option value="contact">Контакт</option>
+                                      <option value="both">Сделка и контакт</option>
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Выберите, для каких объектов изменить ответственного пользователя</p>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Ответственный пользователь<span className="text-red-500">*</span></label>
+                                    <select
+                                      value={action.params?.userId || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { userId: e.target.value })}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                      style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                    >
+                                      <option value="">Выберите ответственного пользователя</option>
+                                      {(crmData?.users || MOCK_USERS).map((user: any) => (
+                                        <option key={user.id} value={user.id}>{user.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+
+                              {action.action === 'create_task' && (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Описание задачи<span className="text-red-500">*</span></label>
+                                    <input
+                                      type="text"
+                                      value={action.params?.taskDescription || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { taskDescription: e.target.value })}
+                                      placeholder="Введите описание задачи"
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Ответственный пользователь</label>
+                                    <select
+                                      value={action.params?.taskUserId || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { taskUserId: e.target.value })}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                      style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                    >
+                                      <option value="">Выберите ответственного пользователя</option>
+                                      {(crmData?.users || MOCK_USERS).map((user: any) => (
+                                        <option key={user.id} value={user.id}>{user.name}</option>
+                                      ))}
+                                    </select>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Если не выбран, будет использоваться ответственный пользователь сделки</p>
+                                  </div>
+                                </>
+                              )}
+
+                              {action.action === 'run_salesbot' && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Salesbot<span className="text-red-500">*</span></label>
+                                  <select
+                                    value={action.params?.salesbotId || ''}
+                                    onChange={(e) => updateTriggerActionParams(action.id, { salesbotId: e.target.value })}
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                    style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                  >
+                                    <option value="">Выберите Salesbot</option>
+                                    {(crmData?.salesbots?.length ? crmData.salesbots : MOCK_SALESBOTS).map((bot: any) => (
+                                      <option key={bot.id} value={bot.id}>{bot.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
+
+                              {(action.action === 'add_deal_tags' || action.action === 'add_contact_tags') && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">
+                                    {action.action === 'add_deal_tags' ? 'Теги сделки' : 'Теги контакта'}<span className="text-red-500">*</span>
+                                  </label>
+                                  <div className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700">
+                                    <input
+                                      type="text"
+                                      value={newTagInput[action.id] || ''}
+                                      onChange={(e) => setNewTagInput(prev => ({ ...prev, [action.id]: e.target.value }))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newTagInput[action.id]?.trim()) {
+                                          e.preventDefault();
+                                          const currentTags = action.params?.tags || [];
+                                          if (!currentTags.includes(newTagInput[action.id].trim())) {
+                                            updateTriggerActionParams(action.id, { tags: [...currentTags, newTagInput[action.id].trim()] });
+                                          }
+                                          setNewTagInput(prev => ({ ...prev, [action.id]: '' }));
+                                        }
+                                      }}
+                                      placeholder="Новый тег"
+                                      className="w-full text-sm bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
+                                    />
+                                    {(action.params?.tags || []).length > 0 && (
+                                      <div className="flex flex-wrap gap-2 mt-2">
+                                        {(action.params?.tags || []).map((tag, tagIndex) => (
+                                          <span key={tagIndex} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded">
+                                            {tag}
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const newTags = (action.params?.tags || []).filter((_, i) => i !== tagIndex);
+                                                updateTriggerActionParams(action.id, { tags: newTags });
+                                              }}
+                                              className="text-blue-600 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-100"
+                                            >
+                                              <X size={12} />
+                                            </button>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {(action.action === 'add_deal_note' || action.action === 'add_contact_note') && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Текст примечания<span className="text-red-500">*</span></label>
+                                  <textarea
+                                    value={action.params?.noteText || ''}
+                                    onChange={(e) => updateTriggerActionParams(action.id, { noteText: e.target.value })}
+                                    placeholder="Введите текст примечания"
+                                    rows={3}
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
+                                  />
+                                </div>
+                              )}
+
+                              {action.action === 'send_message' && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Текст сообщения<span className="text-red-500">*</span></label>
+                                  <textarea
+                                    value={action.params?.messageText || ''}
+                                    onChange={(e) => updateTriggerActionParams(action.id, { messageText: e.target.value })}
+                                    placeholder="Введите текст сообщения"
+                                    rows={3}
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
+                                  />
+                                </div>
+                              )}
+
+                              {action.action === 'send_email' && (
+                                <div className="space-y-4">
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Инструкции для письма<span className="text-red-500">*</span></label>
+                                    <textarea
+                                      value={action.params?.emailInstructions || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { emailInstructions: e.target.value })}
+                                      placeholder="Например: Отправь приветственное письмо с информацией о наших услугах и контактами менеджера"
+                                      rows={3}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">AI сгенерирует тему и текст письма. Email отправится на адрес контакта из сделки.</p>
+                                  </div>
+
+                                  {/* Вложения для email */}
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Вложения</label>
+                                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-4 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
+                                      <input
+                                        type="file"
+                                        multiple
+                                        className="hidden"
+                                        id={`email-attachment-${action.id}`}
+                                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                          const files = e.target.files;
+                                          if (files && files.length > 0) {
+                                            const fileArray = Array.from(files) as File[];
+                                            const fileInfos = fileArray.map((f: File) => ({ name: f.name, size: f.size }));
+                                            setSelectedFiles((prev: { [key: string]: { name: string; size: number }[] }) => ({
+                                              ...prev,
+                                              [`email-${action.id}`]: [...(prev[`email-${action.id}`] || []), ...fileInfos]
+                                            }));
+                                            const currentAttachments = action.params?.emailAttachments || [];
+                                            const newAttachments = fileArray.map((f: File) => f.name);
+                                            updateTriggerActionParams(action.id, { emailAttachments: [...currentAttachments, ...newAttachments] });
+                                          }
+                                          e.target.value = '';
+                                        }}
+                                      />
+                                      <label htmlFor={`email-attachment-${action.id}`} className="cursor-pointer">
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                          Перетащите файлы или <span className="text-blue-600 dark:text-blue-400 hover:underline">выберите</span>
+                                        </p>
+                                      </label>
+                                    </div>
+
+                                    {/* Список вложений */}
+                                    {(selectedFiles[`email-${action.id}`]?.length > 0 || (action.params?.emailAttachments?.length || 0) > 0) && (
+                                      <div className="mt-2 space-y-2">
+                                        {(selectedFiles[`email-${action.id}`] || action.params?.emailAttachments?.map((name: string) => ({ name, size: 0 })) || []).map((file: { name: string; size: number }, fileIndex: number) => (
+                                          <div key={fileIndex} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-md px-3 py-2">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-sm text-gray-900 dark:text-white truncate max-w-[200px]">{file.name}</span>
+                                              {file.size > 0 && (
+                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                  ({(file.size / 1024).toFixed(1)} KB)
+                                                </span>
+                                              )}
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedFiles((prev: { [key: string]: { name: string; size: number }[] }) => ({
+                                                  ...prev,
+                                                  [`email-${action.id}`]: (prev[`email-${action.id}`] || []).filter((_: { name: string; size: number }, i: number) => i !== fileIndex)
+                                                }));
+                                                const newAttachments = (action.params?.emailAttachments || []).filter((_: string, i: number) => i !== fileIndex);
+                                                updateTriggerActionParams(action.id, { emailAttachments: newAttachments });
+                                              }}
+                                              className="text-red-500 hover:text-red-700"
+                                            >
+                                              <X size={16} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Файлы будут отправлены как вложения к письму.</p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {action.action === 'send_files' && (
+                                <div>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Файлы для отправки<span className="text-red-500">*</span></label>
+                                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
+                                    <input
+                                      type="file"
+                                      multiple
+                                      className="hidden"
+                                      id={`file-upload-${action.id}`}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const files = e.target.files;
+                                        if (files && files.length > 0) {
+                                          const fileArray = Array.from(files) as File[];
+                                          const fileInfos = fileArray.map((f: File) => ({ name: f.name, size: f.size }));
+                                          setSelectedFiles((prev: { [key: string]: { name: string; size: number }[] }) => ({
+                                            ...prev,
+                                            [action.id]: [...(prev[action.id] || []), ...fileInfos]
+                                          }));
+                                          // Сохраняем имена файлов в params
+                                          const currentUrls = action.params?.fileUrls || [];
+                                          const newUrls = fileArray.map((f: File) => f.name);
+                                          updateTriggerActionParams(action.id, { fileUrls: [...currentUrls, ...newUrls] });
+                                        }
+                                        e.target.value = ''; // Reset input
+                                      }}
+                                    />
+                                    <label htmlFor={`file-upload-${action.id}`} className="cursor-pointer">
+                                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        Перетащите файлы или <span className="text-blue-600 dark:text-blue-400 hover:underline">выберите</span>
+                                      </p>
+                                    </label>
+                                  </div>
+
+                                  {/* Список выбранных файлов */}
+                                  {(selectedFiles[action.id]?.length > 0 || (action.params?.fileUrls?.length || 0) > 0) && (
+                                    <div className="mt-3 space-y-2">
+                                      {(selectedFiles[action.id] || action.params?.fileUrls?.map((url: string) => ({ name: url, size: 0 })) || []).map((file: { name: string; size: number }, fileIndex: number) => (
+                                        <div key={fileIndex} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-md px-3 py-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-sm text-gray-900 dark:text-white truncate max-w-[200px]">{file.name}</span>
+                                            {file.size > 0 && (
+                                              <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                ({(file.size / 1024).toFixed(1)} KB)
+                                              </span>
+                                            )}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedFiles((prev: { [key: string]: { name: string; size: number }[] }) => ({
+                                                ...prev,
+                                                [action.id]: (prev[action.id] || []).filter((_: { name: string; size: number }, i: number) => i !== fileIndex)
+                                              }));
+                                              const newUrls = (action.params?.fileUrls || []).filter((_: string, i: number) => i !== fileIndex);
+                                              updateTriggerActionParams(action.id, { fileUrls: newUrls });
+                                            }}
+                                            className="text-red-500 hover:text-red-700"
+                                          >
+                                            <X size={16} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Эти файлы (изображения, аудио, видео или документы) будут отправлены клиентам вместе с сообщением.</p>
+                                </div>
+                              )}
+
+                              {action.action === 'send_webhook' && (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">URL вебхука<span className="text-red-500">*</span></label>
+                                    <input
+                                      type="url"
+                                      value={action.params?.webhookUrl || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { webhookUrl: e.target.value })}
+                                      placeholder="https://example.com/webhook"
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">URL, который будет получать запрос вебхука.</p>
+                                  </div>
+                                  <div className="flex gap-4">
+                                    <div className="w-1/3">
+                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">HTTP-метод<span className="text-red-500">*</span></label>
+                                      <select
+                                        value={action.params?.webhookMethod || 'POST'}
+                                        onChange={(e) => updateTriggerActionParams(action.id, { webhookMethod: e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE' })}
+                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
+                                        style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
+                                      >
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                        <option value="PUT">PUT</option>
+                                        <option value="DELETE">DELETE</option>
+                                      </select>
+                                    </div>
+                                    <div className="w-2/3">
+                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Тело запроса</label>
+                                      <div className="flex gap-1">
+                                        {['form', 'json', 'raw'].map((type) => (
+                                          <button
+                                            key={type}
+                                            type="button"
+                                            onClick={() => updateTriggerActionParams(action.id, { webhookBodyType: type as 'form' | 'json' | 'raw' })}
+                                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${(action.params?.webhookBodyType || 'form') === type
+                                              ? 'bg-blue-600 text-white'
+                                              : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+                                          >
+                                            {type === 'form' ? 'Form' : type === 'json' ? 'JSON' : 'Raw'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Заголовки</label>
+                                    <div className="space-y-2">
+                                      {(action.params?.webhookHeaders || [{ key: '', value: '' }]).map((header, hIndex) => (
+                                        <div key={hIndex} className="flex gap-2">
+                                          <input
+                                            type="text"
+                                            value={header.key}
+                                            onChange={(e) => {
+                                              const headers = [...(action.params?.webhookHeaders || [{ key: '', value: '' }])];
+                                              headers[hIndex] = { ...headers[hIndex], key: e.target.value };
+                                              updateTriggerActionParams(action.id, { webhookHeaders: headers });
+                                            }}
+                                            placeholder="Header"
+                                            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={header.value}
+                                            onChange={(e) => {
+                                              const headers = [...(action.params?.webhookHeaders || [{ key: '', value: '' }])];
+                                              headers[hIndex] = { ...headers[hIndex], value: e.target.value };
+                                              updateTriggerActionParams(action.id, { webhookHeaders: headers });
+                                            }}
+                                            placeholder="Value"
+                                            className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const headers = (action.params?.webhookHeaders || []).filter((_, i) => i !== hIndex);
+                                              updateTriggerActionParams(action.id, { webhookHeaders: headers.length ? headers : [{ key: '', value: '' }] });
+                                            }}
+                                            className="text-red-500 hover:text-red-700 p-2"
+                                          >
+                                            <Trash2 size={16} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const headers = [...(action.params?.webhookHeaders || []), { key: '', value: '' }];
+                                          updateTriggerActionParams(action.id, { webhookHeaders: headers });
+                                        }}
+                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                      >
+                                        Добавить строку
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Тело запроса</label>
+                                    {(action.params?.webhookBodyType || 'form') === 'raw' ? (
+                                      <textarea
+                                        value={typeof action.params?.webhookBody === 'string' ? action.params.webhookBody : ''}
+                                        onChange={(e) => updateTriggerActionParams(action.id, { webhookBody: e.target.value })}
+                                        placeholder="Raw body content"
+                                        rows={3}
+                                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none font-mono"
+                                      />
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {(Array.isArray(action.params?.webhookBody) ? action.params.webhookBody : [{ key: '', value: '' }]).map((item: any, bIndex: number) => (
+                                          <div key={bIndex} className="flex gap-2">
+                                            <input
+                                              type="text"
+                                              value={item.key}
+                                              onChange={(e) => {
+                                                const body = Array.isArray(action.params?.webhookBody) ? [...action.params.webhookBody] : [{ key: '', value: '' }];
+                                                body[bIndex] = { ...body[bIndex], key: e.target.value };
+                                                updateTriggerActionParams(action.id, { webhookBody: body });
+                                              }}
+                                              placeholder="Ключ"
+                                              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                            />
+                                            <input
+                                              type="text"
+                                              value={item.value}
+                                              onChange={(e) => {
+                                                const body = Array.isArray(action.params?.webhookBody) ? [...action.params.webhookBody] : [{ key: '', value: '' }];
+                                                body[bIndex] = { ...body[bIndex], value: e.target.value };
+                                                updateTriggerActionParams(action.id, { webhookBody: body });
+                                              }}
+                                              placeholder="Значение"
+                                              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const body = Array.isArray(action.params?.webhookBody) ? action.params.webhookBody.filter((_: any, i: number) => i !== bIndex) : [];
+                                                updateTriggerActionParams(action.id, { webhookBody: body.length ? body : [{ key: '', value: '' }] });
+                                              }}
+                                              className="text-red-500 hover:text-red-700 p-2"
+                                            >
+                                              <Trash2 size={16} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const body = Array.isArray(action.params?.webhookBody) ? [...action.params.webhookBody, { key: '', value: '' }] : [{ key: '', value: '' }];
+                                            updateTriggerActionParams(action.id, { webhookBody: body });
+                                          }}
+                                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                        >
+                                          Добавить строку
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <Toggle checked={action.params?.webhookPassToAI || false} onChange={(val) => updateTriggerActionParams(action.id, { webhookPassToAI: val })} />
+                                    <div>
+                                      <span className="text-sm text-gray-900 dark:text-white">Передать ответ вебхука ИИ</span>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Если включено, ответ вебхука будет передан Агенту ИИ для формирования ответа.</p>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Send KB Article params */}
+                              {action.action === 'send_kb_article' && (
+                                <>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Статья из базы знаний</label>
+                                    <select
+                                      value={action.params?.articleId || ''}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { articleId: e.target.value ? parseInt(e.target.value) : undefined })}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                      <option value="">Выберите статью</option>
+                                      {kbArticles.filter(a => a.isActive).map(article => (
+                                        <option key={article.id} value={article.id}>{article.title}</option>
+                                      ))}
+                                    </select>
+                                    {kbArticles.length === 0 && (
+                                      <p className="mt-1 text-xs text-gray-400">Создайте статьи в базе знаний</p>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Канал отправки</label>
+                                    <select
+                                      value={action.params?.channel || 'chat'}
+                                      onChange={(e) => updateTriggerActionParams(action.id, { channel: e.target.value as 'chat' | 'email' })}
+                                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                    >
+                                      <option value="chat">В чат мессенджера</option>
+                                      <option value="email">По email</option>
+                                    </select>
+                                  </div>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    Содержимое статьи будет отправлено клиенту через выбранный канал
+                                  </p>
+                                </>
+                              )}
                             </div>
                           </div>
-                        ))}
+                        )})}
                       </div>
                       <div className="flex justify-center mt-4">
                         <button
-                          onClick={() => setTriggerActions([...triggerActions, { id: Math.random().toString(), action: '' }])}
+                          onClick={() => setTriggerActions([...triggerActions, { id: Math.random().toString(), action: '', params: {} }])}
                           className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                           type="button"
                         >
@@ -1625,9 +3188,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       // Reset form for creating another
                       setTriggerName('');
                       setTriggerCondition('');
-                      setTriggerActions([{ id: '1', action: '' }]);
+                      setTriggerActions([{ id: '1', action: '', params: {} }]);
                       setTriggerCancelMessage('');
                       setTriggerRunLimit(0);
+                      setNewTagInput({});
+                      setSelectedFiles({});
                     }} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
                       Создать и создать еще один
                     </button>
@@ -1906,6 +3471,253 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                             </div>
                                           </div>
 
+                                          {/* Dynamic fields based on action type */}
+                                          {action.type === 'change_stage' && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Этап сделки<span className="text-red-500">*</span></label>
+                                              <select
+                                                value={action.params?.stageId || ''}
+                                                onChange={(e) => updateChainActionParams(step.id, action.id, { stageId: e.target.value })}
+                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                              >
+                                                <option value="">Выберите этап</option>
+                                                {availablePipelines.map((pipeline: any) => (
+                                                  <optgroup key={pipeline.id} label={pipeline.name}>
+                                                    {pipeline.stages.map((stage: any) => (
+                                                      <option key={stage.id} value={stage.id}>{pipeline.name} - {stage.name}</option>
+                                                    ))}
+                                                  </optgroup>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+
+                                          {action.type === 'assign_user' && (
+                                            <>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Применить к<span className="text-red-500">*</span></label>
+                                                <select
+                                                  value={action.params?.applyTo || 'deal'}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { applyTo: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="deal">Сделка</option>
+                                                  <option value="contact">Контакт</option>
+                                                  <option value="both">Сделка и контакт</option>
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Ответственный<span className="text-red-500">*</span></label>
+                                                <select
+                                                  value={action.params?.userId || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { userId: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="">Выберите пользователя</option>
+                                                  {(crmData?.users || MOCK_USERS).map((user: any) => (
+                                                    <option key={user.id} value={user.id}>{user.name}</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            </>
+                                          )}
+
+                                          {action.type === 'create_task' && (
+                                            <>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Описание задачи<span className="text-red-500">*</span></label>
+                                                <input
+                                                  type="text"
+                                                  value={action.params?.taskDescription || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { taskDescription: e.target.value })}
+                                                  placeholder="Введите описание задачи"
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Ответственный</label>
+                                                <select
+                                                  value={action.params?.taskUserId || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { taskUserId: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="">Ответственный сделки</option>
+                                                  {(crmData?.users || MOCK_USERS).map((user: any) => (
+                                                    <option key={user.id} value={user.id}>{user.name}</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                            </>
+                                          )}
+
+                                          {action.type === 'run_salesbot' && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Salesbot<span className="text-red-500">*</span></label>
+                                              <select
+                                                value={action.params?.salesbotId || ''}
+                                                onChange={(e) => updateChainActionParams(step.id, action.id, { salesbotId: e.target.value })}
+                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                              >
+                                                <option value="">Выберите Salesbot</option>
+                                                {(crmData?.salesbots?.length ? crmData.salesbots : MOCK_SALESBOTS).map((bot: any) => (
+                                                  <option key={bot.id} value={bot.id}>{bot.name}</option>
+                                                ))}
+                                              </select>
+                                            </div>
+                                          )}
+
+                                          {(action.type === 'add_deal_tags' || action.type === 'add_contact_tags') && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">
+                                                {action.type === 'add_deal_tags' ? 'Теги сделки' : 'Теги контакта'}<span className="text-red-500">*</span>
+                                              </label>
+                                              <div className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700">
+                                                <input
+                                                  type="text"
+                                                  value={newTagInput[`chain-${action.id}`] || ''}
+                                                  onChange={(e) => setNewTagInput(prev => ({ ...prev, [`chain-${action.id}`]: e.target.value }))}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && newTagInput[`chain-${action.id}`]?.trim()) {
+                                                      e.preventDefault();
+                                                      const currentTags = action.params?.tags || [];
+                                                      if (!currentTags.includes(newTagInput[`chain-${action.id}`].trim())) {
+                                                        updateChainActionParams(step.id, action.id, { tags: [...currentTags, newTagInput[`chain-${action.id}`].trim()] });
+                                                      }
+                                                      setNewTagInput(prev => ({ ...prev, [`chain-${action.id}`]: '' }));
+                                                    }
+                                                  }}
+                                                  placeholder="Новый тег (Enter для добавления)"
+                                                  className="w-full text-sm bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
+                                                />
+                                                {(action.params?.tags || []).length > 0 && (
+                                                  <div className="flex flex-wrap gap-2 mt-2">
+                                                    {(action.params?.tags || []).map((tag: string, tagIndex: number) => (
+                                                      <span key={tagIndex} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded">
+                                                        {tag}
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => {
+                                                            const newTags = (action.params?.tags || []).filter((_: string, i: number) => i !== tagIndex);
+                                                            updateChainActionParams(step.id, action.id, { tags: newTags });
+                                                          }}
+                                                          className="text-blue-600 dark:text-blue-300 hover:text-blue-800"
+                                                        >
+                                                          <X size={12} />
+                                                        </button>
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {(action.type === 'add_deal_note' || action.type === 'add_contact_note') && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Текст примечания<span className="text-red-500">*</span></label>
+                                              <textarea
+                                                value={action.params?.noteText || ''}
+                                                onChange={(e) => updateChainActionParams(step.id, action.id, { noteText: e.target.value })}
+                                                placeholder="Введите текст примечания"
+                                                rows={2}
+                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
+                                              />
+                                            </div>
+                                          )}
+
+                                          {action.type === 'send_message' && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Текст сообщения<span className="text-red-500">*</span></label>
+                                              <textarea
+                                                value={action.params?.messageText || ''}
+                                                onChange={(e) => updateChainActionParams(step.id, action.id, { messageText: e.target.value })}
+                                                placeholder="Введите текст сообщения"
+                                                rows={3}
+                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
+                                              />
+                                            </div>
+                                          )}
+
+                                          {action.type === 'send_email' && (
+                                            <div>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Инструкции для письма<span className="text-red-500">*</span></label>
+                                              <textarea
+                                                value={action.params?.emailInstructions || ''}
+                                                onChange={(e) => updateChainActionParams(step.id, action.id, { emailInstructions: e.target.value })}
+                                                placeholder="Например: Отправь приветственное письмо с информацией о наших услугах"
+                                                rows={3}
+                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
+                                              />
+                                              <p className="mt-1 text-[10px] text-gray-400">AI сгенерирует тему и текст письма</p>
+                                            </div>
+                                          )}
+
+                                          {action.type === 'send_webhook' && (
+                                            <>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">URL<span className="text-red-500">*</span></label>
+                                                <input
+                                                  type="text"
+                                                  value={action.params?.webhookUrl || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { webhookUrl: e.target.value })}
+                                                  placeholder="https://example.com/webhook"
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Метод</label>
+                                                <select
+                                                  value={action.params?.webhookMethod || 'POST'}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { webhookMethod: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="POST">POST</option>
+                                                  <option value="GET">GET</option>
+                                                  <option value="PUT">PUT</option>
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Body (JSON)</label>
+                                                <textarea
+                                                  value={action.params?.webhookBody || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { webhookBody: e.target.value })}
+                                                  placeholder='{"key": "value"}'
+                                                  rows={2}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none font-mono"
+                                                />
+                                              </div>
+                                            </>
+                                          )}
+
+                                          {action.type === 'send_kb_article' && (
+                                            <>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Статья<span className="text-red-500">*</span></label>
+                                                <select
+                                                  value={action.params?.articleId || ''}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { articleId: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="">Выберите статью</option>
+                                                  {kbArticles.filter(a => a.isActive).map(article => (
+                                                    <option key={article.id} value={article.id}>{article.title}</option>
+                                                  ))}
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Канал отправки<span className="text-red-500">*</span></label>
+                                                <select
+                                                  value={action.params?.channel || 'chat'}
+                                                  onChange={(e) => updateChainActionParams(step.id, action.id, { channel: e.target.value })}
+                                                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
+                                                >
+                                                  <option value="chat">В чат</option>
+                                                  <option value="email">По email</option>
+                                                </select>
+                                              </div>
+                                            </>
+                                          )}
+
                                           <div>
                                             <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Инструкция<span className="text-red-500">*</span></label>
                                             <textarea
@@ -1977,32 +3789,26 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                 <span className={`text-sm ${day.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{day.day}</span>
                               </div>
                               <div className="flex items-center gap-4">
-                                <div className="relative">
-                                  <input
-                                    type="time"
-                                    value={day.start}
-                                    disabled={!day.enabled}
-                                    onChange={(e) => {
-                                      const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
-                                      setChainSchedule(newSchedule);
-                                    }}
-                                    className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                                  />
-                                  <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                                </div>
-                                <div className="relative">
-                                  <input
-                                    type="time"
-                                    value={day.end}
-                                    disabled={!day.enabled}
-                                    onChange={(e) => {
-                                      const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
-                                      setChainSchedule(newSchedule);
-                                    }}
-                                    className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                                  />
-                                  <Clock size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                                </div>
+                                <input
+                                  type="time"
+                                  value={day.start}
+                                  disabled={!day.enabled}
+                                  onChange={(e) => {
+                                    const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
+                                    setChainSchedule(newSchedule);
+                                  }}
+                                  className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <input
+                                  type="time"
+                                  value={day.end}
+                                  disabled={!day.enabled}
+                                  onChange={(e) => {
+                                    const newSchedule = chainSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
+                                    setChainSchedule(newSchedule);
+                                  }}
+                                  className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                                />
                               </div>
                             </div>
                           ))}

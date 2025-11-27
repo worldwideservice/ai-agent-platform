@@ -61,12 +61,12 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     const availableContactFields = crmData?.contactFields || CONTACT_FIELDS;
 
     // --- State ---
-    // Data Access - Инициализируем из сохраненных данных или дефолтными значениями
+    // Data Access - Инициализируем из сохраненных данных или пустыми массивами
     const [readDealFields, setReadDealFields] = useState<string[]>(
-        crmData?.dealReadFields || ['deal_stage']
+        crmData?.dealReadFields || []
     );
     const [readContactFields, setReadContactFields] = useState<string[]>(
-        crmData?.contactReadFields || ['contact_name']
+        crmData?.contactReadFields || []
     );
     const [isDealAccessOpen, setIsDealAccessOpen] = useState(true);
     const [isContactAccessOpen, setIsContactAccessOpen] = useState(true);
@@ -123,6 +123,14 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     };
 
     const getFieldName = (fieldId: string) => {
+        // Сначала ищем в реальных данных CRM (включая кастомные поля)
+        const crmDealField = availableDealFields.find((f: any) => f.id === fieldId);
+        if (crmDealField?.label) return crmDealField.label;
+
+        const crmContactField = availableContactFields.find((f: any) => f.id === fieldId);
+        if (crmContactField?.label) return crmContactField.label;
+
+        // Fallback на захардкоженные поля
         const dealField = DEAL_FIELDS.find(f => f.id === fieldId);
         const contactField = CONTACT_FIELDS.find(f => f.id === fieldId);
         return dealField?.label || contactField?.label || fieldId;
@@ -139,6 +147,24 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
     const updateRule = (id: string, field: keyof UpdateRule, value: any, setter: React.Dispatch<React.SetStateAction<UpdateRule[]>>) => {
         setter(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+    };
+
+    const moveRuleUp = (index: number, setter: React.Dispatch<React.SetStateAction<UpdateRule[]>>) => {
+        if (index === 0) return;
+        setter(prev => {
+            const newRules = [...prev];
+            [newRules[index - 1], newRules[index]] = [newRules[index], newRules[index - 1]];
+            return newRules;
+        });
+    };
+
+    const moveRuleDown = (index: number, setter: React.Dispatch<React.SetStateAction<UpdateRule[]>>, rules: UpdateRule[]) => {
+        if (index >= rules.length - 1) return;
+        setter(prev => {
+            const newRules = [...prev];
+            [newRules[index], newRules[index + 1]] = [newRules[index + 1], newRules[index]];
+            return newRules;
+        });
     };
 
     // --- Components ---
@@ -367,8 +393,20 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                             {/* Header Row */}
                                             <div className="flex justify-between items-center mb-3">
                                                 <div className="flex gap-1">
-                                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><ArrowUp size={14} /></button>
-                                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><ArrowDown size={14} /></button>
+                                                    <button
+                                                        onClick={() => moveRuleUp(index, setDealUpdateRules)}
+                                                        disabled={index === 0}
+                                                        className={`${index === 0 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                    >
+                                                        <ArrowUp size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveRuleDown(index, setDealUpdateRules, dealUpdateRules)}
+                                                        disabled={index >= dealUpdateRules.length - 1}
+                                                        className={`${index >= dealUpdateRules.length - 1 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                    >
+                                                        <ArrowDown size={14} />
+                                                    </button>
                                                 </div>
                                                 <button
                                                     onClick={() => removeRule(rule.id, setDealUpdateRules)}
@@ -449,8 +487,20 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                             {/* Header Row */}
                                             <div className="flex justify-between items-center mb-3">
                                                 <div className="flex gap-1">
-                                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><ArrowUp size={14} /></button>
-                                                    <button className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><ArrowDown size={14} /></button>
+                                                    <button
+                                                        onClick={() => moveRuleUp(index, setContactUpdateRules)}
+                                                        disabled={index === 0}
+                                                        className={`${index === 0 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                    >
+                                                        <ArrowUp size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveRuleDown(index, setContactUpdateRules, contactUpdateRules)}
+                                                        disabled={index >= contactUpdateRules.length - 1}
+                                                        className={`${index >= contactUpdateRules.length - 1 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                    >
+                                                        <ArrowDown size={14} />
+                                                    </button>
                                                 </div>
                                                 <button
                                                     onClick={() => removeRule(rule.id, setContactUpdateRules)}

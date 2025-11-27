@@ -106,6 +106,17 @@ class AuthService {
       return null;
     }
   }
+
+  /**
+   * Смена пароля текущего пользователя
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    const response = await apiClient.post<{ success: boolean; message: string }>('/auth/change-password', {
+      currentPassword,
+      newPassword,
+    });
+    return response.data;
+  }
 }
 
 export const authService = new AuthService();

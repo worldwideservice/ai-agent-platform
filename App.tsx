@@ -12,12 +12,15 @@ import { KbCategories } from './pages/KbCategories';
 import { KbCategoryCreate } from './pages/KbCategoryCreate';
 import { KbArticles } from './pages/KbArticles';
 import { KbArticleCreate } from './pages/KbArticleCreate';
+import { TrainingRoles } from './pages/TrainingRoles';
+import { TrainingSources } from './pages/TrainingSources';
 import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
 import { useAuth } from './src/contexts/AuthContext';
+import { useToast } from './src/contexts/ToastContext';
 import { Auth } from './src/pages/Auth';
-import { agentService, billingService } from './src/services/api';
+import { agentService, billingService, notificationsService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
 const INITIAL_KB_CATEGORIES = [
@@ -27,6 +30,7 @@ const INITIAL_KB_CATEGORIES = [
 const App: React.FC = () => {
   // === 1. Все хуки должны быть в начале компонента ===
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { showToast, toasts, removeToast } = useToast();
 
   // State для агентов
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
@@ -115,7 +119,6 @@ const App: React.FC = () => {
     title: string;
     onConfirm: () => void;
   }>({ isOpen: false, title: '', onConfirm: () => { } });
-  const [toasts, setToasts] = useState<Toast[]>([]);
 
   // === 2. Вспомогательные функции ===
   const showConfirmation = (title: string, onConfirm: () => void) => {
@@ -124,15 +127,6 @@ const App: React.FC = () => {
 
   const hideConfirmation = () => {
     setConfirmationModal({ isOpen: false, title: '', onConfirm: () => { } });
-  };
-
-  const showToast = (type: Toast['type'], message: string) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev, { id, type, message }]);
-  };
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
   };
 
   const loadAgents = async () => {
@@ -323,16 +317,24 @@ const App: React.FC = () => {
         kbSettings: agentData.kbSettings,
       });
       await loadAgents(); // Перезагрузить список агентов
-      showToast('success', 'Агент создан');
+      showToast('success', `Создан новый агент "${newAgent.name}"`);
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          title: 'Агент создан',
+          message: `Создан новый агент "${newAgent.name}"`,
+        });
+      } catch (e) { /* ignore */ }
       return newAgent;
     } catch (error: any) {
       console.error('Failed to create agent:', error);
-      showToast('error', error.response?.data?.message || 'Не удалось создать агента');
+      showToast('error', error.response?.data?.message || `Не удалось создать агента "${agentData.name}"`);
       throw error;
     }
   };
 
-  const handleAddArticle = (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => {
+  const handleAddArticle = async (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => {
     const newArticle = {
       id: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit ID
       ...article,
@@ -347,16 +349,35 @@ const App: React.FC = () => {
     };
     setKbArticles(prev => [...prev, newArticle]);
     showToast('success', 'Статья создана');
+    // Создаём уведомление
+    try {
+      await notificationsService.createNotification({
+        type: 'success',
+        title: 'Статья создана',
+        message: `Создана новая статья "${article.title}" в базе знаний`,
+      });
+    } catch (e) { /* ignore */ }
   };
 
   const handleToggleAgentStatus = async (id: string) => {
+    const agent = agents.find(a => a.id === id);
+    const wasActive = agent?.isActive;
     try {
       await agentService.toggleAgentStatus(id);
       await loadAgents(); // Перезагрузить список
-      showToast('success', 'Статус изменен');
+      const newStatus = wasActive ? 'выключен' : 'включен';
+      showToast('success', `Агент "${agent?.name}" ${newStatus}`);
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: 'Статус агента изменён',
+          message: `Агент "${agent?.name}" ${newStatus}`,
+        });
+      } catch (e) { /* ignore */ }
     } catch (error: any) {
       console.error('Failed to toggle agent status:', error);
-      showToast('error', 'Не удалось изменить статус');
+      showToast('error', `Не удалось изменить статус агента "${agent?.name}"`);
     }
   };
 
@@ -369,10 +390,18 @@ const App: React.FC = () => {
         await agentService.deleteAgent(id);
         await loadAgents(); // Перезагрузить список
         hideConfirmation();
-        showToast('success', 'Удалено');
+        showToast('success', `Агент "${agent.name}" удалён`);
+        // Создаём уведомление
+        try {
+          await notificationsService.createNotification({
+            type: 'warning',
+            title: 'Агент удалён',
+            message: `Агент "${agent.name}" был удалён`,
+          });
+        } catch (e) { /* ignore */ }
       } catch (error: any) {
         console.error('Failed to delete agent:', error);
-        showToast('error', 'Не удалось удалить агента');
+        showToast('error', `Не удалось удалить агента "${agent.name}"`);
         hideConfirmation();
       }
     });
@@ -390,10 +419,18 @@ const App: React.FC = () => {
         kbSettings: agent.kbSettings,
       });
       await loadAgents(); // Перезагрузить список
-      showToast('success', `Создана копия: ${newAgent.name}`);
+      showToast('success', `Агент "${agent.name}" скопирован → "${newAgent.name}"`);
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          title: 'Агент скопирован',
+          message: `Создана копия агента "${agent.name}" → "${newAgent.name}"`,
+        });
+      } catch (e) { /* ignore */ }
     } catch (error: any) {
       console.error('Failed to copy agent:', error);
-      showToast('error', 'Не удалось создать копию');
+      showToast('error', `Не удалось скопировать агента "${agent.name}"`);
     }
   };
 
@@ -410,10 +447,10 @@ const App: React.FC = () => {
         crmData: updatedAgent.crmData,
       });
       await loadAgents(); // Перезагрузить список
-      showToast('success', 'Изменения сохранены');
+      showToast('success', `Агент "${updatedAgent.name}" сохранён`);
     } catch (error: any) {
       console.error('Failed to save agent:', error);
-      showToast('error', error.response?.data?.message || 'Не удалось сохранить изменения');
+      showToast('error', error.response?.data?.message || `Не удалось сохранить агента "${updatedAgent.name}"`);
     }
   };
 
@@ -421,14 +458,22 @@ const App: React.FC = () => {
     const category = kbCategories.find(c => c.id === id);
     if (!category) return;
 
-    showConfirmation(`Удалить ${category.name}`, () => {
+    showConfirmation(`Удалить ${category.name}`, async () => {
       setKbCategories(prev => prev.filter(cat => cat.id !== id));
       hideConfirmation();
       showToast('success', 'Удалено');
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'warning',
+          title: 'Категория удалена',
+          message: `Категория "${category.name}" удалена из базы знаний`,
+        });
+      } catch (e) { /* ignore */ }
     });
   };
 
-  const handleCopyCategory = (category: { id: string; name: string; parentId: string | null }) => {
+  const handleCopyCategory = async (category: { id: string; name: string; parentId: string | null }) => {
     const copiedCategory = {
       ...category,
       id: Math.random().toString(36).substr(2, 9),
@@ -437,20 +482,36 @@ const App: React.FC = () => {
 
     setKbCategories(prev => [...prev, copiedCategory]);
     showToast('success', `Создана копия: ${copiedCategory.name}`);
+    // Создаём уведомление
+    try {
+      await notificationsService.createNotification({
+        type: 'success',
+        title: 'Категория скопирована',
+        message: `Создана копия категории "${category.name}"`,
+      });
+    } catch (e) { /* ignore */ }
   };
 
   const handleDeleteArticle = (id: number) => {
     const article = kbArticles.find(a => a.id === id);
     if (!article) return;
 
-    showConfirmation(`Удалить ${article.title}`, () => {
+    showConfirmation(`Удалить ${article.title}`, async () => {
       setKbArticles(prev => prev.filter(art => art.id !== id));
       hideConfirmation();
       showToast('success', 'Удалено');
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'warning',
+          title: 'Статья удалена',
+          message: `Статья "${article.title}" удалена из базы знаний`,
+        });
+      } catch (e) { /* ignore */ }
     });
   };
 
-  const handleCopyArticle = (article: typeof kbArticles[0]) => {
+  const handleCopyArticle = async (article: typeof kbArticles[0]) => {
     const copiedArticle = {
       ...article,
       id: Math.floor(1000 + Math.random() * 9000),
@@ -468,14 +529,35 @@ const App: React.FC = () => {
 
     setKbArticles(prev => [...prev, copiedArticle]);
     showToast('success', `Создана копия: ${copiedArticle.title}`);
+    // Создаём уведомление
+    try {
+      await notificationsService.createNotification({
+        type: 'success',
+        title: 'Статья скопирована',
+        message: `Создана копия статьи "${article.title}"`,
+      });
+    } catch (e) { /* ignore */ }
   };
 
-  const handleToggleArticleStatus = (id: number) => {
+  const handleToggleArticleStatus = async (id: number) => {
+    const article = kbArticles.find(a => a.id === id);
+    const wasActive = article?.isActive;
     setKbArticles(prevArticles =>
-      prevArticles.map(article =>
-        article.id === id ? { ...article, isActive: !article.isActive } : article
+      prevArticles.map(a =>
+        a.id === id ? { ...a, isActive: !a.isActive } : a
       )
     );
+    // Создаём уведомление
+    if (article) {
+      const newStatus = wasActive ? 'выключена' : 'включена';
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: 'Статус статьи изменён',
+          message: `Статья "${article.title}" ${newStatus}`,
+        });
+      } catch (e) { /* ignore */ }
+    }
   };
 
   const handleEditCategory = (id: string) => {
@@ -509,13 +591,21 @@ const App: React.FC = () => {
     setCurrentCategoryId(categoryId);
   };
 
-  const handleAddCategory = (category: { name: string; parentId: string | null }) => {
+  const handleAddCategory = async (category: { name: string; parentId: string | null }) => {
     const newCategory = {
       id: Math.random().toString(36).substr(2, 9),
       ...category,
     };
     setKbCategories(prev => [...prev, newCategory]);
     showToast('success', 'Категория создана');
+    // Создаём уведомление
+    try {
+      await notificationsService.createNotification({
+        type: 'success',
+        title: 'Категория создана',
+        message: `Создана новая категория "${category.name}" в базе знаний`,
+      });
+    } catch (e) { /* ignore */ }
     setCurrentCategoryId(null); // Reset to root categories view
     setCurrentPage('kb-categories');
   };
@@ -582,6 +672,8 @@ const App: React.FC = () => {
       case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
       case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
       case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} categories={kbCategories} />;
+      case 'training-roles': return <TrainingRoles />;
+      case 'training-sources': return <TrainingSources />;
       default: return <Dashboard />;
     }
   };

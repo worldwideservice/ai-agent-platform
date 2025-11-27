@@ -22,7 +22,6 @@ export interface UpdateAgentDto {
   model?: string;
   systemInstructions?: string;
   isActive?: boolean;
-  checkBeforeSend?: boolean;
   pipelineSettings?: any;
   channelSettings?: any;
   kbSettings?: any;

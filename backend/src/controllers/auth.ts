@@ -149,6 +149,86 @@ export async function login(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * POST /api/auth/change-password
+ * Смена пароля текущего пользователя
+ */
+export async function changePassword(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const userId = req.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!userId) {
+      res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Пользователь не авторизован'
+      });
+      return;
+    }
+
+    // Валидация входных данных
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({
+        error: 'Validation failed',
+        message: 'Текущий и новый пароль обязательны'
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({
+        error: 'Validation failed',
+        message: 'Новый пароль должен быть не менее 6 символов'
+      });
+      return;
+    }
+
+    // Получаем пользователя
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        error: 'User not found',
+        message: 'Пользователь не найден'
+      });
+      return;
+    }
+
+    // Проверяем текущий пароль
+    const isCurrentPasswordValid = await comparePasswords(currentPassword, user.password);
+
+    if (!isCurrentPasswordValid) {
+      res.status(401).json({
+        error: 'Authentication failed',
+        message: 'Неверный текущий пароль'
+      });
+      return;
+    }
+
+    // Хэшируем новый пароль
+    const hashedNewPassword = await hashPassword(newPassword);
+
+    // Обновляем пароль
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword },
+    });
+
+    res.json({
+      success: true,
+      message: 'Пароль успешно изменён'
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Не удалось изменить пароль'
+    });
+  }
+}
+
+/**
  * GET /api/auth/me
  * Получить информацию о текущем пользователе (требует аутентификации)
  */

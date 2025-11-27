@@ -3,6 +3,19 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { ToastProvider, useToast } from './src/contexts/ToastContext';
+import { ToastContainer } from './components/Toast';
+
+// Wrapper для toast контейнера
+const ToastWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { toasts, removeToast } = useToast();
+  return (
+    <>
+      {children}
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+    </>
+  );
+};
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,7 +26,11 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <ToastProvider>
+        <ToastWrapper>
+          <App />
+        </ToastWrapper>
+      </ToastProvider>
     </AuthProvider>
   </React.StrictMode>
 );

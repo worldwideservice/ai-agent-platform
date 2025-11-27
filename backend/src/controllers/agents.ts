@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest, CreateAgentDto, UpdateAgentDto } from '../types';
 import { prisma } from '../config/database';
+import { systemNotifications } from '../services/system-notifications.service';
 
 // Helper функция для парсинга JSON полей агента
 function parseAgentJson(agent: any) {
@@ -113,6 +114,13 @@ export async function createAgent(req: AuthRequest, res: Response) {
       },
     });
 
+    // Уведомление ПОСЛЕ успешного создания в БД
+    await systemNotifications.success(
+      req.userId!,
+      'Агент создан',
+      `Агент "${agent.name}" успешно создан. Модель: ${agent.model}`
+    );
+
     // Парсим JSON поля перед отправкой
     const parsedAgent = parseAgentJson(agent);
     res.status(201).json(parsedAgent);
@@ -155,7 +163,6 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     if (data.model !== undefined) updateData.model = data.model;
     if (data.systemInstructions !== undefined) updateData.systemInstructions = data.systemInstructions;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
-    if (data.checkBeforeSend !== undefined) updateData.checkBeforeSend = data.checkBeforeSend;
 
     // JSON поля нужно сериализовать в строки для SQLite
     if (data.pipelineSettings !== undefined) {
@@ -183,6 +190,13 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     console.log('=== UPDATED AGENT ===');
     console.log('Updated agent crmData:', agent.crmData);
 
+    // Уведомление ПОСЛЕ успешного обновления в БД
+    await systemNotifications.success(
+      req.userId!,
+      'Агент сохранён',
+      `Настройки агента "${agent.name}" сохранены в базе данных`
+    );
+
     // Парсим JSON поля перед отправкой клиенту
     const parsedAgent = parseAgentJson(agent);
     res.json(parsedAgent);
@@ -207,9 +221,18 @@ export async function deleteAgent(req: AuthRequest, res: Response) {
       return;
     }
 
+    const agentName = existingAgent.name;
+
     await prisma.agent.delete({
       where: { id },
     });
+
+    // Уведомление ПОСЛЕ успешного удаления из БД
+    await systemNotifications.info(
+      req.userId!,
+      'Агент удалён',
+      `Агент "${agentName}" удалён из системы`
+    );
 
     res.json({ message: 'Agent deleted successfully' });
   } catch (error) {
@@ -237,6 +260,14 @@ export async function toggleAgentStatus(req: AuthRequest, res: Response) {
       where: { id },
       data: { isActive: !existingAgent.isActive },
     });
+
+    // Уведомление ПОСЛЕ успешного обновления в БД
+    const newStatus = agent.isActive ? 'включен' : 'выключен';
+    await systemNotifications.success(
+      req.userId!,
+      'Статус агента изменён',
+      `Агент "${agent.name}" ${newStatus} и готов к работе`
+    );
 
     // Парсим JSON поля перед отправкой клиенту
     const parsedAgent = parseAgentJson(agent);

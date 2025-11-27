@@ -13,7 +13,7 @@ export interface CrmField {
   id: string;
   key: string;
   label: string;
-  type: 'text' | 'number' | 'date' | 'boolean';
+  type: 'text' | 'number' | 'date' | 'boolean' | 'select' | 'phone' | 'email' | 'url' | 'tags';
 }
 
 export interface Agent {
@@ -22,7 +22,6 @@ export interface Agent {
   isActive: boolean;
   model: string;
   systemInstructions?: string;
-  checkBeforeSend?: boolean;
   pipelineId?: string;
   stageId?: string;
   pipelineSettings?: any;  // Может быть object или string (из БД)
@@ -31,6 +30,7 @@ export interface Agent {
   crmType?: string;
   crmConnected?: boolean;
   crmData?: any;           // Может быть object или string (из БД)
+  trainingRoleId?: string; // ID роли из библиотеки знаний
   createdAt: string;
   updatedAt?: string;
   userId?: string;
@@ -52,15 +52,43 @@ export interface Article {
 }
 
 // Navigation State
-export type Page = 
-  | 'dashboard' 
-  | 'agents' 
+export type Page =
+  | 'dashboard'
+  | 'agents'
   | 'agent-create'
-  | 'agent-editor' 
-  | 'chat' 
-  | 'kb-categories' 
+  | 'agent-editor'
+  | 'chat'
+  | 'kb-categories'
   | 'kb-category-create'
-  | 'kb-articles' 
+  | 'kb-articles'
   | 'kb-article-create'
-  | 'settings' 
+  | 'training-roles'
+  | 'training-sources'
+  | 'settings'
   | 'billing';
+
+// Training Library Types
+export interface TrainingSource {
+  id: string;
+  name: string;
+  author: string | null;
+  description: string | null;
+  category: 'sales' | 'negotiations' | 'psychology' | 'methodology' | 'custom';
+  content: string;
+  isBuiltIn: boolean;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TrainingRole {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string;
+  sourceIds: string[];
+  isBuiltIn: boolean;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -20,10 +20,30 @@ import integrationsRoutes from './routes/integrations';
 import agentSettingsRoutes from './routes/agent-settings';
 import modelsRoutes from './routes/models';
 import kommoRoutes from './routes/kommo';
+import googleRoutes from './routes/google';
+import googleCalendarRoutes from './routes/google-calendar';
 import memoryRoutes from './routes/memory';
 import kbImportRoutes from './routes/kb-import';
+import trainingRoutes from './routes/training';
+import agentDocumentsRoutes from './routes/agent-documents';
+import profileRoutes from './routes/profile';
+import notificationsRoutes from './routes/notifications';
+import testRoutes from './routes/test';
+
+// Public routes (без авторизации)
+import { getPublicDocumentFile } from './controllers/agent-documents';
+
+// Chain executor for scheduled steps
+import { processScheduledChainSteps } from './services/chain-executor.service';
 
 const app: Express = express();
+
+// Периодическая проверка отложенных шагов цепочек (каждую минуту)
+const CHAIN_SCHEDULER_INTERVAL = 60 * 1000; // 1 минута
+setInterval(() => {
+  processScheduledChainSteps().catch(err => console.error('Chain scheduler error:', err));
+}, CHAIN_SCHEDULER_INTERVAL);
+console.log('⏰ Chain scheduler started (interval: 1 minute)');
 
 // Middleware
 app.use(cors({
@@ -46,14 +66,18 @@ app.get('/health', (_req: Request, res: Response) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
 app.use('/api/models', modelsRoutes);
 app.use('/api/kommo', kommoRoutes);
+app.use('/api/google', googleRoutes);
+app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/agents', triggersRoutes);
 app.use('/api/agents', chainsRoutes);
 app.use('/api/agents', integrationsRoutes);
 app.use('/api/agents', agentSettingsRoutes);
 app.use('/api/agents', memoryRoutes);
+app.use('/api/agents', agentDocumentsRoutes);
 app.use('/api/kb/categories', kbCategoryRoutes);
 app.use('/api/kb/articles', kbArticleRoutes);
 app.use('/api/kb/import', kbImportRoutes);
@@ -64,6 +88,12 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/training', trainingRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/test', testRoutes); // Test endpoints для симуляции
+
+// Public routes (без авторизации - для доступа Kommo к файлам)
+app.get('/api/public/documents/:documentId', getPublicDocumentFile);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {

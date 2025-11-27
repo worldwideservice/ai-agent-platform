@@ -27,9 +27,46 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  company?: string | null;
+  avatarUrl?: string | null;
+  timezone?: string;
+  language?: 'ru' | 'en' | 'ua';
   role: 'USER' | 'ADMIN';
   createdAt?: string;
   updatedAt?: string;
+}
+
+// Profile Types
+export interface ProfileUpdateRequest {
+  name?: string;
+  company?: string;
+  timezone?: string;
+  language?: 'ru' | 'en' | 'ua';
+}
+
+export interface ProfileResponse {
+  user: User;
+}
+
+export interface EmailUpdateRequest {
+  newEmail: string;
+  password: string;
+}
+
+export interface AvatarUploadResponse {
+  success: boolean;
+  message: string;
+  avatarUrl: string;
+}
+
+export interface TimezoneOption {
+  value: string;
+  label: string;
+}
+
+export interface DeleteAccountRequest {
+  password: string;
+  confirmation: string;
 }
 
 // Agent Types (расширяем существующий тип Agent)
