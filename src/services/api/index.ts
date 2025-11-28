@@ -16,6 +16,7 @@ export { googleService } from './google.service';
 export { default as profileService } from './profile.service';
 export { default as notificationsService } from './notifications.service';
 export { testService } from './test.service';
+export { default as adminService } from './admin.service';
 
 // Re-export для удобства
 export * from './apiClient';
@@ -35,3 +36,4 @@ export * from './google.service';
 export * from './profile.service';
 export * from './notifications.service';
 export * from './test.service';
+export * from './admin.service';

@@ -30,9 +30,14 @@ import profileRoutes from './routes/profile';
 import notificationsRoutes from './routes/notifications';
 import testRoutes from './routes/test';
 import conversationsRoutes from './routes/conversations';
+import adminRoutes from './routes/admin';
 
 // Public routes (без авторизации)
 import { getPublicDocumentFile } from './controllers/agent-documents';
+
+// Stats imports for monitoring
+import { getQueueStats, isQueueAvailable } from './services/webhook-queue.service';
+import { getOpenRouterStats } from './services/openrouter.service';
 
 // Chain executor for scheduled steps
 import { processScheduledChainSteps } from './services/chain-executor.service';
@@ -65,6 +70,35 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+// Detailed stats endpoint for monitoring (queue, OpenRouter, etc.)
+app.get('/health/stats', async (_req: Request, res: Response) => {
+  try {
+    const queueStats = await getQueueStats();
+    const openRouterStats = getOpenRouterStats();
+
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: {
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      },
+      queue: {
+        enabled: isQueueAvailable(),
+        ...queueStats,
+      },
+      openRouter: openRouterStats,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message,
+    });
+  }
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
@@ -93,6 +127,7 @@ app.use('/api/training', trainingRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/conversations', conversationsRoutes);
 app.use('/api/test', testRoutes); // Test endpoints для симуляции
+app.use('/api/admin', adminRoutes); // Admin panel endpoints
 
 // Public routes (без авторизации - для доступа Kommo к файлам)
 app.get('/api/public/documents/:documentId', getPublicDocumentFile);

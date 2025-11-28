@@ -5,7 +5,21 @@
 
 import { prisma } from '../config/database';
 import realPrisma from '../lib/prisma';
-import { sendChatMessage, sendEmail, getLeadContactEmail } from './kommo.service';
+import {
+  sendChatMessage,
+  sendChatFileMessage,
+  sendEmail,
+  getLeadContactEmail,
+  updateLead,
+  updateContact,
+  createTask,
+  addLeadTags,
+  addContactTags,
+  createLeadNote,
+  createContactNote,
+  runSalesbot,
+  fetchLeadById
+} from './kommo.service';
 import { chatCompletion, ChatMessage } from './openrouter.service';
 
 // Типы для расписания
@@ -175,13 +189,276 @@ async function executeStepAction(
       break;
 
     case 'change_stage':
-      // Смена этапа сделки - требует интеграции с Kommo API
-      console.log(`⚠️ Change stage action not implemented yet`);
+      // Смена этапа сделки
+      if (action.params?.stageId) {
+        try {
+          // stageId в формате "pipeline_id:status_id" или просто status_id
+          const stageIdStr = String(action.params.stageId);
+          let statusId: number;
+          let pipelineId: number | undefined;
+
+          if (stageIdStr.includes(':')) {
+            const [pId, sId] = stageIdStr.split(':');
+            pipelineId = parseInt(pId, 10);
+            statusId = parseInt(sId, 10);
+          } else {
+            statusId = parseInt(stageIdStr, 10);
+          }
+
+          const updateData: any = { status_id: statusId };
+          if (pipelineId) {
+            updateData.pipeline_id = pipelineId;
+          }
+
+          await updateLead(integrationId, leadId, updateData);
+          console.log(`✅ Lead ${leadId} stage changed to ${statusId}`);
+        } catch (error: any) {
+          console.error('Error changing stage:', error.message);
+        }
+      }
       break;
 
+    case 'create_task':
     case 'add_task':
-      // Создание задачи - требует интеграции с Kommo API
-      console.log(`⚠️ Add task action not implemented yet`);
+      // Создание задачи
+      if (action.params?.taskText) {
+        try {
+          // Время выполнения задачи (по умолчанию через 24 часа)
+          const dueHours = action.params.taskDueHours || 24;
+          const completeTill = Math.floor(Date.now() / 1000) + (dueHours * 60 * 60);
+
+          await createTask(integrationId, {
+            text: action.params.taskText,
+            complete_till: completeTill,
+            entity_id: leadId,
+            entity_type: 'leads',
+            responsible_user_id: action.params.responsibleUserId,
+            task_type_id: action.params.taskTypeId,
+          });
+          console.log(`✅ Task created for lead ${leadId}: "${action.params.taskText}"`);
+        } catch (error: any) {
+          console.error('Error creating task:', error.message);
+        }
+      }
+      break;
+
+    case 'assign_user':
+      // Изменить ответственного
+      if (action.params?.userId) {
+        try {
+          const userId = parseInt(String(action.params.userId), 10);
+          const applyTo = action.params.applyTo || 'deal';
+
+          if (applyTo === 'deal' || applyTo === 'both') {
+            await updateLead(integrationId, leadId, { responsible_user_id: userId });
+            console.log(`✅ Lead ${leadId} assigned to user ${userId}`);
+          }
+
+          if (applyTo === 'contact' || applyTo === 'both') {
+            // Получаем контакт из сделки
+            const lead = await fetchLeadById(integrationId, leadId);
+            const contactId = lead?._embedded?.contacts?.[0]?.id;
+            if (contactId) {
+              await updateContact(integrationId, contactId, { responsible_user_id: userId });
+              console.log(`✅ Contact ${contactId} assigned to user ${userId}`);
+            }
+          }
+        } catch (error: any) {
+          console.error('Error assigning user:', error.message);
+        }
+      }
+      break;
+
+    case 'stop_agents':
+      // Остановить агентов в этом чате
+      try {
+        // Создаём или обновляем запись о паузе агента для лида
+        await realPrisma.agentPause.upsert({
+          where: {
+            agentId_leadId: {
+              agentId,
+              leadId,
+            },
+          },
+          create: {
+            agentId,
+            integrationId,
+            leadId,
+            chatId,
+            isPaused: true,
+            reason: action.params?.reason || 'Остановлено через цепочку',
+          },
+          update: {
+            isPaused: true,
+            pausedAt: new Date(),
+            reason: action.params?.reason || 'Остановлено через цепочку',
+            resumeAt: null,
+          },
+        });
+        console.log(`✅ Agent ${agentId} paused for lead ${leadId}`);
+      } catch (error: any) {
+        console.error('Error stopping agents:', error.message);
+      }
+      break;
+
+    case 'run_salesbot':
+      // Запустить Salesbot
+      if (action.params?.salesbotId) {
+        try {
+          const salesbotId = parseInt(String(action.params.salesbotId), 10);
+          await runSalesbot(integrationId, salesbotId, leadId);
+          console.log(`✅ Salesbot ${salesbotId} triggered for lead ${leadId}`);
+        } catch (error: any) {
+          console.error('Error running salesbot:', error.message);
+        }
+      }
+      break;
+
+    case 'add_deal_tags':
+      // Добавить теги сделки
+      if (action.params?.tags && Array.isArray(action.params.tags)) {
+        try {
+          await addLeadTags(integrationId, leadId, action.params.tags);
+          console.log(`✅ Tags added to lead ${leadId}: ${action.params.tags.join(', ')}`);
+        } catch (error: any) {
+          console.error('Error adding deal tags:', error.message);
+        }
+      }
+      break;
+
+    case 'add_contact_tags':
+      // Добавить теги контакта
+      if (action.params?.tags && Array.isArray(action.params.tags)) {
+        try {
+          const lead = await fetchLeadById(integrationId, leadId);
+          const contactId = lead?._embedded?.contacts?.[0]?.id;
+          if (contactId) {
+            await addContactTags(integrationId, contactId, action.params.tags);
+            console.log(`✅ Tags added to contact ${contactId}: ${action.params.tags.join(', ')}`);
+          }
+        } catch (error: any) {
+          console.error('Error adding contact tags:', error.message);
+        }
+      }
+      break;
+
+    case 'add_deal_note':
+      // Добавить примечание к сделке
+      if (action.params?.noteText) {
+        try {
+          await createLeadNote(integrationId, leadId, action.params.noteText);
+          console.log(`✅ Note added to lead ${leadId}`);
+        } catch (error: any) {
+          console.error('Error adding deal note:', error.message);
+        }
+      }
+      break;
+
+    case 'add_contact_note':
+      // Добавить примечание к контакту
+      if (action.params?.noteText) {
+        try {
+          const lead = await fetchLeadById(integrationId, leadId);
+          const contactId = lead?._embedded?.contacts?.[0]?.id;
+          if (contactId) {
+            await createContactNote(integrationId, contactId, action.params.noteText);
+            console.log(`✅ Note added to contact ${contactId}`);
+          }
+        } catch (error: any) {
+          console.error('Error adding contact note:', error.message);
+        }
+      }
+      break;
+
+    case 'send_files':
+      // Отправить файлы
+      if (action.params?.fileUrls && Array.isArray(action.params.fileUrls) && chatId) {
+        try {
+          for (const fileUrl of action.params.fileUrls) {
+            // Определяем имя файла из URL
+            const fileName = fileUrl.split('/').pop() || 'file';
+            // По умолчанию отправляем как файл
+            await sendChatFileMessage(integrationId, chatId, fileUrl, fileName, 0, 'application/octet-stream');
+            console.log(`✅ File sent to chat: ${fileName}`);
+          }
+        } catch (error: any) {
+          console.error('Error sending files:', error.message);
+        }
+      }
+      break;
+
+    case 'send_kb_article':
+      // Отправить статью из базы знаний
+      if (action.params?.articleId && chatId) {
+        try {
+          const article = await realPrisma.kbArticle.findUnique({
+            where: { id: parseInt(String(action.params.articleId), 10) },
+          });
+          if (article && article.content) {
+            await sendChatMessage(integrationId, chatId, article.content);
+            console.log(`✅ KB article "${article.title}" sent to chat`);
+          }
+        } catch (error: any) {
+          console.error('Error sending KB article:', error.message);
+        }
+      }
+      break;
+
+    case 'send_webhook':
+      // Отправить вебхук
+      if (action.params?.webhookUrl) {
+        try {
+          const webhookPayload = {
+            leadId,
+            agentId,
+            integrationId,
+            timestamp: new Date().toISOString(),
+            customData: action.params.webhookData || {},
+          };
+
+          await fetch(action.params.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookPayload),
+          });
+          console.log(`✅ Webhook sent to ${action.params.webhookUrl}`);
+        } catch (error: any) {
+          console.error('Error sending webhook:', error.message);
+        }
+      }
+      break;
+
+    case 'generate_message':
+      // Алиас для ai_message (генерация сообщения через AI)
+      if (action.instruction && chatId) {
+        try {
+          const messages: ChatMessage[] = [
+            {
+              role: 'system',
+              content: `Ты AI ассистент. Напиши сообщение клиенту согласно инструкции. Отвечай кратко и по делу.`,
+            },
+            {
+              role: 'user',
+              content: `Инструкция: ${action.instruction}`,
+            },
+          ];
+
+          const result = await chatCompletion({
+            model: chainMessageModel || 'openai/gpt-4o-mini',
+            messages,
+            temperature: 0.7,
+            max_tokens: 500,
+          });
+
+          const response = result.choices[0]?.message?.content;
+          if (response) {
+            await sendChatMessage(integrationId, chatId, response);
+            console.log(`✅ Generated message sent to chat`);
+          }
+        } catch (error) {
+          console.error('Error generating message:', error);
+        }
+      }
       break;
 
     default:
@@ -603,10 +880,127 @@ export async function cancelChainsForLead(
   }
 }
 
+/**
+ * Проверяет, приостановлен ли агент для конкретного лида
+ */
+export async function isAgentPausedForLead(
+  agentId: string,
+  leadId: number
+): Promise<boolean> {
+  try {
+    const pause = await realPrisma.agentPause.findUnique({
+      where: {
+        agentId_leadId: {
+          agentId,
+          leadId,
+        },
+      },
+    });
+
+    if (!pause || !pause.isPaused) {
+      return false;
+    }
+
+    // Проверяем, не истекла ли пауза
+    if (pause.resumeAt && new Date() > new Date(pause.resumeAt)) {
+      // Автоматически снимаем паузу
+      await realPrisma.agentPause.update({
+        where: { id: pause.id },
+        data: { isPaused: false },
+      });
+      return false;
+    }
+
+    return true;
+  } catch (error: any) {
+    console.error('Error checking agent pause:', error.message);
+    return false;
+  }
+}
+
+/**
+ * Снимает паузу агента для лида
+ */
+export async function resumeAgentForLead(
+  agentId: string,
+  leadId: number
+): Promise<void> {
+  try {
+    await realPrisma.agentPause.upsert({
+      where: {
+        agentId_leadId: {
+          agentId,
+          leadId,
+        },
+      },
+      create: {
+        agentId,
+        integrationId: '',
+        leadId,
+        isPaused: false,
+      },
+      update: {
+        isPaused: false,
+      },
+    });
+    console.log(`✅ Agent ${agentId} resumed for lead ${leadId}`);
+  } catch (error: any) {
+    console.error('Error resuming agent:', error.message);
+  }
+}
+
+/**
+ * Приостанавливает агента для лида на определённое время
+ */
+export async function pauseAgentForLead(
+  agentId: string,
+  integrationId: string,
+  leadId: number,
+  chatId?: string,
+  reason?: string,
+  resumeAfterMinutes?: number
+): Promise<void> {
+  try {
+    const resumeAt = resumeAfterMinutes
+      ? new Date(Date.now() + resumeAfterMinutes * 60 * 1000)
+      : null;
+
+    await realPrisma.agentPause.upsert({
+      where: {
+        agentId_leadId: {
+          agentId,
+          leadId,
+        },
+      },
+      create: {
+        agentId,
+        integrationId,
+        leadId,
+        chatId,
+        isPaused: true,
+        reason: reason || 'Приостановлено вручную',
+        resumeAt,
+      },
+      update: {
+        isPaused: true,
+        pausedAt: new Date(),
+        reason: reason || 'Приостановлено вручную',
+        resumeAt,
+      },
+    });
+    console.log(`✅ Agent ${agentId} paused for lead ${leadId}${resumeAt ? ` until ${resumeAt.toISOString()}` : ''}`);
+  } catch (error: any) {
+    console.error('Error pausing agent:', error.message);
+  }
+}
+
 export default {
   executeChainForLead,
   checkAndExecuteChains,
   processScheduledChainSteps,
   cancelChainsForLead,
   isChainWorkingNow,
+  isAgentPausedForLead,
+  resumeAgentForLead,
+  pauseAgentForLead,
 };

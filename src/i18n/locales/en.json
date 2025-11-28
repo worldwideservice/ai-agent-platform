@@ -37,7 +37,13 @@
     "knowledgeSources": "Knowledge Sources",
     "account": "Account",
     "accountSettings": "Account Settings",
-    "billing": "Billing Plans"
+    "billing": "Billing Plans",
+    "admin": "Administration",
+    "adminDashboard": "Overview",
+    "adminUsers": "Users",
+    "adminAgents": "All Agents",
+    "adminSystem": "System",
+    "support": "Support"
   },
   "header": {
     "notifications": "Notifications",
@@ -239,6 +245,8 @@
     "free": "Free",
     "mostPopular": "Most popular",
     "aboutPerConvo": "About ${{price}} per conversation",
+    "tooltipLine1": "Based on industry data, an average conversation includes 5-8 messages, which usually means about 3-4 responses.",
+    "tooltipLine2": "This rate was automatically calculated based on your plan price. No additional charges.",
     "agent": "{{count}} agent",
     "agents": "{{count}} agents",
     "unlimitedAgents": "Unlimited agents",
@@ -268,7 +276,21 @@
     "faq4q": "Do I need my own OpenAI API keys?",
     "faq4a": "No, we provide access to models through our keys. The cost of using models is already included in the plan.",
     "faq5q": "Are there additional charges for conversations?",
-    "faq5a": "In Scale and Max plans, voice features are included. Additional charges may apply only for telephony if you connect your own number via SIP."
+    "faq5a": "In Scale and Max plans, voice features are included. Additional charges may apply only for telephony if you connect your own number via SIP.",
+    "subscriptionStatus": {
+      "trial": "Trial period",
+      "active": "Active",
+      "grace_period": "Grace period",
+      "expired": "Expired"
+    },
+    "daysLeft": "{{count}} days left",
+    "gracePeriodWarning": "Your subscription has expired. {{count}} days of grace period remaining for payment.",
+    "subscriptionExpired": "Subscription expired",
+    "subscriptionExpiredMessage": "Your subscription has expired. Please renew to continue using the service.",
+    "renewSubscription": "Renew subscription",
+    "subscriptionEndsAt": "Subscription valid until {{date}}",
+    "periodInfo": "Subscription period: 30 days",
+    "gracePeriodInfo": "After subscription ends, you get 3 more days (10%) grace period for payment"
   },
   "knowledgeBase": {
     "categories": "Categories",

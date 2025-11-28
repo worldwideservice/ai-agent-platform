@@ -1,7 +1,34 @@
 import fetch from 'node-fetch';
+import pLimit from 'p-limit';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+// Concurrency limiter: max 5 parallel requests to OpenRouter
+// This prevents rate limiting and ensures stable performance
+const OPENROUTER_CONCURRENCY = parseInt(process.env.OPENROUTER_CONCURRENCY || '5');
+const openRouterLimit = pLimit(OPENROUTER_CONCURRENCY);
+
+// Stats for monitoring
+const stats = {
+  totalRequests: 0,
+  activeRequests: 0,
+  failedRequests: 0,
+  totalLatencyMs: 0,
+};
+
+/**
+ * Get OpenRouter service stats
+ */
+export function getOpenRouterStats() {
+  return {
+    ...stats,
+    avgLatencyMs: stats.totalRequests > 0 ? Math.round(stats.totalLatencyMs / stats.totalRequests) : 0,
+    concurrencyLimit: OPENROUTER_CONCURRENCY,
+    pendingRequests: openRouterLimit.pendingCount,
+    activeRequests: openRouterLimit.activeCount,
+  };
+}
 
 export interface OpenRouterModel {
   id: string;
@@ -94,44 +121,57 @@ export async function fetchModels(): Promise<OpenRouterModel[]> {
 
 /**
  * Send chat completion request to OpenRouter
+ * Wrapped with concurrency limiter to prevent rate limiting
  */
 export async function chatCompletion(
   request: ChatCompletionRequest
 ): Promise<ChatCompletionResponse> {
-  try {
-    const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.APP_URL || 'http://localhost:5173',
-        'X-Title': 'AI Agent Platform',
-      },
-      body: JSON.stringify(request),
-    });
+  // Use concurrency limiter to control parallel requests
+  return openRouterLimit(async () => {
+    const startTime = Date.now();
+    stats.totalRequests++;
+    stats.activeRequests++;
 
-    if (!response.ok) {
-      const errorData: any = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `OpenRouter API error: ${response.status}`
-      );
+    try {
+      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': process.env.APP_URL || 'http://localhost:5173',
+          'X-Title': 'AI Agent Platform',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorData: any = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.error?.message || `OpenRouter API error: ${response.status}`
+        );
+      }
+
+      const result = await response.json() as ChatCompletionResponse;
+      stats.totalLatencyMs += Date.now() - startTime;
+      return result;
+    } catch (error: any) {
+      stats.failedRequests++;
+      console.error('❌ Error in OpenRouter chat completion:', error);
+
+      // Handle specific errors
+      if (error.message?.includes('API key')) {
+        throw new Error('Invalid OpenRouter API key');
+      } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
+        throw new Error('OpenRouter rate limit exceeded. Try again later.');
+      } else if (error.message?.includes('model')) {
+        throw new Error(`Model not available: ${request.model}`);
+      }
+
+      throw new Error(`OpenRouter error: ${error.message}`);
+    } finally {
+      stats.activeRequests--;
     }
-
-    return await response.json() as ChatCompletionResponse;
-  } catch (error: any) {
-    console.error('❌ Error in OpenRouter chat completion:', error);
-
-    // Handle specific errors
-    if (error.message?.includes('API key')) {
-      throw new Error('Invalid OpenRouter API key');
-    } else if (error.message?.includes('quota') || error.message?.includes('limit')) {
-      throw new Error('OpenRouter rate limit exceeded. Try again later.');
-    } else if (error.message?.includes('model')) {
-      throw new Error(`Model not available: ${request.model}`);
-    }
-
-    throw new Error(`OpenRouter error: ${error.message}`);
-  }
+  });
 }
 
 /**
@@ -215,4 +255,5 @@ export default {
   chatCompletion,
   streamChatCompletion,
   estimateCost,
+  getOpenRouterStats,
 };

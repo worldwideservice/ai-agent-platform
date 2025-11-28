@@ -18,6 +18,8 @@ import {
   fetchUsers
 } from '../services/kommo.service';
 import { systemNotifications } from '../services/system-notifications.service';
+import { isAgentPausedForLead } from '../services/chain-executor.service';
+import { enqueueWebhook, isQueueAvailable } from '../services/webhook-queue.service';
 
 // In-memory cache for trigger execution counts per chat
 // Key format: "triggerId:chatId" -> count
@@ -709,8 +711,9 @@ interface TriggerWithActions {
 /**
  * Process webhook in background (async, not awaited)
  * Processes webhook for ALL integrations that have active triggers
+ * Exported for use by queue worker
  */
-async function processWebhookAsync(payload: any) {
+export async function processWebhookAsync(payload: any) {
   try {
     // Extract account ID from webhook
     const accountId = payload.account?.id || payload.account_id;
@@ -798,9 +801,14 @@ async function processWebhookAsync(payload: any) {
  * Handle webhooks from Kommo
  * IMPORTANT: Kommo requires response within 2 seconds!
  * We respond immediately and process asynchronously.
+ *
+ * Architecture:
+ * - If Redis Queue available: enqueue for worker processing (scalable)
+ * - If no Redis: process in background (current behavior)
  */
 export async function handleWebhook(req: Request, res: Response) {
   const payload = req.body;
+  const receivedAt = new Date().toISOString();
 
   // Log webhook for debugging (short version)
   console.log('📥 Kommo Webhook received:', Object.keys(payload).join(', '));
@@ -808,7 +816,29 @@ export async function handleWebhook(req: Request, res: Response) {
   // Respond IMMEDIATELY with 200 OK to satisfy Kommo's 2-second requirement
   res.status(200).json({ success: true });
 
-  // Process webhook asynchronously in background (don't await!)
+  // Check if Redis Queue is available for scalable processing
+  if (isQueueAvailable()) {
+    // Enqueue webhook for worker processing
+    const jobId = await enqueueWebhook({
+      integrationId: '', // Will be resolved by worker
+      agentId: '', // Will be resolved by worker
+      payload,
+      receivedAt,
+      headers: {
+        'x-forwarded-for': req.headers['x-forwarded-for'] as string || '',
+        'user-agent': req.headers['user-agent'] as string || '',
+      },
+    });
+
+    if (jobId) {
+      console.log(`📤 Webhook queued for processing: ${jobId}`);
+      return;
+    }
+    // If queue failed, fallback to sync processing
+    console.log('⚠️ Queue failed, falling back to sync processing');
+  }
+
+  // Fallback: Process webhook asynchronously in background (don't await!)
   processWebhookAsync(payload).catch(err => {
     console.error('❌ Background webhook processing failed:', err);
   });
@@ -869,6 +899,49 @@ async function processWebhookPayload(
       eventType = 'task_created';
     } else if (payload.task?.update?.[0]) {
       eventType = 'task_updated';
+    }
+    // ========================================================================
+    // Talk events (chat session management)
+    // talk.add - new conversation started
+    // talk.update - conversation status changed (in_work, closed, read)
+    // ========================================================================
+    else if (payload.talk?.add?.[0] || payload.talk?.update?.[0]) {
+      const talk = payload.talk?.add?.[0] || payload.talk?.update?.[0];
+      const isNewTalk = !!payload.talk?.add;
+      const talkId = talk.talk_id || talk.id;
+      const chatId = talk.chat_id;
+      const entityId = talk.entity_id; // Lead ID
+      const entityType = talk.entity_type; // 'lead' or 'contact'
+      const isInWork = talk.is_in_work === '1' || talk.is_in_work === 1;
+      const isRead = talk.is_read === '1' || talk.is_read === 1;
+      const origin = talk.origin; // telegram, whatsapp, etc.
+
+      if (isNewTalk) {
+        console.log(`🗨️ New talk created: ${talkId}, chat: ${chatId}, entity: ${entityType}:${entityId}, origin: ${origin}`);
+        // New talk - just log, AI agent will respond to messages
+        eventType = 'talk_created';
+      } else {
+        // Talk updated - check if closed or taken in work
+        console.log(`🗨️ Talk updated: ${talkId}, is_in_work: ${isInWork}, is_read: ${isRead}, entity: ${entityType}:${entityId}`);
+
+        if (!isInWork && entityId) {
+          // Chat closed by manager - resume AI agent
+          console.log(`📤 Talk ${talkId} closed, resuming AI agent for lead ${entityId}`);
+          const { resumeAgentForLead } = await import('../services/conversational-agent.service');
+          await resumeAgentForLead(integration.id, parseInt(entityId));
+          eventType = 'talk_closed';
+        } else if (isInWork && entityId) {
+          // Manager took chat in work - pause AI agent
+          console.log(`📥 Talk ${talkId} taken in work, pausing AI agent for lead ${entityId}`);
+          const { pauseAgentForLead } = await import('../services/conversational-agent.service');
+          // Use 0 as employee ID since we don't have specific user from talk event
+          await pauseAgentForLead(integration.id, parseInt(entityId), agent.id, 0);
+          eventType = 'talk_in_work';
+        }
+      }
+
+      console.log(`✅ Talk event processed: ${eventType}`);
+      return;
     }
     // Check for incoming chat messages (message.add webhook)
     else if (payload.message?.add?.[0]) {
@@ -956,14 +1029,15 @@ async function processWebhookPayload(
                     params: a.params ? JSON.parse(a.params) : {},
                   }));
 
-                  // Check if this trigger has stop_agent action
-                  if (actionsWithParams.some((a: any) => a.action === 'stop_agent')) {
+                  // Check if this trigger has stop_agents action
+                  if (actionsWithParams.some((a: any) => a.action === 'stop_agents')) {
                     shouldStopAgent = true;
                     console.log(`⏹️ Agent stopped by trigger: ${trigger.name}`);
                   }
 
                   const context = {
                     integrationId: integration.id,
+                    agentId: agent.id,
                     leadId: entityId ? parseInt(entityId) : undefined,
                     chatId,
                     emailGenerationModel: advancedSettings?.emailGenerationModel || 'openai/gpt-4o-mini',
@@ -999,6 +1073,13 @@ async function processWebhookPayload(
         // If agent not stopped, run conversational AI
         if (!shouldStopAgent && entityId) {
           try {
+            // Check if agent is paused for this lead
+            const isPaused = await isAgentPausedForLead(agent.id, parseInt(entityId));
+            if (isPaused) {
+              console.log(`⏸️ Agent ${agent.id} is paused for lead ${entityId}, skipping response`);
+              return;
+            }
+
             // Fetch lead to get pipeline/stage info
             const { fetchLeadById } = await import('../services/kommo.service');
             const lead = await fetchLeadById(integration.id, parseInt(entityId));
@@ -1092,14 +1173,15 @@ async function processWebhookPayload(
                     params: a.params ? JSON.parse(a.params) : {},
                   }));
 
-                  // Check if this trigger has stop_agent action
-                  if (actionsWithParams.some((a: any) => a.action === 'stop_agent')) {
+                  // Check if this trigger has stop_agents action
+                  if (actionsWithParams.some((a: any) => a.action === 'stop_agents')) {
                     shouldStopAgent = true;
                     console.log(`⏹️ Agent stopped by email trigger: ${trigger.name}`);
                   }
 
                   const context = {
                     integrationId: integration.id,
+                    agentId: agent.id,
                     leadId: entityType === 'leads' ? parseInt(entityId) : undefined,
                     contactId: entityType === 'contacts' ? parseInt(entityId) : undefined,
                     emailFrom,
@@ -1124,6 +1206,13 @@ async function processWebhookPayload(
         // If agent not stopped and entity is a lead, run conversational AI
         if (!shouldStopAgent && entityType === 'leads' && entityId) {
           try {
+            // Check if agent is paused for this lead
+            const isPaused = await isAgentPausedForLead(agent.id, parseInt(entityId));
+            if (isPaused) {
+              console.log(`⏸️ Agent ${agent.id} is paused for lead ${entityId}, skipping email response`);
+              return;
+            }
+
             const { fetchLeadById } = await import('../services/kommo.service');
             const lead = await fetchLeadById(integration.id, parseInt(entityId));
 
@@ -1300,6 +1389,7 @@ async function processWebhookPayload(
 
       const context = {
         integrationId: integration.id,
+        agentId: agent.id,
         leadId,
         contactId,
         pipelineId,

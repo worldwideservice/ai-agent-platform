@@ -328,9 +328,9 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
     console.error('Error sending chat message:', error);
 
     // Уведомляем пользователя об ошибке AI модели
-    if (userId) {
+    if (req.userId) {
       const agentName = req.body.agentId ? 'Агент' : 'Неизвестный агент';
-      await systemNotifications.aiModelError(userId, agentName, error.message || 'Не удалось обработать запрос');
+      await systemNotifications.aiModelError(req.userId, agentName, error.message || 'Не удалось обработать запрос');
     }
 
     return res.status(500).json({

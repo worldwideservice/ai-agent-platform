@@ -10,28 +10,36 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  email             String    @unique
-  password          String
-  name              String?
-  role              String    @default("USER")
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  currentPlan       String    @default("trial") @map("current_plan")
-  trialEndsAt       DateTime? @map("trial_ends_at") @db.Timestamptz(6)
-  responsesUsed     Int       @default(0) @map("responses_used")
-  responsesLimit    Int       @default(500) @map("responses_limit")
-  avatarUrl         String?   @map("avatar_url")
-  company           String?
-  language          String    @default("ru")
-  timezone          String    @default("Europe/Kiev")
-  agentsLimit       Int       @default(3) @map("agents_limit")
-  instructionsLimit Int       @default(30000) @map("instructions_limit")
-  kbArticlesLimit   Int       @default(100) @map("kb_articles_limit")
-  responsesResetAt  DateTime? @map("responses_reset_at") @db.Timestamptz(6)
+  id                   String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  email                String    @unique
+  password             String
+  name                 String?
+  role                 String    @default("USER")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  currentPlan          String    @default("trial") @map("current_plan")
+  trialEndsAt          DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  responsesUsed        Int       @default(0) @map("responses_used")
+  responsesLimit       Int       @default(500) @map("responses_limit")
+  avatarUrl            String?   @map("avatar_url")
+  company              String?
+  language             String    @default("ru")
+  timezone             String    @default("Europe/Kiev")
+  agentsLimit          Int       @default(3) @map("agents_limit")
+  instructionsLimit    Int       @default(30000) @map("instructions_limit")
+  kbArticlesLimit      Int       @default(100) @map("kb_articles_limit")
+  responsesResetAt     DateTime? @map("responses_reset_at") @db.Timestamptz(6)
+  // Subscription fields
+  subscriptionStatus   String    @default("trial") @map("subscription_status") // trial, active, grace_period, expired
+  subscriptionStartsAt DateTime? @map("subscription_starts_at") @db.Timestamptz(6)
+  subscriptionEndsAt   DateTime? @map("subscription_ends_at") @db.Timestamptz(6)
+  gracePeriodEndsAt    DateTime? @map("grace_period_ends_at") @db.Timestamptz(6)
+  billingCycle         String    @default("monthly") @map("billing_cycle") // monthly, yearly
+  selectedResponses    Int       @default(1000) @map("selected_responses") // выбранный пакет ответов
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
+  @@index([subscriptionStatus], map: "idx_users_subscription_status")
   @@map("users")
 }
 
@@ -1055,4 +1063,25 @@ model TestConversationMessage {
 
   @@index([conversationId], map: "idx_test_conversation_messages_conversation_id")
   @@map("test_conversation_messages")
+}
+
+// Пауза агента для конкретного лида (для действия stop_agents)
+model AgentPause {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentId       String    @map("agent_id")
+  integrationId String    @map("integration_id")
+  leadId        Int       @map("lead_id")
+  chatId        String?   @map("chat_id")
+  isPaused      Boolean   @default(true) @map("is_paused")
+  reason        String?
+  pausedAt      DateTime  @default(now()) @map("paused_at") @db.Timestamptz(6)
+  resumeAt      DateTime? @map("resume_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([agentId, leadId], map: "unique_agent_pause_per_lead")
+  @@index([agentId], map: "idx_agent_pauses_agent_id")
+  @@index([leadId], map: "idx_agent_pauses_lead_id")
+  @@index([isPaused], map: "idx_agent_pauses_is_paused")
+  @@map("agent_pauses")
 }

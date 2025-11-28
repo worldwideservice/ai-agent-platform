@@ -65,7 +65,11 @@ export type Page =
   | 'training-roles'
   | 'training-sources'
   | 'settings'
-  | 'billing';
+  | 'billing'
+  | 'admin-dashboard'
+  | 'admin-users'
+  | 'admin-agents'
+  | 'admin-system';
 
 // Training Library Types
 export interface TrainingSource {

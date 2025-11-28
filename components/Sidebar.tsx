@@ -13,9 +13,14 @@ import {
   FileText,
   Library,
   Users,
-  BookOpen
+  BookOpen,
+  Shield,
+  Server,
+  UserCog,
+  Mail
 } from 'lucide-react';
 import { Page } from '../types';
+import { useAuth } from '../src/contexts/AuthContext';
 
 interface SidebarProps {
   currentPage: Page;
@@ -24,12 +29,15 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
   // Section toggle states
   const [isAgentsOpen, setIsAgentsOpen] = useState(true);
   const [isKbOpen, setIsKbOpen] = useState(true);
   const [isTrainingOpen, setIsTrainingOpen] = useState(true);
   const [isAccountOpen, setIsAccountOpen] = useState(true);
+  const [isAdminOpen, setIsAdminOpen] = useState(true);
 
   // Global sidebar collapsed state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -157,7 +165,45 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
             </div>
           )}
         </div>
+
+        {/* Admin Section - Only visible for admins */}
+        {isAdmin && (
+          <div>
+            <GroupHeader
+              label={t('sidebar.admin', 'Администрирование')}
+              isOpen={isAdminOpen}
+              toggle={() => setIsAdminOpen(!isAdminOpen)}
+            />
+            {(isAdminOpen || isSidebarCollapsed) && (
+              <div className="space-y-1">
+                <NavItem page="admin-dashboard" icon={Shield} label={t('sidebar.adminDashboard', 'Обзор')} />
+                <NavItem page="admin-users" icon={UserCog} label={t('sidebar.adminUsers', 'Пользователи')} />
+                <NavItem page="admin-agents" icon={Bot} label={t('sidebar.adminAgents', 'Все агенты')} />
+                <NavItem page="admin-system" icon={Server} label={t('sidebar.adminSystem', 'Система')} />
+              </div>
+            )}
+          </div>
+        )}
       </nav>
+
+      {/* Support Section */}
+      <div className={`border-t border-gray-100 dark:border-gray-700 p-4 ${isSidebarCollapsed ? 'text-center' : ''}`}>
+        <a
+          href="mailto:support@ton18.com"
+          title={isSidebarCollapsed ? t('sidebar.support', 'Поддержка') : undefined}
+          className={`flex items-center gap-3 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+            isSidebarCollapsed ? 'justify-center' : ''
+          }`}
+        >
+          <Mail size={18} className="flex-shrink-0" />
+          {!isSidebarCollapsed && (
+            <div className="min-w-0">
+              <div className="text-xs text-gray-400 dark:text-gray-500">{t('sidebar.support', 'Поддержка')}</div>
+              <div className="text-sm font-medium truncate">support@ton18.com</div>
+            </div>
+          )}
+        </a>
+      </div>
     </aside>
   );
 };

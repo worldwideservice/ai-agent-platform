@@ -15,6 +15,7 @@ import {
   createLeadNote,
   createContactNote,
   sendChatMessage,
+  sendChatFileMessage,
   sendEmail,
   getLeadContactEmail,
   fetchLeadById,
@@ -66,6 +67,7 @@ export interface TriggerAction {
 
 export interface TriggerContext {
   integrationId: string;
+  agentId?: string;
   leadId?: number;
   contactId?: number;
   chatId?: string;
@@ -97,7 +99,7 @@ export async function executeTriggerAction(
   action: TriggerAction,
   context: TriggerContext
 ): Promise<ActionResult> {
-  const { integrationId, leadId, contactId, chatId, emailGenerationModel } = context;
+  const { integrationId, agentId, leadId, contactId, chatId, emailGenerationModel } = context;
 
   console.log(`🎯 Executing action: ${action.action}`, { actionId: action.id, params: action.params });
 
@@ -152,10 +154,41 @@ export async function executeTriggerAction(
 
       // ---- Stop Agents ----
       case 'stop_agents': {
-        // This action is handled internally - mark chat/lead as "paused" for AI
-        // Implementation depends on your chat handling logic
-        console.log(`⏸️ Stop agents requested for lead ${leadId}, contact ${contactId}`);
-        return { success: true, actionId: action.id, actionType: action.action, message: 'Agents stopped for this chat' };
+        if (!agentId || !leadId) {
+          console.log(`⏸️ Stop agents requested but missing agentId (${agentId}) or leadId (${leadId})`);
+          return { success: false, actionId: action.id, actionType: action.action, message: 'Agent ID and Lead ID required', error: 'Missing agentId or leadId' };
+        }
+
+        try {
+          // Создаём или обновляем запись о паузе агента для лида
+          await prisma.agentPause.upsert({
+            where: {
+              agentId_leadId: {
+                agentId,
+                leadId,
+              },
+            },
+            create: {
+              agentId,
+              integrationId,
+              leadId,
+              chatId,
+              isPaused: true,
+              reason: 'Остановлено через триггер',
+            },
+            update: {
+              isPaused: true,
+              pausedAt: new Date(),
+              reason: 'Остановлено через триггер',
+              resumeAt: null,
+            },
+          });
+          console.log(`✅ Agent ${agentId} paused for lead ${leadId} (via trigger)`);
+          return { success: true, actionId: action.id, actionType: action.action, message: 'Agents stopped for this chat' };
+        } catch (error: any) {
+          console.error('Error stopping agents:', error.message);
+          return { success: false, actionId: action.id, actionType: action.action, message: 'Failed to stop agents', error: error.message };
+        }
       }
 
       // ---- Create Task ----
@@ -400,10 +433,35 @@ ${leadContext ? `Контекст: ${leadContext}` : ''}
 
       // ---- Send Files ----
       case 'send_files': {
-        // File sending requires file upload to Kommo first, then sending via chat
-        // This is a complex operation that depends on file storage
-        console.log('📎 Send files action - not yet implemented');
-        return { success: false, actionId: action.id, actionType: action.action, message: 'File sending not yet implemented', error: 'Not implemented' };
+        if (!action.params?.fileUrls || !Array.isArray(action.params.fileUrls) || action.params.fileUrls.length === 0) {
+          return { success: false, actionId: action.id, actionType: action.action, message: 'File URLs required', error: 'Missing fileUrls' };
+        }
+        if (!chatId) {
+          return { success: false, actionId: action.id, actionType: action.action, message: 'Chat ID required for sending files', error: 'Missing chatId' };
+        }
+
+        const sentFiles: string[] = [];
+        const failedFiles: string[] = [];
+
+        for (const fileUrl of action.params.fileUrls) {
+          try {
+            const fileName = fileUrl.split('/').pop() || 'file';
+            await sendChatFileMessage(integrationId, chatId, fileUrl, fileName, 0, 'application/octet-stream');
+            console.log(`✅ File sent to chat: ${fileName}`);
+            sentFiles.push(fileName);
+          } catch (error: any) {
+            console.error(`❌ Error sending file ${fileUrl}:`, error.message);
+            failedFiles.push(fileUrl);
+          }
+        }
+
+        if (failedFiles.length === 0) {
+          return { success: true, actionId: action.id, actionType: action.action, message: `Files sent successfully: ${sentFiles.join(', ')}` };
+        } else if (sentFiles.length > 0) {
+          return { success: true, actionId: action.id, actionType: action.action, message: `Partially sent. Success: ${sentFiles.join(', ')}. Failed: ${failedFiles.length}` };
+        } else {
+          return { success: false, actionId: action.id, actionType: action.action, message: 'Failed to send all files', error: 'All files failed' };
+        }
       }
 
       // ---- Send KB Article ----

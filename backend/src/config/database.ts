@@ -84,8 +84,8 @@ export const agent = {
       INSERT INTO agents (
         id, name, is_active, model, system_instructions,
         pipeline_settings, channel_settings, kb_settings,
-        crm_type, crm_connected, crm_data, user_id, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        crm_type, crm_connected, crm_data, training_role_id, user_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *
     `;
 
@@ -101,6 +101,7 @@ export const agent = {
       data.crmType || null,
       data.crmConnected || false,
       data.crmData ? JSON.stringify(data.crmData) : null,
+      data.trainingRoleId || null,
       data.userId,
       now,
       now
@@ -153,6 +154,10 @@ export const agent = {
     if (data.crmData !== undefined) {
       updates.push(`crm_data = $${paramIndex++}`);
       params.push(JSON.stringify(data.crmData));
+    }
+    if (data.trainingRoleId !== undefined) {
+      updates.push(`training_role_id = $${paramIndex++}`);
+      params.push(data.trainingRoleId);
     }
 
     updates.push(`updated_at = $${paramIndex++}`);
@@ -579,6 +584,24 @@ export const kbArticle = {
     return articles;
   },
   async create() { return null; },
+
+  async count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*)::int as count FROM kb_articles WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.isActive !== undefined) {
+      query += ` AND is_active = $${paramIndex++}`;
+      params.push(where.isActive);
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows[0].count;
+  },
 };
 
 export const contact = {
@@ -2211,6 +2234,257 @@ export const notification = {
   },
 };
 
+// TestConversation model operations
+export const testConversation = {
+  async findMany({ where, orderBy, include }: any = {}) {
+    let query = 'SELECT * FROM test_conversations WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+
+    if (orderBy?.updatedAt) {
+      query += ` ORDER BY updated_at ${orderBy.updatedAt === 'desc' ? 'DESC' : 'ASC'}`;
+    } else if (orderBy?.createdAt) {
+      query += ` ORDER BY created_at ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    const result = await pool.query(query, params);
+    const conversations = result.rows.map(toCamelCase);
+
+    // Include messages if requested
+    if (include?.messages) {
+      for (const conv of conversations) {
+        const msgQuery = `
+          SELECT * FROM test_conversation_messages
+          WHERE conversation_id = $1
+          ORDER BY created_at ${include.messages.orderBy?.createdAt === 'desc' ? 'DESC' : 'ASC'}
+          ${include.messages.take ? `LIMIT ${include.messages.take}` : ''}
+        `;
+        const msgResult = await pool.query(msgQuery, [conv.id]);
+        conv.messages = msgResult.rows.map(toCamelCase);
+      }
+    }
+
+    return conversations;
+  },
+
+  async findFirst({ where, include }: any) {
+    let query = 'SELECT * FROM test_conversations WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.id) {
+      query += ` AND id = $${paramIndex++}`;
+      params.push(where.id);
+    }
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+    if (where?.agentId) {
+      query += ` AND agent_id = $${paramIndex++}`;
+      params.push(where.agentId);
+    }
+
+    query += ' LIMIT 1';
+    const result = await pool.query(query, params);
+
+    if (!result.rows[0]) return null;
+
+    const conv = toCamelCase(result.rows[0]);
+
+    // Include messages if requested
+    if (include?.messages) {
+      const msgQuery = `
+        SELECT * FROM test_conversation_messages
+        WHERE conversation_id = $1
+        ORDER BY created_at ${include.messages.orderBy?.createdAt === 'desc' ? 'DESC' : 'ASC'}
+      `;
+      const msgResult = await pool.query(msgQuery, [conv.id]);
+      conv.messages = msgResult.rows.map(toCamelCase);
+    }
+
+    return conv;
+  },
+
+  async findUnique({ where, include }: any) {
+    return this.findFirst({ where, include });
+  },
+
+  async create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const query = `
+      INSERT INTO test_conversations (id, user_id, agent_id, title, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      id,
+      data.userId,
+      data.agentId,
+      data.title || 'Новый разговор',
+      now,
+      now
+    ]);
+
+    return toCamelCase(result.rows[0]);
+  },
+
+  async update({ where, data }: any) {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      params.push(data.title);
+    }
+    if (data.updatedAt !== undefined) {
+      updates.push(`updated_at = $${paramIndex++}`);
+      params.push(data.updatedAt);
+    } else {
+      updates.push(`updated_at = $${paramIndex++}`);
+      params.push(new Date().toISOString());
+    }
+
+    params.push(where.id);
+
+    const query = `UPDATE test_conversations SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    const result = await pool.query(query, params);
+
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+
+  async updateMany({ where, data }: any) {
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (data.title !== undefined) {
+      updates.push(`title = $${paramIndex++}`);
+      params.push(data.title);
+    }
+
+    if (updates.length === 0) {
+      return { count: 0 };
+    }
+
+    let query = `UPDATE test_conversations SET ${updates.join(', ')} WHERE 1=1`;
+
+    if (where?.id) {
+      query += ` AND id = $${paramIndex++}`;
+      params.push(where.id);
+    }
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
+
+  async delete({ where }: any) {
+    const query = 'DELETE FROM test_conversations WHERE id = $1 RETURNING *';
+    const result = await pool.query(query, [where.id]);
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM test_conversations WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.id) {
+      query += ` AND id = $${paramIndex++}`;
+      params.push(where.id);
+    }
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
+};
+
+// TestConversationMessage model operations
+export const testConversationMessage = {
+  async findMany({ where, orderBy }: any = {}) {
+    let query = 'SELECT * FROM test_conversation_messages WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.conversationId) {
+      query += ` AND conversation_id = $${paramIndex++}`;
+      params.push(where.conversationId);
+    }
+    if (where?.role) {
+      query += ` AND role = $${paramIndex++}`;
+      params.push(where.role);
+    }
+
+    if (orderBy?.createdAt) {
+      query += ` ORDER BY created_at ${orderBy.createdAt === 'desc' ? 'DESC' : 'ASC'}`;
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows.map(toCamelCase);
+  },
+
+  async create({ data }: any) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    const query = `
+      INSERT INTO test_conversation_messages (id, conversation_id, role, content, sources, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      id,
+      data.conversationId,
+      data.role,
+      data.content,
+      data.sources || null,
+      now
+    ]);
+
+    return toCamelCase(result.rows[0]);
+  },
+
+  async count({ where }: any = {}) {
+    let query = 'SELECT COUNT(*)::int as count FROM test_conversation_messages WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.conversationId) {
+      query += ` AND conversation_id = $${paramIndex++}`;
+      params.push(where.conversationId);
+    }
+    if (where?.role) {
+      query += ` AND role = $${paramIndex++}`;
+      params.push(where.role);
+    }
+
+    const result = await pool.query(query, params);
+    return result.rows[0].count;
+  },
+};
+
 // Export as prisma-like object
 export const prisma = {
   agent: { ...agent, count: agent.count },
@@ -2238,6 +2512,8 @@ export const prisma = {
   trainingSource,
   trainingRole,
   notification,
+  testConversation,
+  testConversationMessage,
   $connect: async () => {
     try {
       await pool.query('SELECT NOW()');

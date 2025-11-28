@@ -3,7 +3,7 @@
  * Сервис проверки и управления лимитами тарифных планов
  */
 
-import { prisma } from '../config/database';
+import prisma from '../lib/prisma';
 import { getPlanConfig, isUnlimited, PlanType, PLAN_CONFIGS } from '../config/plans';
 
 export interface LimitCheckResult {
@@ -255,14 +255,28 @@ export async function changePlan(
     trialEndsAt.setDate(trialEndsAt.getDate() + planConfig.trialDays);
     updateData.trialEndsAt = trialEndsAt;
     updateData.responsesResetAt = null;
+    updateData.subscriptionStatus = 'trial';
+    updateData.subscriptionStartsAt = null;
+    updateData.subscriptionEndsAt = null;
+    updateData.gracePeriodEndsAt = null;
   } else {
     // Для платных планов - дата сброса на следующий месяц
+    const now = new Date();
     const nextReset = new Date();
     nextReset.setMonth(nextReset.getMonth() + 1);
     nextReset.setDate(1);
+
+    // Устанавливаем даты подписки на 30 дней
+    const subscriptionEndsAt = new Date(now);
+    subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + 30);
+
     updateData.responsesResetAt = nextReset;
     updateData.responsesUsed = 0; // Сбрасываем при смене плана
     updateData.trialEndsAt = null;
+    updateData.subscriptionStatus = 'active';
+    updateData.subscriptionStartsAt = now;
+    updateData.subscriptionEndsAt = subscriptionEndsAt;
+    updateData.gracePeriodEndsAt = null;
   }
 
   await prisma.user.update({

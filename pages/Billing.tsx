@@ -14,7 +14,8 @@ import {
   Book,
   MessageSquare,
   Calendar,
-  Clock
+  Clock,
+  HelpCircle
 } from 'lucide-react';
 import { billingService, SubscriptionInfo } from '../src/services/api';
 
@@ -25,6 +26,9 @@ type ResponseCount = 1000 | 5000 | 10000 | 15000 | 20000 | 50000;
 
 const RESPONSE_OPTIONS: ResponseCount[] = [1000, 5000, 10000, 15000, 20000, 50000];
 
+// Средний разговор содержит 3.5 ответа AI (5-8 сообщений всего)
+const AVG_RESPONSES_PER_CONVERSATION = 3.5;
+
 const PRICING_DATA: Record<ResponseCount, { launch: number | null; scale: number; max: number }> = {
   1000: { launch: 18, scale: 35, max: 60 },
   5000: { launch: null, scale: 171, max: 292 },
@@ -32,6 +36,49 @@ const PRICING_DATA: Record<ResponseCount, { launch: number | null; scale: number
   15000: { launch: null, scale: 578, max: 973 },
   20000: { launch: null, scale: 760, max: 1280 },
   50000: { launch: null, scale: 1800, max: 2900 },
+};
+
+// Компонент tooltip для цены за разговор
+interface PriceTooltipProps {
+  price: string;
+  variant: 'blue' | 'gray';
+}
+
+const PriceTooltip: React.FC<PriceTooltipProps> = ({ price, variant }) => {
+  const { t } = useTranslation();
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const bgClass = variant === 'blue'
+    ? 'text-[#0078D4] bg-blue-50 dark:bg-blue-900/30'
+    : 'text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700';
+
+  return (
+    <div className="relative inline-block">
+      <span
+        className={`text-xs font-medium ${bgClass} px-2 py-0.5 rounded cursor-help flex items-center gap-1`}
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+      >
+        <Info size={10} />
+        {t('billing.aboutPerConvo', { price })}
+        <HelpCircle size={10} className="opacity-60" />
+      </span>
+
+      {showTooltip && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 z-50">
+          <div className="bg-gray-900 dark:bg-gray-950 text-white text-xs rounded-lg p-3 shadow-xl">
+            <p className="mb-2">
+              {t('billing.tooltipLine1')}
+            </p>
+            <p className="text-gray-300">
+              {t('billing.tooltipLine2')}
+            </p>
+            <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-gray-900 dark:border-t-gray-950"></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // FAQs are now loaded from translations
@@ -85,19 +132,74 @@ export const Billing: React.FC = () => {
     return new Intl.NumberFormat('en-US').format(num);
   };
 
+  // Расчет цены за разговор (1 разговор ≈ 3.5 ответа AI)
+  const getPricePerConversation = (planPrice: number | null) => {
+    const price = getPrice(planPrice);
+    if (price === null) return '0.00';
+    // Количество разговоров = ответы / среднее кол-во ответов на разговор
+    const conversationsCount = responseCount / AVG_RESPONSES_PER_CONVERSATION;
+    return (price / conversationsCount).toFixed(2);
+  };
+
   return (
     <div className="space-y-10 pb-20 max-w-7xl mx-auto">
        
        {/* Header */}
        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('billing.title')}</h1>
           
+       {/* Grace Period / Expired Warning Banner */}
+       {subscription?.subscriptionStatus === 'grace_period' && (
+         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-xl p-4 flex items-center gap-4">
+           <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center flex-shrink-0">
+             <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+           </div>
+           <div className="flex-1">
+             <p className="font-medium text-yellow-800 dark:text-yellow-200">
+               {t('billing.gracePeriodWarning', { count: subscription?.gracePeriodDaysRemaining ?? 0 })}
+             </p>
+             <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">{t('billing.gracePeriodInfo')}</p>
+           </div>
+           <button className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+             {t('billing.renewSubscription')}
+           </button>
+         </div>
+       )}
+
+       {subscription?.subscriptionStatus === 'expired' && (
+         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-xl p-4 flex items-center gap-4">
+           <div className="w-10 h-10 bg-red-100 dark:bg-red-800 rounded-full flex items-center justify-center flex-shrink-0">
+             <Clock className="w-5 h-5 text-red-600 dark:text-red-400" />
+           </div>
+           <div className="flex-1">
+             <p className="font-medium text-red-800 dark:text-red-200">{t('billing.subscriptionExpired')}</p>
+             <p className="text-sm text-red-600 dark:text-red-400 mt-1">{t('billing.subscriptionExpiredMessage')}</p>
+           </div>
+           <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm">
+             {t('billing.renewSubscription')}
+           </button>
+         </div>
+       )}
+
        {/* Current Plan Card - Polished to match screenshot */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm">
          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
             <div className="w-full md:flex-1 min-w-0 space-y-5">
                <div className="flex flex-wrap items-baseline gap-2">
                  <span className="text-xl font-bold text-gray-900 dark:text-white">{t('billing.yourCurrentPlan')}</span>
-                 <span className="text-xl font-bold text-gray-500 dark:text-gray-400">{t('billing.trialPeriod')}</span>
+                 <span className="text-xl font-bold text-gray-500 dark:text-gray-400">
+                   {subscription?.planDisplayName || t('billing.trialPeriod')}
+                 </span>
+                 {/* Subscription Status Badge */}
+                 {subscription?.subscriptionStatus && (
+                   <span className={`ml-2 px-2.5 py-0.5 text-xs font-medium rounded-full ${
+                     subscription.subscriptionStatus === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                     subscription.subscriptionStatus === 'trial' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                     subscription.subscriptionStatus === 'grace_period' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                     'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                   }`}>
+                     {t(`billing.subscriptionStatus.${subscription.subscriptionStatus}`)}
+                   </span>
+                 )}
                </div>
 
                <div className="flex flex-wrap items-center gap-8">
@@ -111,8 +213,22 @@ export const Billing: React.FC = () => {
                  </div>
                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-medium">
                    <Calendar size={18} className="text-gray-400" />
-                   <span>{t('billing.daysRemaining')} {subscription?.daysRemaining ?? 0}</span>
+                   <span>
+                     {subscription?.subscriptionStatus === 'grace_period'
+                       ? t('billing.daysLeft', { count: subscription?.gracePeriodDaysRemaining ?? 0 })
+                       : `${t('billing.daysRemaining')} ${subscription?.daysRemaining ?? 0}`
+                     }
+                   </span>
                  </div>
+                 {subscription?.subscriptionEndsAt && subscription?.subscriptionStatus === 'active' && (
+                   <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-medium text-sm">
+                     <span>
+                       {t('billing.subscriptionEndsAt', {
+                         date: new Date(subscription.subscriptionEndsAt).toLocaleDateString()
+                       })}
+                     </span>
+                   </div>
+                 )}
                </div>
 
                <div className="w-full pt-2">
@@ -241,9 +357,15 @@ export const Billing: React.FC = () => {
               )}
            </div>
 
-           <p className="text-xs text-gray-400 dark:text-gray-500 mb-6 h-4">
-             {prices.launch === null ? t('billing.notAvailableForResponses') : ''}
-           </p>
+           <div className="flex items-center gap-1 mb-6 h-4">
+             {prices.launch === null ? (
+               <span className="text-xs text-gray-400 dark:text-gray-500">
+                 {t('billing.notAvailableForResponses')}
+               </span>
+             ) : (
+               <PriceTooltip price={getPricePerConversation(prices.launch)} variant="gray" />
+             )}
+           </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
               <p className="font-medium text-gray-900 dark:text-white">{t('billing.whatsIncluded')}</p>
@@ -285,10 +407,7 @@ export const Billing: React.FC = () => {
            </div>
 
            <div className="flex items-center gap-1 mb-6 h-4">
-             <span className="text-xs font-medium text-[#0078D4] bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
-                <Info size={10} className="inline mr-1 mb-0.5"/>
-                {t('billing.aboutPerConvo', { price: '0.13' })}
-             </span>
+             <PriceTooltip price={getPricePerConversation(prices.scale)} variant="blue" />
            </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
@@ -324,10 +443,7 @@ export const Billing: React.FC = () => {
            </div>
 
            <div className="flex items-center gap-1 mb-6 h-4">
-             <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                <Info size={10} className="inline mr-1 mb-0.5"/>
-                {t('billing.aboutPerConvo', { price: '0.23' })}
-             </span>
+             <PriceTooltip price={getPricePerConversation(prices.max)} variant="gray" />
            </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">

@@ -15,6 +15,10 @@ import { KbArticles } from './pages/KbArticles';
 import { KbArticleCreate } from './pages/KbArticleCreate';
 import { TrainingRoles } from './pages/TrainingRoles';
 import { TrainingSources } from './pages/TrainingSources';
+import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminUsers } from './pages/AdminUsers';
+import { AdminAgents } from './pages/AdminAgents';
+import { AdminSystem } from './pages/AdminSystem';
 import { Page, Agent } from './types';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
@@ -688,6 +692,10 @@ const App: React.FC = () => {
       case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} categories={kbCategories} />;
       case 'training-roles': return <TrainingRoles />;
       case 'training-sources': return <TrainingSources />;
+      case 'admin-dashboard': return <AdminDashboard />;
+      case 'admin-users': return <AdminUsers />;
+      case 'admin-agents': return <AdminAgents />;
+      case 'admin-system': return <AdminSystem />;
       default: return <Dashboard />;
     }
   };
