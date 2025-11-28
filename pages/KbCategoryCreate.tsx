@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, ChevronDown } from 'lucide-react';
 
 interface KbCategoryCreateProps {
@@ -18,6 +19,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
   categories = [],
   currentCategoryId = null
 }) => {
+  const { t } = useTranslation();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [parentCategory, setParentCategory] = useState<string | null>(currentCategoryId);
@@ -59,12 +61,12 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
       {/* Breadcrumbs and Title */}
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-          <span>Категории</span>
+          <span>{t('knowledgeBase.categories')}</span>
           <span>/</span>
-          <span>{isEditMode ? 'Редактировать' : 'Создать'}</span>
+          <span>{isEditMode ? t('knowledgeBase.edit') : t('common.create')}</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-          {isEditMode ? 'Редактировать Категорию' : 'Создать Категорию'}
+          {isEditMode ? t('knowledgeBase.editCategory') : t('knowledgeBase.createCategory')}
         </h1>
       </div>
 
@@ -74,7 +76,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
         {/* Parent Category Field */}
         <div>
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Родительская категория
+            {t('knowledgeBase.parentCategoryLabel')}
           </label>
           <div className="relative" ref={dropdownRef}>
             <div
@@ -82,7 +84,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 flex items-center justify-between bg-white dark:bg-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors cursor-pointer"
             >
               <span className={`text-sm ${getParentCategoryName() ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                {getParentCategoryName() || 'Нет родительской категории (корневая)'}
+                {getParentCategoryName() || t('knowledgeBase.noParentCategory')}
               </span>
               <div className="flex items-center gap-2 text-gray-400">
                 {parentCategory && (
@@ -107,7 +109,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
                   }}
                   className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer text-sm text-gray-900 dark:text-white"
                 >
-                  Нет родительской категории (корневая)
+                  {t('knowledgeBase.noParentCategory')}
                 </div>
                 {categories.filter(c => !category || c.id !== category.id).map((cat) => (
                   <div
@@ -129,7 +131,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
         {/* Title Field */}
         <div>
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Заголовок<span className="text-red-500">*</span>
+            {t('knowledgeBase.titleLabel')}<span className="text-red-500">*</span>
           </label>
           <input 
             type="text" 
@@ -142,7 +144,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
         {/* Description Field */}
         <div>
           <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-            Описание
+            {t('knowledgeBase.descriptionLabel')}
           </label>
           <textarea 
             value={description}
@@ -167,7 +169,7 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
           }}
           className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
         >
-          {isEditMode ? 'Сохранить' : 'Создать'}
+          {isEditMode ? t('common.save') : t('common.create')}
         </button>
         {!isEditMode && (
           <button
@@ -181,14 +183,14 @@ export const KbCategoryCreate: React.FC<KbCategoryCreateProps> = ({
             }}
             className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
           >
-            Создать и Создать еще
+            {t('knowledgeBase.createAndAnother')}
           </button>
         )}
         <button
           onClick={onCancel}
           className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-4 py-2 text-sm font-medium transition-colors"
         >
-          Отмена
+          {t('common.cancel')}
         </button>
       </div>
     </div>

@@ -35,6 +35,10 @@ export async function getNotifications(req: AuthRequest, res: Response): Promise
       where: { userId, isRead: false },
     });
 
+    // Debug: check if titleKey is returned
+    if (notifications.length > 0) {
+      console.log('📝 First notification:', JSON.stringify(notifications[0], null, 2));
+    }
     res.json({ notifications, unreadCount });
   } catch (error) {
     console.error('Get notifications error:', error);
@@ -54,22 +58,33 @@ export async function createNotification(req: AuthRequest, res: Response): Promi
       return;
     }
 
-    const { type, title, message, isRead = true } = req.body;
+    const { type, title, message, titleKey, messageKey, params, isRead = true } = req.body;
 
-    if (!type || !title || !message) {
-      res.status(400).json({ error: 'type, title и message обязательны' });
+    console.log('📬 Creating notification:', { type, title, message, titleKey, messageKey, params });
+
+    // Для обратной совместимости: требуем либо title/message, либо titleKey/messageKey
+    if (!type || (!title && !titleKey) || (!message && !messageKey)) {
+      res.status(400).json({ error: 'type и (title/message или titleKey/messageKey) обязательны' });
       return;
     }
 
+    const dataToCreate = {
+      userId,
+      type,
+      title: title || titleKey || '', // Fallback для совместимости
+      message: message || messageKey || '', // Fallback для совместимости
+      titleKey: titleKey || null,
+      messageKey: messageKey || null,
+      params: params ? JSON.stringify(params) : null,
+      isRead,
+    };
+    console.log('📝 Data to create in DB:', dataToCreate);
+
     const notification = await prisma.notification.create({
-      data: {
-        userId,
-        type,
-        title,
-        message,
-        isRead,
-      },
+      data: dataToCreate,
     });
+
+    console.log('✅ Created notification:', notification);
 
     res.status(201).json({ notification });
   } catch (error) {

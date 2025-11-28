@@ -6,6 +6,9 @@ export interface Notification {
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
   message: string;
+  titleKey?: string; // Ключ перевода для заголовка
+  messageKey?: string; // Ключ перевода для текста
+  params?: string; // JSON строка с параметрами для подстановки
   isRead: boolean;
   createdAt: string;
 }
@@ -17,8 +20,11 @@ export interface NotificationsResponse {
 
 export interface CreateNotificationRequest {
   type: 'success' | 'error' | 'warning' | 'info';
-  title: string;
-  message: string;
+  title?: string; // Deprecated: используйте titleKey
+  message?: string; // Deprecated: используйте messageKey
+  titleKey?: string; // Ключ перевода для заголовка
+  messageKey?: string; // Ключ перевода для текста
+  params?: Record<string, string | number>; // Параметры для подстановки в перевод
   isRead?: boolean;
 }
 

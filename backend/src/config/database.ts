@@ -2120,8 +2120,8 @@ export const notification = {
     const now = new Date().toISOString();
 
     const query = `
-      INSERT INTO notifications (id, user_id, type, title, message, is_read, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO notifications (id, user_id, type, title, message, is_read, created_at, title_key, message_key, params)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
 
@@ -2132,7 +2132,10 @@ export const notification = {
       data.title,
       data.message,
       data.isRead !== undefined ? data.isRead : true,
-      now
+      now,
+      data.titleKey || null,
+      data.messageKey || null,
+      data.params || null
     ]);
 
     return toCamelCase(result.rows[0]);

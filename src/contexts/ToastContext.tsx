@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Toast } from '../../components/Toast';
 import { notificationsService } from '../services/api/notifications.service';
 
@@ -23,17 +24,21 @@ interface ToastProviderProps {
   children: ReactNode;
 }
 
-// Маппинг типов toast в заголовки
-const typeToTitle: Record<string, string> = {
-  success: 'Успешно',
-  error: 'Ошибка',
-  warning: 'Предупреждение',
-  info: 'Информация',
-};
-
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
+  const { t } = useTranslation();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [refreshCounter, setRefreshCounter] = useState(0);
+
+  // Маппинг типов toast в заголовки (с переводами)
+  const getTypeTitle = (type: string): string => {
+    const titles: Record<string, string> = {
+      success: t('toast.success'),
+      error: t('toast.error'),
+      warning: t('toast.warning'),
+      info: t('toast.info'),
+    };
+    return titles[type] || t('toast.notification');
+  };
 
   const showToast = useCallback((type: Toast['type'], message: string, saveToHistory = false) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -45,7 +50,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     if (saveToHistory) {
       notificationsService.createNotification({
         type,
-        title: typeToTitle[type] || 'Уведомление',
+        title: getTypeTitle(type),
         message,
         isRead: true, // Уже прочитано, т.к. toast показан
       }).catch(err => {
@@ -53,7 +58,7 @@ export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
         console.error('Failed to save notification:', err);
       });
     }
-  }, []);
+  }, [t]);
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));

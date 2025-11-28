@@ -7,6 +7,7 @@ import {
   deleteEmbeddingsBySource,
   semanticSearch,
 } from '../services/embeddings.service';
+import { canCreateKbArticle } from '../services/plan-limits.service';
 
 // Pool для работы с embeddings
 const pool = new Pool({
@@ -174,6 +175,18 @@ export async function createArticle(req: AuthRequest, res: Response): Promise<vo
         });
         return;
       }
+    }
+
+    // Проверяем лимит статей базы знаний
+    const articleLimit = await canCreateKbArticle(userId);
+    if (!articleLimit.allowed) {
+      res.status(403).json({
+        error: 'Plan limit reached',
+        message: articleLimit.message || 'Достигнут лимит статей базы знаний для вашего тарифа',
+        current: articleLimit.current,
+        limit: articleLimit.limit,
+      });
+      return;
     }
 
     // Создаем статью

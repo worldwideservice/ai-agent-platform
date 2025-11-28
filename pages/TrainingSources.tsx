@@ -9,11 +9,13 @@ import {
   BookOpen,
   Eye
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { TrainingSource } from '../types';
 import * as trainingService from '../src/services/api/training.service';
 import { notificationsService } from '../src/services/api';
 
 export const TrainingSources: React.FC = () => {
+  const { t } = useTranslation();
   const [sources, setSources] = useState<TrainingSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -69,7 +71,7 @@ export const TrainingSources: React.FC = () => {
 
   const handleDeleteSource = async (source: TrainingSource) => {
     if (source.isBuiltIn) return;
-    if (!confirm('Удалить источник знаний?')) return;
+    if (!confirm(t('training.deleteSourceConfirm'))) return;
 
     try {
       await trainingService.deleteSource(source.id);
@@ -78,8 +80,9 @@ export const TrainingSources: React.FC = () => {
       try {
         await notificationsService.createNotification({
           type: 'warning',
-          title: 'Источник удалён',
-          message: `Источник знаний "${source.name}" удалён`,
+          titleKey: 'training.sourceDeleted',
+          messageKey: 'training.sourceDeletedMessage',
+          params: { name: source.name },
         });
       } catch (e) { /* ignore */ }
     } catch (error) {
@@ -95,8 +98,9 @@ export const TrainingSources: React.FC = () => {
         try {
           await notificationsService.createNotification({
             type: 'success',
-            title: 'Источник обновлён',
-            message: `Источник знаний "${formData.name}" обновлён`,
+            titleKey: 'training.sourceUpdated',
+            messageKey: 'training.sourceUpdatedMessage',
+            params: { name: formData.name },
           });
         } catch (e) { /* ignore */ }
       } else {
@@ -105,8 +109,9 @@ export const TrainingSources: React.FC = () => {
         try {
           await notificationsService.createNotification({
             type: 'success',
-            title: 'Источник создан',
-            message: `Создан новый источник знаний "${formData.name}"`,
+            titleKey: 'training.sourceCreated',
+            messageKey: 'training.sourceCreatedMessage',
+            params: { name: formData.name },
           });
         } catch (e) { /* ignore */ }
       }
@@ -127,9 +132,33 @@ export const TrainingSources: React.FC = () => {
   const builtInSources = filteredSources.filter(s => s.isBuiltIn);
   const customSources = filteredSources.filter(s => !s.isBuiltIn);
 
+  // Get translated name for built-in sources
+  const getSourceName = (source: TrainingSource): string => {
+    if (source.isBuiltIn && source.id.startsWith('builtin-')) {
+      const translatedName = t(`training.builtInNames.${source.id}`, { defaultValue: '' });
+      return translatedName || source.name;
+    }
+    return source.name;
+  };
+
+  // Get translated description for built-in sources
+  const getSourceDescription = (source: TrainingSource): string | null => {
+    if (source.isBuiltIn && source.id.startsWith('builtin-')) {
+      const translatedDesc = t(`training.builtInDescriptions.${source.id}`, { defaultValue: '' });
+      return translatedDesc || source.description;
+    }
+    return source.description;
+  };
+
+  // Get translated category label
+  const getCategoryLabel = (category: string): string => {
+    const translatedLabel = t(`training.categories.${category}`, { defaultValue: '' });
+    return translatedLabel || trainingService.getCategoryLabel(category);
+  };
+
   const getCategoryBadge = (category: string) => {
     const color = trainingService.getCategoryColor(category);
-    const label = trainingService.getCategoryLabel(category);
+    const label = getCategoryLabel(category);
     const colorClasses: Record<string, string> = {
       blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
       purple: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
@@ -157,9 +186,9 @@ export const TrainingSources: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Источники знаний</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('training.sources')}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Книги, методологии и техники для обучения агентов
+            {t('training.sourcesSubtitle')}
           </p>
         </div>
         <button
@@ -167,7 +196,7 @@ export const TrainingSources: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus size={18} />
-          Добавить источник
+          {t('training.addSource')}
         </button>
       </div>
 
@@ -180,7 +209,7 @@ export const TrainingSources: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск источников..."
+            placeholder={t('training.searchSources')}
             className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
         </div>
@@ -191,9 +220,9 @@ export const TrainingSources: React.FC = () => {
           onChange={(e) => setSelectedCategory(e.target.value)}
           className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         >
-          <option value="all">Все категории</option>
+          <option value="all">{t('training.allCategories')}</option>
           {trainingService.SOURCE_CATEGORIES.map(cat => (
-            <option key={cat.value} value={cat.value}>{cat.label}</option>
+            <option key={cat.value} value={cat.value}>{getCategoryLabel(cat.value)}</option>
           ))}
         </select>
       </div>
@@ -202,7 +231,7 @@ export const TrainingSources: React.FC = () => {
       {builtInSources.length > 0 && (
         <div className="mb-8">
           <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-            Встроенные источники ({builtInSources.length})
+            {t('training.builtInSources')} ({builtInSources.length})
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {builtInSources.map(source => (
@@ -213,7 +242,7 @@ export const TrainingSources: React.FC = () => {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">{source.name}</h3>
+                      <h3 className="font-semibold text-gray-900 dark:text-white truncate">{getSourceName(source)}</h3>
                       {getCategoryBadge(source.category)}
                     </div>
                   </div>
@@ -227,22 +256,22 @@ export const TrainingSources: React.FC = () => {
                   </div>
                 </div>
 
-                {source.description && (
+                {getSourceDescription(source) && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
-                    {source.description}
+                    {getSourceDescription(source)}
                   </p>
                 )}
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">
-                    {source.content.length.toLocaleString()} символов
+                    {source.content.length.toLocaleString()} {t('training.characters')}
                   </span>
                   <button
                     onClick={() => setViewingSource(source)}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                   >
                     <Eye size={14} />
-                    Просмотреть
+                    {t('training.view')}
                   </button>
                 </div>
               </div>
@@ -254,14 +283,14 @@ export const TrainingSources: React.FC = () => {
       {/* Custom Sources */}
       <div>
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">
-          Мои источники ({customSources.length})
+          {t('training.mySources')} ({customSources.length})
         </h2>
         {customSources.length === 0 ? (
           <div className="bg-gray-50 dark:bg-gray-800/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center">
             <BookOpen size={40} className="mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-600 dark:text-gray-400 mb-2">У вас пока нет своих источников</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">{t('training.noSources')}</p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
-              Добавьте свои методологии, скрипты продаж или другие знания
+              {t('training.noSourcesHint')}
             </p>
           </div>
         ) : (
@@ -302,14 +331,14 @@ export const TrainingSources: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">
-                    {source.content.length.toLocaleString()} символов
+                    {source.content.length.toLocaleString()} {t('training.characters')}
                   </span>
                   <button
                     onClick={() => setViewingSource(source)}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                   >
                     <Eye size={14} />
-                    Просмотреть
+                    {t('training.view')}
                   </button>
                 </div>
               </div>
@@ -324,7 +353,7 @@ export const TrainingSources: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingSource ? 'Редактировать источник' : 'Добавить источник'}
+                {editingSource ? t('training.editSource') : t('training.addSource')}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -335,13 +364,13 @@ export const TrainingSources: React.FC = () => {
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Название *
+                  {t('training.nameRequired')}
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Например: Техники холодных звонков"
+                  placeholder={t('training.exampleSourceName')}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
@@ -349,13 +378,13 @@ export const TrainingSources: React.FC = () => {
               {/* Author */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Автор
+                  {t('training.author')}
                 </label>
                 <input
                   type="text"
                   value={formData.author}
                   onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                  placeholder="Например: Джордан Белфорт"
+                  placeholder={t('training.exampleAuthor')}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
@@ -363,7 +392,7 @@ export const TrainingSources: React.FC = () => {
               {/* Category */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Категория *
+                  {t('training.categoryRequired')}
                 </label>
                 <select
                   value={formData.category}
@@ -371,7 +400,7 @@ export const TrainingSources: React.FC = () => {
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 >
                   {trainingService.SOURCE_CATEGORIES.map(cat => (
-                    <option key={cat.value} value={cat.value}>{cat.label}</option>
+                    <option key={cat.value} value={cat.value}>{getCategoryLabel(cat.value)}</option>
                   ))}
                 </select>
               </div>
@@ -379,12 +408,12 @@ export const TrainingSources: React.FC = () => {
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Описание
+                  {t('training.description')}
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Краткое описание содержимого..."
+                  placeholder={t('training.briefSourceDescription')}
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
@@ -393,17 +422,17 @@ export const TrainingSources: React.FC = () => {
               {/* Content */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Содержимое *
+                  {t('training.contentRequired')}
                 </label>
                 <textarea
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                  placeholder="Текст методологии, техники, скрипта продаж..."
+                  placeholder={t('training.contentPlaceholder')}
                   rows={12}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  {formData.content.length.toLocaleString()} символов
+                  {formData.content.length.toLocaleString()} {t('training.characters')}
                 </p>
               </div>
             </div>
@@ -413,7 +442,7 @@ export const TrainingSources: React.FC = () => {
                 onClick={() => setIsModalOpen(false)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveSource}
@@ -421,7 +450,7 @@ export const TrainingSources: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Check size={18} />
-                {editingSource ? 'Сохранить' : 'Добавить'}
+                {editingSource ? t('common.save') : t('training.addSource')}
               </button>
             </div>
           </div>
@@ -436,7 +465,7 @@ export const TrainingSources: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {viewingSource.name}
+                    {getSourceName(viewingSource)}
                   </h2>
                   {getCategoryBadge(viewingSource.category)}
                 </div>

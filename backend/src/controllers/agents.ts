@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest, CreateAgentDto, UpdateAgentDto } from '../types';
 import { prisma } from '../config/database';
 import { systemNotifications } from '../services/system-notifications.service';
+import { canCreateAgent, checkInstructionsLimit } from '../services/plan-limits.service';
 
 // Helper функция для парсинга JSON полей агента
 function parseAgentJson(agent: any) {
@@ -101,6 +102,32 @@ export async function createAgent(req: AuthRequest, res: Response) {
       return;
     }
 
+    // Проверяем лимит агентов
+    const agentLimit = await canCreateAgent(req.userId!);
+    if (!agentLimit.allowed) {
+      res.status(403).json({
+        error: 'Plan limit reached',
+        message: agentLimit.message || 'Достигнут лимит агентов для вашего тарифа',
+        current: agentLimit.current,
+        limit: agentLimit.limit,
+      });
+      return;
+    }
+
+    // Проверяем лимит инструкций
+    if (data.systemInstructions) {
+      const instructionsCheck = await checkInstructionsLimit(req.userId!, data.systemInstructions.length);
+      if (!instructionsCheck.allowed) {
+        res.status(403).json({
+          error: 'Plan limit reached',
+          message: instructionsCheck.message || 'Превышен лимит символов в инструкциях',
+          current: instructionsCheck.current,
+          limit: instructionsCheck.limit,
+        });
+        return;
+      }
+    }
+
     const agent = await prisma.agent.create({
       data: {
         name: data.name.trim(),
@@ -114,12 +141,7 @@ export async function createAgent(req: AuthRequest, res: Response) {
       },
     });
 
-    // Уведомление ПОСЛЕ успешного создания в БД
-    await systemNotifications.success(
-      req.userId!,
-      'Агент создан',
-      `Агент "${agent.name}" успешно создан. Модель: ${agent.model}`
-    );
+    // Уведомление создаётся на фронтенде с ключами перевода (i18n)
 
     // Парсим JSON поля перед отправкой
     const parsedAgent = parseAgentJson(agent);
@@ -157,6 +179,20 @@ export async function updateAgent(req: AuthRequest, res: Response) {
       return;
     }
 
+    // Проверяем лимит инструкций при обновлении
+    if (data.systemInstructions !== undefined && data.systemInstructions) {
+      const instructionsCheck = await checkInstructionsLimit(req.userId!, data.systemInstructions.length);
+      if (!instructionsCheck.allowed) {
+        res.status(403).json({
+          error: 'Plan limit reached',
+          message: instructionsCheck.message || 'Превышен лимит символов в инструкциях',
+          current: instructionsCheck.current,
+          limit: instructionsCheck.limit,
+        });
+        return;
+      }
+    }
+
     // Обновляем только предоставленные поля
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name.trim();
@@ -190,12 +226,8 @@ export async function updateAgent(req: AuthRequest, res: Response) {
     console.log('=== UPDATED AGENT ===');
     console.log('Updated agent crmData:', agent.crmData);
 
-    // Уведомление ПОСЛЕ успешного обновления в БД
-    await systemNotifications.success(
-      req.userId!,
-      'Агент сохранён',
-      `Настройки агента "${agent.name}" сохранены в базе данных`
-    );
+    // Уведомление создаётся на фронтенде с ключами перевода (i18n)
+    // Бэкенд больше не создаёт дублирующих уведомлений
 
     // Парсим JSON поля перед отправкой клиенту
     const parsedAgent = parseAgentJson(agent);
@@ -227,12 +259,7 @@ export async function deleteAgent(req: AuthRequest, res: Response) {
       where: { id },
     });
 
-    // Уведомление ПОСЛЕ успешного удаления из БД
-    await systemNotifications.info(
-      req.userId!,
-      'Агент удалён',
-      `Агент "${agentName}" удалён из системы`
-    );
+    // Уведомление создаётся на фронтенде с ключами перевода (i18n)
 
     res.json({ message: 'Agent deleted successfully' });
   } catch (error) {
@@ -261,13 +288,8 @@ export async function toggleAgentStatus(req: AuthRequest, res: Response) {
       data: { isActive: !existingAgent.isActive },
     });
 
-    // Уведомление ПОСЛЕ успешного обновления в БД
-    const newStatus = agent.isActive ? 'включен' : 'выключен';
-    await systemNotifications.success(
-      req.userId!,
-      'Статус агента изменён',
-      `Агент "${agent.name}" ${newStatus} и готов к работе`
-    );
+    // Уведомление создаётся на фронтенде с ключами перевода (i18n)
+    // Бэкенд больше не создаёт дублирующих уведомлений
 
     // Парсим JSON поля перед отправкой клиенту
     const parsedAgent = parseAgentJson(agent);

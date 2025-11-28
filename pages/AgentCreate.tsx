@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User } from 'lucide-react';
 import { Agent } from '../types';
 
@@ -9,13 +10,14 @@ interface AgentCreateProps {
 }
 
 export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, onAddAgent }) => {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleCreate = async (shouldClose: boolean = true) => {
     if (!name.trim()) {
-      setError('Пожалуйста, введите название агента');
+      setError(t('agentCreate.errorNameRequired'));
       return false;
     }
 
@@ -46,7 +48,7 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
 
       return true;
     } catch (err) {
-      setError('Не удалось создать агента. Попробуйте еще раз.');
+      setError(t('agentCreate.errorCreateFailed'));
       console.error('Failed to create agent:', err);
       return false;
     } finally {
@@ -59,11 +61,11 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
       {/* Breadcrumbs and Title */}
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-          <span>Агенты ИИ</span>
+          <span>{t('agentCreate.breadcrumbAgents')}</span>
           <span>/</span>
-          <span>Создать</span>
+          <span>{t('agentCreate.breadcrumbCreate')}</span>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Создать Агент ИИ</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('agentCreate.title')}</h1>
       </div>
 
       {/* Form Card */}
@@ -74,14 +76,14 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
           <div className="text-gray-400 dark:text-gray-500">
             <User size={20} strokeWidth={1.5} />
           </div>
-          <h2 className="text-base font-medium text-gray-900 dark:text-white">Профиль агента</h2>
+          <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentCreate.agentProfile')}</h2>
         </div>
 
         {/* Card Body */}
         <div className="p-6">
           <div>
             <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
-              Название<span className="text-red-500">*</span>
+              {t('agentCreate.name')}<span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -107,21 +109,21 @@ export const AgentCreate: React.FC<AgentCreateProps> = ({ onCancel, onCreate, on
           disabled={isLoading}
           className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Создание...' : 'Создать'}
+          {isLoading ? t('agentCreate.creating') : t('agentCreate.create')}
         </button>
         <button
           onClick={() => handleCreate(false)}
           disabled={isLoading}
           className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
         >
-          Создать и Создать еще
+          {t('agentCreate.createAndAnother')}
         </button>
         <button
           onClick={onCancel}
           disabled={isLoading}
           className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
         >
-          Отмена
+          {t('agentCreate.cancel')}
         </button>
       </div>
     </div>

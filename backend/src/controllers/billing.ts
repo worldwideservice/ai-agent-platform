@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
-import { prisma } from '../config/database';
+import { getSubscriptionInfo, changePlan, getUserLimits } from '../services/plan-limits.service';
+import { PlanType, PLAN_CONFIGS } from '../config/plans';
 
 /**
  * GET /api/billing/subscription
@@ -14,61 +15,99 @@ export const getSubscription = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        currentPlan: true,
-        trialEndsAt: true,
-        responsesUsed: true,
-        responsesLimit: true,
-        createdAt: true,
-      },
-    });
+    const subscription = await getSubscriptionInfo(userId);
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Вычисляем оставшиеся дни пробного периода
-    let daysRemaining = 0;
-    if (user.trialEndsAt) {
-      const now = new Date();
-      const trialEndDate = new Date(user.trialEndsAt);
-      const diffTime = trialEndDate.getTime() - now.getTime();
-      daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-
-      console.log('🔍 Trial Debug:', {
-        now: now.toISOString(),
-        trialEndDate: trialEndDate.toISOString(),
-        diffTime,
-        daysRemaining,
-        user: { currentPlan: user.currentPlan, trialEndsAt: user.trialEndsAt }
-      });
-    } else {
-      console.log('⚠️ trialEndsAt is null for user:', userId);
-    }
-
-    // Вычисляем процент использования
-    const usagePercentage = user.responsesLimit > 0
-      ? Math.round((user.responsesUsed / user.responsesLimit) * 100)
-      : 0;
-
-    // Проверяем статус
-    const isActive = user.currentPlan === 'trial'
-      ? daysRemaining > 0
-      : true;
-
-    return res.json({
-      currentPlan: user.currentPlan,
-      isActive,
-      daysRemaining,
-      responsesUsed: user.responsesUsed,
-      responsesLimit: user.responsesLimit,
-      usagePercentage,
-      trialEndsAt: user.trialEndsAt,
-    });
+    return res.json(subscription);
   } catch (error) {
     console.error('Error fetching subscription:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * GET /api/billing/limits
+ * Получить текущие лимиты пользователя
+ */
+export const getLimits = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const limits = await getUserLimits(userId);
+
+    return res.json(limits);
+  } catch (error) {
+    console.error('Error fetching limits:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * GET /api/billing/plans
+ * Получить список доступных планов с их характеристиками
+ */
+export const getPlans = async (req: AuthRequest, res: Response) => {
+  try {
+    const plans = Object.entries(PLAN_CONFIGS).map(([key, config]) => ({
+      id: key,
+      name: config.displayName,
+      agentsLimit: config.agentsLimit,
+      kbArticlesLimit: config.kbArticlesLimit,
+      responsesLimit: config.responsesLimit,
+      instructionsLimit: config.instructionsLimit,
+      features: {
+        canSendMedia: config.canSendMedia,
+        canReceiveVoice: config.canReceiveVoice,
+        canReceiveImages: config.canReceiveImages,
+        canUpdateCrmFields: config.canUpdateCrmFields,
+      },
+      trialDays: config.trialDays,
+      isMonthlyReset: config.isMonthlyReset,
+    }));
+
+    return res.json(plans);
+  } catch (error) {
+    console.error('Error fetching plans:', error);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * POST /api/billing/change-plan
+ * Изменить план пользователя
+ */
+export const updatePlan = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const { plan, responsesLimit } = req.body;
+
+    // Валидация плана
+    if (!plan || !['trial', 'launch', 'scale', 'max'].includes(plan)) {
+      return res.status(400).json({
+        message: 'Invalid plan. Available plans: trial, launch, scale, max'
+      });
+    }
+
+    // Меняем план
+    await changePlan(userId, plan as PlanType, responsesLimit);
+
+    // Возвращаем обновленную информацию
+    const subscription = await getSubscriptionInfo(userId);
+
+    return res.json({
+      message: 'План успешно изменён',
+      subscription,
+    });
+  } catch (error) {
+    console.error('Error changing plan:', error);
     return res.status(500).json({ message: 'Internal server error' });
   }
 };

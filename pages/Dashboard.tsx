@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   LineChart,
   Line,
@@ -26,6 +27,7 @@ interface ChartData {
 }
 
 export const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
@@ -57,7 +59,7 @@ export const Dashboard: React.FC = () => {
       setHourlyData(analytics.charts.hourlyData);
     } catch (err: any) {
       console.error('Failed to load analytics:', err);
-      setError('Не удалось загрузить аналитику');
+      setError(t('dashboard.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -67,7 +69,7 @@ export const Dashboard: React.FC = () => {
     return (
       <div className="space-y-6">
         <div className="text-center text-gray-500 dark:text-gray-400 py-12">
-          Загрузка аналитики...
+          {t('dashboard.loadingAnalytics')}
         </div>
       </div>
     );
@@ -102,10 +104,10 @@ export const Dashboard: React.FC = () => {
       {/* Top Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-        {/* 1. Ответы ИИ за этот месяц */}
+        {/* 1. AI responses this month */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
-            Ответы ИИ за этот месяц
+            {t('dashboard.responsesThisMonth')}
           </h3>
           <div className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
             {stats.responsesThisMonth.toLocaleString()}
@@ -115,10 +117,10 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 2. Ответы ИИ за последние 7 дней */}
+        {/* 2. AI responses last 7 days */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
-            Ответы ИИ за последние 7 дней
+            {t('dashboard.responsesLast7Days')}
           </h3>
           <div className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
             {stats.responsesLast7Days.toLocaleString()}
@@ -128,10 +130,10 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. Ответы ИИ сегодня */}
+        {/* 3. AI responses today */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
-            Ответы ИИ сегодня
+            {t('dashboard.responsesToday')}
           </h3>
           <div className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
             {stats.responsesToday.toLocaleString()}
@@ -141,10 +143,10 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. Агенты */}
+        {/* 4. Agents */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-2">
-            Агенты
+            {t('dashboard.agents')}
           </h3>
           <div className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
             {stats.totalAgents}
@@ -159,14 +161,14 @@ export const Dashboard: React.FC = () => {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* График: Ответы ИИ за этот месяц */}
+        {/* Chart: AI responses this month */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-            Ответы ИИ за этот месяц
+            {t('dashboard.responsesThisMonth')}
           </h3>
           <div className="h-[300px] w-full flex items-center justify-center">
             {monthlyData.length === 0 ? (
-              <p className="text-gray-400 dark:text-gray-500">Нет данных для отображения</p>
+              <p className="text-gray-400 dark:text-gray-500">{t('dashboard.noData')}</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={monthlyData}>
@@ -211,14 +213,14 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* График: Ответы ИИ за день */}
+        {/* Chart: AI responses per day */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm transition-colors">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">
-            Ответы ИИ за день
+            {t('dashboard.responsesPerDay')}
           </h3>
           <div className="h-[300px] w-full flex items-center justify-center">
             {hourlyData.length === 0 ? (
-              <p className="text-gray-400 dark:text-gray-500">Нет данных для отображения</p>
+              <p className="text-gray-400 dark:text-gray-500">{t('dashboard.noData')}</p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={hourlyData}>

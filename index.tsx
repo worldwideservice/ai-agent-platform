@@ -1,8 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import './src/i18n'; // Initialize i18n
 import App from './App';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { SubscriptionProvider } from './src/contexts/SubscriptionContext';
 import { ToastProvider, useToast } from './src/contexts/ToastContext';
 import { ToastContainer } from './components/Toast';
 
@@ -26,11 +28,13 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <ToastProvider>
-        <ToastWrapper>
-          <App />
-        </ToastWrapper>
-      </ToastProvider>
+      <SubscriptionProvider>
+        <ToastProvider>
+          <ToastWrapper>
+            <App />
+          </ToastWrapper>
+        </ToastProvider>
+      </SubscriptionProvider>
     </AuthProvider>
   </React.StrictMode>
 );

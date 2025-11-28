@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { hashPassword, comparePasswords, generateToken } from '../utils/auth';
 import { AuthRequest } from '../types';
+import { PLAN_CONFIGS } from '../config/plans';
 
 /**
  * POST /api/auth/register
@@ -44,11 +45,14 @@ export async function register(req: Request, res: Response): Promise<void> {
     // Хэшируем пароль
     const hashedPassword = await hashPassword(password);
 
-    // Устанавливаем дату окончания пробного периода (15 дней)
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 15);
+    // Получаем конфигурацию trial плана
+    const trialConfig = PLAN_CONFIGS.trial;
 
-    // Создаем пользователя
+    // Устанавливаем дату окончания пробного периода
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + trialConfig.trialDays);
+
+    // Создаем пользователя с лимитами trial плана
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase().trim(),
@@ -56,8 +60,11 @@ export async function register(req: Request, res: Response): Promise<void> {
         name: name?.trim() || null,
         currentPlan: 'trial',
         trialEndsAt,
-        responsesLimit: 500,
+        responsesLimit: trialConfig.responsesLimit,
         responsesUsed: 0,
+        agentsLimit: trialConfig.agentsLimit,
+        kbArticlesLimit: trialConfig.kbArticlesLimit,
+        instructionsLimit: trialConfig.instructionsLimit,
       },
       select: {
         id: true,

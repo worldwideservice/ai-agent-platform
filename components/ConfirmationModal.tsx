@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Trash2, X } from 'lucide-react';
 
 interface ConfirmationModalProps {
@@ -12,10 +13,12 @@ interface ConfirmationModalProps {
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     isOpen,
     title,
-    message = 'Вы уверены, что хотите это сделать?',
+    message,
     onConfirm,
     onCancel
 }) => {
+    const { t } = useTranslation();
+    const displayMessage = message || t('confirmation.defaultMessage');
     if (!isOpen) return null;
 
     return (
@@ -50,7 +53,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 
                 {/* Message */}
                 <p className="text-gray-500 dark:text-gray-400 text-center mb-8">
-                    {message}
+                    {displayMessage}
                 </p>
 
                 {/* Buttons */}
@@ -59,13 +62,13 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         onClick={onCancel}
                         className="flex-1 px-6 py-3 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-base font-medium transition-colors"
                     >
-                        Отменить
+                        {t('confirmation.cancel')}
                     </button>
                     <button
                         onClick={onConfirm}
                         className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-base font-medium transition-colors shadow-sm"
                     >
-                        Удалить
+                        {t('confirmation.delete')}
                     </button>
                 </div>
             </div>

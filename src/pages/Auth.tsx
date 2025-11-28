@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Auth: React.FC = () => {
+  const { t } = useTranslation();
   const { login, register } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -33,24 +35,24 @@ export const Auth: React.FC = () => {
         console.log('🔐 Calling login...');
         await login({ email, password });
         console.log('✅ Login successful!');
-        setSuccess('Вход выполнен успешно!');
+        setSuccess(t('auth.loginSuccess'));
       } else {
         // РЕГИСТРАЦИЯ
         // Валидация
         if (!organizationName.trim()) {
-          setError('Введите название организации');
+          setError(t('auth.errorOrgRequired'));
           setIsLoading(false);
           return;
         }
 
         if (password.length < 6) {
-          setError('Пароль должен содержать минимум 6 символов');
+          setError(t('auth.errorPasswordMin'));
           setIsLoading(false);
           return;
         }
 
         if (password !== confirmPassword) {
-          setError('Пароли не совпадают');
+          setError(t('auth.errorPasswordMismatch'));
           setIsLoading(false);
           return;
         }
@@ -60,7 +62,7 @@ export const Auth: React.FC = () => {
         console.log('✅ Register successful!');
 
         // Показываем успешное сообщение
-        setSuccess('Регистрация успешна! Теперь войдите в систему.');
+        setSuccess(t('auth.registerSuccess'));
 
         // Очищаем форму
         setEmail('');
@@ -78,13 +80,13 @@ export const Auth: React.FC = () => {
       console.error('❌ Auth error:', err);
       const errorMessage = err.response?.data?.message || err.message;
 
-      // Переводим ошибки на русский
+      // Переводим ошибки
       if (errorMessage?.includes('already exists')) {
-        setError('Пользователь с таким email уже существует');
+        setError(t('auth.errorUserExists'));
       } else if (errorMessage?.includes('Invalid email or password')) {
-        setError('Неверный email или пароль');
+        setError(t('auth.errorInvalidCredentials'));
       } else {
-        setError(errorMessage || 'Произошла ошибка. Проверьте данные и попробуйте снова.');
+        setError(errorMessage || t('auth.errorGeneric'));
       }
     } finally {
       setIsLoading(false);
@@ -122,7 +124,7 @@ export const Auth: React.FC = () => {
           color: '#718096',
           marginBottom: '32px',
         }}>
-          {isLogin ? 'Войдите в свой аккаунт' : 'Создайте новый аккаунт'}
+          {isLogin ? t('auth.loginTitle') : t('auth.registerTitle')}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -135,13 +137,13 @@ export const Auth: React.FC = () => {
                 fontSize: '14px',
                 fontWeight: '500',
               }}>
-                Название организации *
+                {t('auth.organizationName')} *
               </label>
               <input
                 type="text"
                 value={organizationName}
                 onChange={(e) => setOrganizationName(e.target.value)}
-                placeholder="ООО Ваша Компания"
+                placeholder={t('auth.organizationPlaceholder')}
                 required
                 style={{
                   width: '100%',
@@ -164,7 +166,7 @@ export const Auth: React.FC = () => {
               fontSize: '14px',
               fontWeight: '500',
             }}>
-              Email *
+              {t('auth.email')} *
             </label>
             <input
               type="email"
@@ -192,7 +194,7 @@ export const Auth: React.FC = () => {
               fontSize: '14px',
               fontWeight: '500',
             }}>
-              Пароль *
+              {t('auth.password')} *
             </label>
             <input
               type="password"
@@ -222,7 +224,7 @@ export const Auth: React.FC = () => {
                 fontSize: '14px',
                 fontWeight: '500',
               }}>
-                Подтвердите пароль *
+                {t('auth.confirmPassword')} *
               </label>
               <input
                 type="password"
@@ -296,7 +298,7 @@ export const Auth: React.FC = () => {
               transition: 'all 0.2s',
             }}
           >
-            {isLoading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+            {isLoading ? t('auth.loading') : (isLogin ? t('auth.loginButton') : t('auth.registerButton'))}
           </button>
         </form>
 
@@ -306,7 +308,7 @@ export const Auth: React.FC = () => {
           color: '#718096',
           fontSize: '14px',
         }}>
-          {isLogin ? 'Нет аккаунта?' : 'Уже есть аккаунт?'}
+          {isLogin ? t('auth.noAccount') : t('auth.hasAccount')}
           {' '}
           <button
             onClick={() => {
@@ -328,7 +330,7 @@ export const Auth: React.FC = () => {
               textDecoration: 'underline',
             }}
           >
-            {isLogin ? 'Зарегистрироваться' : 'Войти'}
+            {isLogin ? t('auth.registerLink') : t('auth.loginLink')}
           </button>
         </div>
       </div>

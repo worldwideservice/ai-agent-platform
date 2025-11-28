@@ -166,6 +166,16 @@ export const updateAdvancedSettings = async (req: AuthRequest, res: Response) =>
       });
     }
 
+    // Синхронизируем модель с основной таблицей agents
+    if (model) {
+      console.log(`🔄 Syncing model to agents table: ${model}`);
+      await prisma.agent.update({
+        where: { id: agentId },
+        data: { model },
+      });
+      console.log(`✅ Model synced successfully`);
+    }
+
     return res.json(settings);
   } catch (error: any) {
     console.error('Error updating advanced settings:', error);

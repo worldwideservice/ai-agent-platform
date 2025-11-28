@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard,
   Bot,
@@ -22,12 +23,14 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
+  const { t } = useTranslation();
+
   // Section toggle states
   const [isAgentsOpen, setIsAgentsOpen] = useState(true);
   const [isKbOpen, setIsKbOpen] = useState(true);
   const [isTrainingOpen, setIsTrainingOpen] = useState(true);
   const [isAccountOpen, setIsAccountOpen] = useState(true);
-  
+
   // Global sidebar collapsed state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -90,22 +93,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 custom-scrollbar">
         {/* Main Section */}
         <div className="space-y-1 mb-6">
-          <NavItem page="dashboard" icon={LayoutDashboard} label="Инфопанель" />
+          <NavItem page="dashboard" icon={LayoutDashboard} label={t('sidebar.dashboard')} />
         </div>
 
         {/* Agents Section */}
         <div>
-          <GroupHeader 
-            label="Агенты ИИ" 
-            isOpen={isAgentsOpen} 
-            toggle={() => setIsAgentsOpen(!isAgentsOpen)} 
+          <GroupHeader
+            label={t('sidebar.aiAgents')}
+            isOpen={isAgentsOpen}
+            toggle={() => setIsAgentsOpen(!isAgentsOpen)}
           />
-          
+
           {/* Show items if group is open OR if sidebar is collapsed (to keep icons accessible) */}
           {(isAgentsOpen || isSidebarCollapsed) && (
             <div className="space-y-1">
-              <NavItem page="agents" icon={Bot} label="Агенты ИИ" />
-              <NavItem page="chat" icon={MessageSquare} label="Тестовый чат" />
+              <NavItem page="agents" icon={Bot} label={t('sidebar.aiAgents')} />
+              <NavItem page="chat" icon={MessageSquare} label={t('sidebar.testChat')} />
             </div>
           )}
         </div>
@@ -113,14 +116,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
         {/* Knowledge Base Section */}
         <div>
           <GroupHeader
-            label="База знаний"
+            label={t('sidebar.knowledgeBase')}
             isOpen={isKbOpen}
             toggle={() => setIsKbOpen(!isKbOpen)}
           />
           {(isKbOpen || isSidebarCollapsed) && (
             <div className="space-y-1">
-              <NavItem page="kb-categories" icon={Folder} label="Категории" />
-              <NavItem page="kb-articles" icon={FileText} label="Статьи" />
+              <NavItem page="kb-categories" icon={Folder} label={t('sidebar.categories')} />
+              <NavItem page="kb-articles" icon={FileText} label={t('sidebar.articles')} />
             </div>
           )}
         </div>
@@ -128,29 +131,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
         {/* Training Library Section */}
         <div>
           <GroupHeader
-            label="Библиотека знаний"
+            label={t('sidebar.trainingLibrary')}
             isOpen={isTrainingOpen}
             toggle={() => setIsTrainingOpen(!isTrainingOpen)}
           />
           {(isTrainingOpen || isSidebarCollapsed) && (
             <div className="space-y-1">
-              <NavItem page="training-roles" icon={Users} label="Роли агентов" />
-              <NavItem page="training-sources" icon={BookOpen} label="Источники знаний" />
+              <NavItem page="training-roles" icon={Users} label={t('sidebar.agentRoles')} />
+              <NavItem page="training-sources" icon={BookOpen} label={t('sidebar.knowledgeSources')} />
             </div>
           )}
         </div>
 
         {/* Account Section */}
         <div>
-          <GroupHeader 
-            label="Аккаунт" 
-            isOpen={isAccountOpen} 
-            toggle={() => setIsAccountOpen(!isAccountOpen)} 
+          <GroupHeader
+            label={t('sidebar.account')}
+            isOpen={isAccountOpen}
+            toggle={() => setIsAccountOpen(!isAccountOpen)}
           />
           {(isAccountOpen || isSidebarCollapsed) && (
             <div className="space-y-1">
-              <NavItem page="settings" icon={Settings} label="Настройки аккаунта" />
-              <NavItem page="billing" icon={CreditCard} label="Тарифные планы" />
+              <NavItem page="settings" icon={Settings} label={t('sidebar.accountSettings')} />
+              <NavItem page="billing" icon={CreditCard} label={t('sidebar.billing')} />
             </div>
           )}
         </div>

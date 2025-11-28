@@ -19,6 +19,7 @@ import {
   Check,
   Book
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { TrainingRole, TrainingSource } from '../types';
 import * as trainingService from '../src/services/api/training.service';
 import { notificationsService } from '../src/services/api';
@@ -38,6 +39,7 @@ const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> =
 };
 
 export const TrainingRoles: React.FC = () => {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<TrainingRole[]>([]);
   const [sources, setSources] = useState<TrainingSource[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +98,7 @@ export const TrainingRoles: React.FC = () => {
   };
 
   const handleDeleteRole = async (role: TrainingRole) => {
-    if (!confirm('Удалить роль?')) return;
+    if (!confirm(t('training.deleteRoleConfirm'))) return;
 
     try {
       await trainingService.deleteRole(role.id);
@@ -105,8 +107,9 @@ export const TrainingRoles: React.FC = () => {
       try {
         await notificationsService.createNotification({
           type: 'warning',
-          title: 'Роль удалена',
-          message: `Роль "${role.name}" удалена`,
+          titleKey: 'training.roleDeleted',
+          messageKey: 'training.roleDeletedMessage',
+          params: { name: role.name },
         });
       } catch (e) { /* ignore */ }
     } catch (error) {
@@ -122,8 +125,9 @@ export const TrainingRoles: React.FC = () => {
         try {
           await notificationsService.createNotification({
             type: 'success',
-            title: 'Роль обновлена',
-            message: `Роль "${formData.name}" обновлена`,
+            titleKey: 'training.roleUpdated',
+            messageKey: 'training.roleUpdatedMessage',
+            params: { name: formData.name },
           });
         } catch (e) { /* ignore */ }
       } else {
@@ -132,8 +136,9 @@ export const TrainingRoles: React.FC = () => {
         try {
           await notificationsService.createNotification({
             type: 'success',
-            title: 'Роль создана',
-            message: `Создана новая роль "${formData.name}"`,
+            titleKey: 'training.roleCreated',
+            messageKey: 'training.roleCreatedMessage',
+            params: { name: formData.name },
           });
         } catch (e) { /* ignore */ }
       }
@@ -152,7 +157,7 @@ export const TrainingRoles: React.FC = () => {
       setRoleKnowledge(knowledge);
     } catch (error) {
       console.error('Error loading knowledge:', error);
-      setRoleKnowledge('Ошибка загрузки знаний');
+      setRoleKnowledge(t('training.knowledgeLoadError'));
     } finally {
       setLoadingKnowledge(false);
     }
@@ -181,6 +186,21 @@ export const TrainingRoles: React.FC = () => {
     return sources.filter(s => sourceIds.includes(s.id));
   };
 
+  // Get translated name for built-in sources
+  const getSourceName = (source: TrainingSource): string => {
+    if (source.isBuiltIn && source.id.startsWith('builtin-')) {
+      const translatedName = t(`training.builtInNames.${source.id}`, { defaultValue: '' });
+      return translatedName || source.name;
+    }
+    return source.name;
+  };
+
+  // Get translated category label
+  const getCategoryLabel = (category: string): string => {
+    const translatedLabel = t(`training.categories.${category}`, { defaultValue: '' });
+    return translatedLabel || trainingService.getCategoryLabel(category);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -194,9 +214,9 @@ export const TrainingRoles: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Роли агентов</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('training.roles')}</h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Готовые наборы знаний для обучения агентов профессиональным навыкам
+            {t('training.rolesSubtitle')}
           </p>
         </div>
         <button
@@ -204,7 +224,7 @@ export const TrainingRoles: React.FC = () => {
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Plus size={18} />
-          Создать роль
+          {t('training.createRole')}
         </button>
       </div>
 
@@ -215,7 +235,7 @@ export const TrainingRoles: React.FC = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Поиск ролей..."
+          placeholder={t('training.searchRoles')}
           className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
         />
       </div>
@@ -225,9 +245,9 @@ export const TrainingRoles: React.FC = () => {
         {filteredRoles.length === 0 ? (
           <div className="bg-gray-50 dark:bg-gray-800/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center">
             <Book size={40} className="mx-auto text-gray-400 mb-3" />
-            <p className="text-gray-600 dark:text-gray-400 mb-2">У вас пока нет своих ролей</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">{t('training.noRoles')}</p>
             <p className="text-sm text-gray-500 dark:text-gray-500">
-              Создайте роль, чтобы объединить несколько источников знаний
+              {t('training.noRolesHint')}
             </p>
           </div>
         ) : (
@@ -268,13 +288,13 @@ export const TrainingRoles: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {role.sourceIds.length} источников
+                    {t('training.sourcesCount', { count: role.sourceIds.length })}
                   </span>
                   <button
                     onClick={() => handleViewKnowledge(role)}
                     className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                   >
-                    Просмотреть
+                    {t('training.view')}
                     <ChevronRight size={14} />
                   </button>
                 </div>
@@ -290,7 +310,7 @@ export const TrainingRoles: React.FC = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingRole ? 'Редактировать роль' : 'Создать роль'}
+                {editingRole ? t('training.editRole') : t('training.createRole')}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
@@ -301,13 +321,13 @@ export const TrainingRoles: React.FC = () => {
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Название
+                  {t('training.name')}
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Например: Эксперт по продажам"
+                  placeholder={t('training.exampleRoleName')}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
               </div>
@@ -315,12 +335,12 @@ export const TrainingRoles: React.FC = () => {
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Описание
+                  {t('training.description')}
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Краткое описание роли..."
+                  placeholder={t('training.briefRoleDescription')}
                   rows={2}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
@@ -329,7 +349,7 @@ export const TrainingRoles: React.FC = () => {
               {/* Icon */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Иконка
+                  {t('training.icon')}
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {trainingService.ROLE_ICONS.map(icon => {
@@ -354,7 +374,7 @@ export const TrainingRoles: React.FC = () => {
               {/* Sources */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Источники знаний ({formData.sourceIds.length} выбрано)
+                  {t('training.knowledgeSources')} ({t('training.sourcesSelected', { count: formData.sourceIds.length })})
                 </label>
                 <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
                   {sources.map(source => (
@@ -373,7 +393,7 @@ export const TrainingRoles: React.FC = () => {
                         className="rounded text-blue-600"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 dark:text-white text-sm">{source.name}</div>
+                        <div className="font-medium text-gray-900 dark:text-white text-sm">{getSourceName(source)}</div>
                         {source.author && (
                           <div className="text-xs text-gray-500">{source.author}</div>
                         )}
@@ -385,7 +405,7 @@ export const TrainingRoles: React.FC = () => {
                         trainingService.getCategoryColor(source.category) === 'green' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
                         'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
-                        {trainingService.getCategoryLabel(source.category)}
+                        {getCategoryLabel(source.category)}
                       </span>
                     </label>
                   ))}
@@ -398,7 +418,7 @@ export const TrainingRoles: React.FC = () => {
                 onClick={() => setIsModalOpen(false)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveRole}
@@ -406,7 +426,7 @@ export const TrainingRoles: React.FC = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Check size={18} />
-                {editingRole ? 'Сохранить' : 'Создать'}
+                {editingRole ? t('common.save') : t('common.create')}
               </button>
             </div>
           </div>
@@ -426,7 +446,7 @@ export const TrainingRoles: React.FC = () => {
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                     {viewingRole.name}
                   </h2>
-                  <p className="text-sm text-gray-500">{viewingRole.sourceIds.length} источников</p>
+                  <p className="text-sm text-gray-500">{t('training.sourcesCount', { count: viewingRole.sourceIds.length })}</p>
                 </div>
               </div>
               <button onClick={() => setViewingRole(null)} className="text-gray-400 hover:text-gray-600">

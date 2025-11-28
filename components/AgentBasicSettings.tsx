@@ -1,4 +1,5 @@
 import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     User,
     MessageSquare,
@@ -36,6 +37,8 @@ import { Agent, TrainingRole } from '../types';
 import * as trainingService from '../src/services/api/training.service';
 import * as agentDocumentsService from '../src/services/api/agent-documents.service';
 import type { AgentDocument } from '../src/services/api/agent-documents.service';
+import { useSubscription } from '../src/contexts/SubscriptionContext';
+import { RestrictedSection } from './PlanRestriction';
 
 // Icon mapping for roles
 const roleIconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -89,6 +92,10 @@ export interface AgentBasicSettingsRef {
 }
 
 export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSettingsProps>(({ agent, onCancel, crmConnected, kbCategories, kbArticles = [], onNavigateToKbArticles, onSyncCRM }, ref) => {
+    const { t } = useTranslation();
+    const { canUseFeature } = useSubscription();
+    const canSendMedia = canUseFeature('canSendMedia');
+
     // Parse CRM data from agent
     const parseCrmData = () => {
         if (!agent?.crmData) return null;
@@ -635,7 +642,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                             </div>
                         ))}
                         {options.length === 0 && (
-                            <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных каналов</div>
+                            <div className="px-3 py-2 text-sm text-gray-400 text-center">{t('agentEditor.basicSettings.noChannels')}</div>
                         )}
                     </div>
                 )}
@@ -650,11 +657,11 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                     <User size={20} className="text-gray-400" />
-                    <h2 className="text-base font-medium text-gray-900 dark:text-white">Профиль агента</h2>
+                    <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.agentProfile')}</h2>
                 </div>
                 <div className="p-6 space-y-6">
                     <div>
-                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.nameLabel')}<span className="text-red-500">*</span></label>
                         <input
                             type="text"
                             value={name}
@@ -665,7 +672,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
 
                     {/* Role Selection */}
                     <div>
-                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Роль агента</label>
+                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.roleLabel')}</label>
                         <div className="relative" ref={roleDropdownRef}>
                             <button
                                 type="button"
@@ -686,11 +693,11 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                         </>
                                                     );
                                                 }
-                                                return <span className="text-gray-400">Загрузка...</span>;
+                                                return <span className="text-gray-400">{t('agentEditor.basicSettings.loading')}</span>;
                                             })()}
                                         </>
                                     ) : (
-                                        <span className="text-gray-400">Без роли (базовые инструкции)</span>
+                                        <span className="text-gray-400">{t('agentEditor.basicSettings.noRole')}</span>
                                     )}
                                 </div>
                                 <ChevronDown size={16} className={`text-gray-400 transition-transform ${roleDropdownOpen ? 'rotate-180' : ''}`} />
@@ -706,13 +713,13 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                         }}
                                         className={`px-3 py-2.5 cursor-pointer flex items-center gap-2 ${!trainingRoleId ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-600'}`}
                                     >
-                                        <span className="text-sm text-gray-600 dark:text-gray-300">Без роли (базовые инструкции)</span>
+                                        <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.basicSettings.noRole')}</span>
                                         {!trainingRoleId && <CheckCircle size={14} className="text-blue-600 ml-auto" />}
                                     </div>
 
                                     {loadingRoles ? (
                                         <div className="px-3 py-4 text-center text-sm text-gray-400">
-                                            Загрузка ролей...
+                                            {t('agentEditor.basicSettings.loadingRoles')}
                                         </div>
                                     ) : (
                                         trainingRoles.map(role => {
@@ -747,24 +754,24 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                             )}
                         </div>
                         <p className="text-xs text-gray-400 mt-2">
-                            Роль добавляет профессиональные знания и методологии к инструкциям агента. Настройте роли в разделе «Библиотека знаний».
+                            {t('agentEditor.basicSettings.roleHint')}
                         </p>
                     </div>
 
                     <div className="flex items-center gap-3">
                         <Toggle checked={isActive} onChange={setIsActive} />
-                        <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                        <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.active')}</span>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Инструкции для агента<span className="text-red-500">*</span></label>
+                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.instructionsLabel')}<span className="text-red-500">*</span></label>
                         <textarea
                             value={systemInstructions}
                             onChange={(e) => setSystemInstructions(e.target.value)}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[150px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono leading-relaxed resize-y"
                         />
                         <p className="text-xs text-gray-400 mt-2">
-                            Начальные инструкции по тону, стилю и ответам вашего агента. Вы также можете добавить общие сведения о компании, чтобы помочь агенту отвечать более точно.
+                            {t('agentEditor.basicSettings.instructionsHint')}
                         </p>
                     </div>
                 </div>
@@ -775,7 +782,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Briefcase size={20} className="text-gray-400" />
-                        <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки воронок</h2>
+                        <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.funnelSettings')}</h2>
                     </div>
                     <button
                         onClick={handleSyncCRM}
@@ -783,11 +790,11 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
+                        {isSyncing ? t('agentEditor.basicSettings.syncing') : t('agentEditor.basicSettings.syncCrmSettings')}
                     </button>
                 </div>
                 <div className="p-6">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Выберите воронки и этапы сделок, в которых этот агент должен работать</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t('agentEditor.basicSettings.funnelHint')}</p>
 
                     <div className="space-y-4">
                         {availablePipelines.map(pipeline => (
@@ -806,18 +813,18 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <Toggle checked={activePipelines[pipeline.id] || false} onChange={() => togglePipelineActive(pipeline.id)} />
-                                                <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                                                <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.active')}</span>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <Toggle checked={allStagesPipelines[pipeline.id] || false} onChange={() => toggleAllStages(pipeline.id)} />
-                                                <span className="text-sm text-gray-900 dark:text-white">Все этапы воронок</span>
+                                                <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.allStages')}</span>
                                             </div>
                                         </div>
 
                                         {/* Выбор этапов */}
                                         {!allStagesPipelines[pipeline.id] && (
                                             <div>
-                                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Выберите этапы сделок<span className="text-red-500">*</span></label>
+                                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.selectDealStages')}<span className="text-red-500">*</span></label>
                                                 <div className="flex flex-wrap gap-2 mb-2">
                                                     {(pipelineStages[pipeline.id] || []).map(stageId => {
                                                         const stage = pipeline.stages.find(s => s.id === stageId);
@@ -835,7 +842,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                     options={pipeline.stages}
                                                     selectedIds={pipelineStages[pipeline.id] || []}
                                                     onChange={(ids) => setPipelineStages(prev => ({ ...prev, [pipeline.id]: ids }))}
-                                                    placeholder="Выбрать этапы"
+                                                    placeholder={t('agentEditor.basicSettings.selectStages')}
                                                     dropdownId={`pipeline-stages-${pipeline.id}`}
                                                 />
                                             </div>
@@ -848,8 +855,8 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                 onClick={() => toggleStageInstructions(pipeline.id)}
                                             >
                                                 <div>
-                                                    <span className="text-xs font-medium text-gray-900 dark:text-white">Инструкции для этапа сделки</span>
-                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Настройте, как агент отвечает на каждом этапе сделки</p>
+                                                    <span className="text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.stageInstructions')}</span>
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.basicSettings.stageInstructionsHint')}</p>
                                                 </div>
                                                 <ChevronDown size={14} className={`text-gray-400 transition-transform ${stageInstructionsOpen[pipeline.id] ? 'rotate-180' : ''}`} />
                                             </div>
@@ -869,7 +876,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                 {expandedStages[stageKey] && (
                                                                     <div className="p-4 bg-white dark:bg-gray-800 space-y-4">
                                                                         <div>
-                                                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">Инструкция для агента</label>
+                                                                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('agentEditor.basicSettings.stageInstruction')}</label>
                                                                             <textarea
                                                                                 value={stageInstructions[pipeline.id]?.[stage.id]?.text || ''}
                                                                                 onChange={(e) => setStageInstructions(prev => ({
@@ -883,7 +890,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                                     }
                                                                                 }))}
                                                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[100px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                                                                placeholder="Пример: На этом этапе отправь клиенту договор на ознакомление и ответь на вопросы по нему"
+                                                                                placeholder={t('agentEditor.basicSettings.stageInstructionPlaceholder')}
                                                                             />
                                                                         </div>
 
@@ -891,7 +898,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                         <div>
                                                                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                                                                                 <Paperclip size={12} className="inline mr-1" />
-                                                                                Файлы для отправки клиенту
+                                                                                {t('agentEditor.basicSettings.filesToSend')}
                                                                             </label>
 
                                                                             {/* Список прикреплённых статей */}
@@ -934,7 +941,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                                     className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-2 rounded-md transition-colors"
                                                                                 >
                                                                                     <Plus size={14} />
-                                                                                    Добавить статью из базы знаний
+                                                                                    {t('agentEditor.basicSettings.addKbArticle')}
                                                                                 </button>
 
                                                                                 {articleDropdownOpen[stageKey] && kbArticles.length > 0 && (
@@ -971,18 +978,18 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                                             );
                                                                                         })}
                                                                                         {kbArticles.filter(a => a.isActive).length === 0 && (
-                                                                                            <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет активных статей</div>
+                                                                                            <div className="px-3 py-2 text-sm text-gray-400 text-center">{t('agentEditor.basicSettings.noActiveArticles')}</div>
                                                                                         )}
                                                                                     </div>
                                                                                 )}
 
                                                                                 {kbArticles.length === 0 && (
-                                                                                    <p className="mt-1.5 text-xs text-gray-400">Создайте статьи в базе знаний для прикрепления файлов</p>
+                                                                                    <p className="mt-1.5 text-xs text-gray-400">{t('agentEditor.basicSettings.createArticlesHint')}</p>
                                                                                 )}
                                                                             </div>
 
                                                                             <p className="mt-2 text-xs text-gray-400">
-                                                                                Эти статьи будут доступны агенту для отправки клиенту в мессенджер или по email
+                                                                                {t('agentEditor.basicSettings.articlesAvailableHint')}
                                                                             </p>
                                                                         </div>
                                                                     </div>
@@ -1006,7 +1013,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <Share2 size={20} className="text-gray-400" />
-                        <h2 className="text-base font-medium text-gray-900 dark:text-white">Каналы</h2>
+                        <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.channelsTitle')}</h2>
                     </div>
                     <button
                         onClick={handleSyncCRM}
@@ -1014,26 +1021,26 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
+                        {isSyncing ? t('agentEditor.basicSettings.syncing') : t('agentEditor.basicSettings.syncCrmSettings')}
                     </button>
                 </div>
                 <div className="p-6">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Выберите каналы, в которых агент может отвечать</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{t('agentEditor.basicSettings.channelsHint')}</p>
 
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <Toggle checked={channelsAll} onChange={setChannelsAll} />
-                            <span className="text-sm text-gray-900 dark:text-white">Все каналы</span>
+                            <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.allChannels')}</span>
                         </div>
 
                         {!channelsAll && (
                             <div className="w-1/2">
-                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1">Выбрать каналы<span className="text-red-500">*</span></label>
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1">{t('agentEditor.basicSettings.selectChannels')}<span className="text-red-500">*</span></label>
                                 <MultiSelect
                                     options={availableChannels}
                                     selectedIds={selectedChannels}
                                     onChange={setSelectedChannels}
-                                    placeholder="Выбрать каналы"
+                                    placeholder={t('agentEditor.basicSettings.selectChannels')}
                                     dropdownId="channels"
                                 />
                             </div>
@@ -1046,48 +1053,53 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                     <Book size={20} className="text-gray-400" />
-                    <h2 className="text-base font-medium text-gray-900 dark:text-white">База знаний</h2>
+                    <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.knowledgeBaseTitle')}</h2>
                 </div>
                 <div className="p-6 space-y-6">
 
                     <div>
                         <div className="flex items-center gap-3 mb-4">
                             <Toggle checked={kbAllCategories} onChange={setKbAllCategories} />
-                            <span className="text-sm text-gray-900 dark:text-white">Разрешить доступ ко всем категориям</span>
+                            <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.allowAllCategories')}</span>
                         </div>
 
                         {!kbAllCategories && (
                             <div>
-                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Выберите категории</label>
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.selectCategories')}</label>
                                 <MultiSelect
                                     options={kbCategories}
                                     selectedIds={selectedKbCategories}
                                     onChange={setSelectedKbCategories}
-                                    placeholder="Выбрать категории"
+                                    placeholder={t('agentEditor.basicSettings.selectCategories')}
                                     dropdownId="kb-categories"
                                 />
-                                <p className="text-xs text-gray-400 mt-2">Агент будет получать доступ к знаниям только из этих категорий.</p>
+                                <p className="text-xs text-gray-400 mt-2">{t('agentEditor.basicSettings.categoriesHint')}</p>
                             </div>
                         )}
                     </div>
 
                     <div className="h-px bg-gray-100 dark:bg-gray-700" />
 
-                    {/* Документы для отправки клиентам */}
+                    {/* Documents for sending to clients */}
+                    <RestrictedSection
+                        isAllowed={canSendMedia}
+                        requiredPlan="launch"
+                        featureName={t('planRestriction.sendMediaTitle')}
+                    >
                     <div>
                         <div className="flex items-center gap-2 mb-3">
                             <Share2 size={16} className="text-blue-500" />
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">Документы для отправки клиентам</span>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.documentsTitle')}</span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                            Загрузите документы (PDF, DOCX, изображения, прайс-листы), которые агент сможет отправлять клиентам в чат или по email.
+                            {t('agentEditor.basicSettings.documentsHint')}
                         </p>
 
                         {/* Toggle: Разрешить все документы */}
                         <div className="flex items-center gap-3 mb-4">
                             <Toggle checked={allowAllDocuments} onChange={setAllowAllDocuments} />
                             <span className="text-sm text-gray-900 dark:text-white">
-                                {allowAllDocuments ? 'Агент может отправлять все документы' : 'Только выбранные документы'}
+                                {allowAllDocuments ? t('agentEditor.basicSettings.allowAllDocs') : t('agentEditor.basicSettings.selectedDocsOnly')}
                             </span>
                         </div>
 
@@ -1120,11 +1132,11 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                 )}
                                 <span className="text-sm text-gray-600 dark:text-gray-400 text-center">
                                     {isDragging
-                                        ? 'Отпустите файлы здесь'
-                                        : 'Перетащите файлы сюда или нажмите для выбора'}
+                                        ? t('agentEditor.basicSettings.dropFilesHere')
+                                        : t('agentEditor.basicSettings.dragOrClick')}
                                 </span>
                                 <span className="text-xs text-gray-400">
-                                    PDF, DOCX, XLSX, CSV, изображения (до 25 МБ)
+                                    {t('agentEditor.basicSettings.fileFormats')}
                                 </span>
                             </div>
                         </div>
@@ -1186,7 +1198,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                 </p>
                                                 <p className="text-xs text-gray-400">
                                                     {isPendingDelete ? (
-                                                        <span className="text-red-500">Будет удалён при сохранении</span>
+                                                        <span className="text-red-500">{t('agentEditor.basicSettings.willBeDeleted')}</span>
                                                     ) : (
                                                         agentDocumentsService.formatFileSize(doc.fileSize)
                                                     )}
@@ -1203,7 +1215,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                     className="flex-shrink-0 px-2 py-1 bg-gray-100 hover:bg-blue-500 text-gray-600 hover:text-white dark:bg-gray-700 dark:hover:bg-blue-500 rounded-md flex items-center gap-1 text-xs transition-all"
                                                 >
                                                     <Undo2 size={12} />
-                                                    Отменить
+                                                    {t('common.cancel')}
                                                 </button>
                                             ) : (
                                                 <button
@@ -1245,7 +1257,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                 {pending.file.name}
                                             </p>
                                             <p className="text-xs text-green-600 dark:text-green-400">
-                                                Будет загружен при сохранении
+                                                {t('agentEditor.basicSettings.willBeUploaded')}
                                             </p>
                                         </div>
 
@@ -1261,42 +1273,43 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                             </div>
                         ) : (
                             <div className="text-center py-6 text-sm text-gray-400">
-                                Нет загруженных документов
+                                {t('agentEditor.basicSettings.noDocuments')}
                             </div>
                         )}
 
                         {/* Hint */}
                         {agentDocuments.length > 0 && !allowAllDocuments && (
                             <p className="text-xs text-gray-400 mt-3">
-                                Нажмите на документ, чтобы разрешить или запретить агенту его отправлять.
+                                {t('agentEditor.basicSettings.clickToToggle')}
                             </p>
                         )}
 
                         {agentDocuments.filter(d => d.isEnabled).length > 0 && (
                             <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                                Доступно для отправки: {allowAllDocuments ? agentDocuments.length : agentDocuments.filter(d => d.isEnabled).length} документ(ов)
+                                {t('agentEditor.basicSettings.availableToSend', { count: allowAllDocuments ? agentDocuments.length : agentDocuments.filter(d => d.isEnabled).length })}
                             </p>
                         )}
                     </div>
+                    </RestrictedSection>
 
                     <div className="h-px bg-gray-100 dark:bg-gray-700" />
 
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <Toggle checked={kbCreateTask} onChange={setKbCreateTask} />
-                            <span className="text-sm text-gray-900 dark:text-white">Создать задачу, если ответ не найден</span>
+                            <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.basicSettings.createTaskIfNoAnswer')}</span>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Автоматически создавать задачу в вашей CRM, если в базе знаний не найдена релевантная информация.</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.basicSettings.createTaskHint')}</p>
                     </div>
 
                     <div>
-                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Сообщение при отсутствии ответа</label>
+                        <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.basicSettings.noAnswerMessage')}</label>
                         <textarea
                             value={kbNoAnswerMessage}
                             onChange={(e) => setKbNoAnswerMessage(e.target.value)}
                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                         />
-                        <p className="text-xs text-gray-400 mt-2">Это сообщение будет показано, когда агент не сможет найти релевантную информацию в базе знаний.</p>
+                        <p className="text-xs text-gray-400 mt-2">{t('agentEditor.basicSettings.noAnswerMessageHint')}</p>
                     </div>
 
                     <button
@@ -1304,7 +1317,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-xs font-medium transition-colors shadow-sm flex items-center gap-2"
                     >
                         <Book size={14} />
-                        Открыть базу знаний
+                        {t('agentEditor.basicSettings.openKnowledgeBase')}
                     </button>
 
                 </div>

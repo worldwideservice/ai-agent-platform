@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Check,
   Star,
@@ -7,13 +8,13 @@ import {
   ChevronDown,
   Plus,
   Minus,
-  ShieldCheck,
   ArrowRight,
   Info,
   User,
   Book,
   MessageSquare,
-  Calendar
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { billingService, SubscriptionInfo } from '../src/services/api';
 
@@ -33,35 +34,24 @@ const PRICING_DATA: Record<ResponseCount, { launch: number | null; scale: number
   50000: { launch: null, scale: 1800, max: 2900 },
 };
 
-const FAQS = [
-  {
-    question: 'Могу ли я изменить свой план позже?',
-    answer: 'Да, вы можете изменить свой тарифный план в любое время в настройках аккаунта. Изменения вступят в силу немедленно, а стоимость будет пересчитана пропорционально.'
-  },
-  {
-    question: 'Предоставляете ли вы возврат средств?',
-    answer: 'Да, мы предлагаем 30-дневную гарантию возврата денег. Если вы не удовлетворены сервисом, просто напишите нам в поддержку.'
-  },
-  {
-    question: 'Что произойдет, если я превышу лимиты моего плана?',
-    answer: 'Если вы превысите лимит ответов, агент продолжит работать, но за дополнительные ответы будет взиматься плата согласно тарифам сверх лимита вашего плана.'
-  },
-  {
-    question: 'Нужны ли мне собственные API-ключи OpenAI?',
-    answer: 'Нет, мы предоставляем доступ к моделям через наши ключи. Стоимость использования моделей уже включена в тарифный план.'
-  },
-  {
-    question: 'Есть ли дополнительные платежи за разговоры?',
-    answer: 'В планах Scale и Max голосовые функции включены. Дополнительная плата может взиматься только за телефонию, если вы подключаете собственный номер через SIP.'
-  }
-];
+// FAQs are now loaded from translations
 
 export const Billing: React.FC = () => {
+  const { t } = useTranslation();
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [responseCount, setResponseCount] = useState<ResponseCount>(15000);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // FAQs loaded from translations
+  const FAQS = [
+    { question: t('billing.faq1q'), answer: t('billing.faq1a') },
+    { question: t('billing.faq2q'), answer: t('billing.faq2a') },
+    { question: t('billing.faq3q'), answer: t('billing.faq3a') },
+    { question: t('billing.faq4q'), answer: t('billing.faq4a') },
+    { question: t('billing.faq5q'), answer: t('billing.faq5a') },
+  ];
 
   // Загружаем информацию о подписке
   useEffect(() => {
@@ -99,15 +89,15 @@ export const Billing: React.FC = () => {
     <div className="space-y-10 pb-20 max-w-7xl mx-auto">
        
        {/* Header */}
-       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Тарифные планы</h1>
+       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('billing.title')}</h1>
           
        {/* Current Plan Card - Polished to match screenshot */}
        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-8 shadow-sm">
          <div className="flex flex-col md:flex-row items-start justify-between gap-6">
             <div className="w-full md:flex-1 min-w-0 space-y-5">
                <div className="flex flex-wrap items-baseline gap-2">
-                 <span className="text-xl font-bold text-gray-900 dark:text-white">Ваш текущий план:</span>
-                 <span className="text-xl font-bold text-gray-500 dark:text-gray-400">Пробный период</span>
+                 <span className="text-xl font-bold text-gray-900 dark:text-white">{t('billing.yourCurrentPlan')}</span>
+                 <span className="text-xl font-bold text-gray-500 dark:text-gray-400">{t('billing.trialPeriod')}</span>
                </div>
 
                <div className="flex flex-wrap items-center gap-8">
@@ -117,18 +107,18 @@ export const Billing: React.FC = () => {
                    <div className={`w-2 h-2 rounded-full ${
                      subscription?.isActive ? 'bg-[#22C55E]' : 'bg-red-500'
                    }`} />
-                   <span>Статус: {subscription?.isActive ? 'Активен' : 'Неактивен'}</span>
+                   <span>{t('billing.status')} {subscription?.isActive ? t('billing.statusActive') : t('billing.statusInactive')}</span>
                  </div>
                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-medium">
                    <Calendar size={18} className="text-gray-400" />
-                   <span>Осталось дней: {subscription?.daysRemaining ?? 0}</span>
+                   <span>{t('billing.daysRemaining')} {subscription?.daysRemaining ?? 0}</span>
                  </div>
                </div>
 
                <div className="w-full pt-2">
                   <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-2 font-medium">
-                    <span>Использовано: {subscription?.responsesUsed ?? 0} из {formatNumber(subscription?.responsesLimit ?? 5000)}</span>
-                    <span>{subscription?.usagePercentage ?? 0}% использовано</span>
+                    <span>{t('billing.used')} {subscription?.responsesUsed ?? 0} {t('billing.of')} {formatNumber(subscription?.responsesLimit ?? 5000)}</span>
+                    <span>{subscription?.usagePercentage ?? 0}{t('billing.usedPercent')}</span>
                   </div>
                   <div className="h-2 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div
@@ -141,7 +131,7 @@ export const Billing: React.FC = () => {
 
             <div className="w-full md:w-auto md:flex-shrink-0 flex justify-end md:justify-start md:self-start md:mt-0">
                 <button className="bg-[#B91C1C] hover:bg-[#991B1B] text-white px-5 py-2 rounded-lg font-medium transition-colors shadow-sm whitespace-nowrap text-sm">
-                  Управление подпиской
+                  {t('billing.manageSubscription')}
                 </button>
             </div>
          </div>
@@ -153,7 +143,7 @@ export const Billing: React.FC = () => {
             {/* Response Dropdown */}
             <div className="flex items-center gap-4 bg-white dark:bg-gray-800 px-1 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 h-[48px]">
                 <div className="relative group px-4">
-                  <span className="text-sm text-gray-600 dark:text-gray-400 font-medium mr-2">Ответов ИИ:</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 font-medium mr-2">{t('billing.aiResponses')}</span>
                   <select 
                     value={responseCount}
                     onChange={(e) => setResponseCount(Number(e.target.value) as ResponseCount)}
@@ -179,17 +169,17 @@ export const Billing: React.FC = () => {
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
-                  Ежемесячно
+                  {t('billing.monthly')}
                 </button>
-                <button 
+                <button
                   onClick={() => setBillingCycle('yearly')}
                   className={`px-6 py-2 rounded-md text-sm font-medium transition-all h-full flex items-center ${
-                    billingCycle === 'yearly' 
-                      ? 'bg-[#0078D4] text-white shadow-sm' 
+                    billingCycle === 'yearly'
+                      ? 'bg-[#0078D4] text-white shadow-sm'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                   }`}
                 >
-                  Ежегодно
+                  {t('billing.yearly')}
                 </button>
             </div>
          </div>
@@ -207,29 +197,29 @@ export const Billing: React.FC = () => {
 
            <div className="mb-1 min-h-[60px]">
               <span className="text-4xl font-extrabold text-gray-900 dark:text-white">$0</span>
-              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">/15 дней</span>
-              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Пробный период</div>
+              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">{t('billing.per15days')}</span>
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{t('billing.trialPeriod')}</div>
            </div>
 
            <div className="flex items-center gap-1 mb-6 h-4">
              <span className="text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded">
-                Бесплатно
+                {t('billing.free')}
              </span>
            </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
-              <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t('billing.whatsIncluded')}</p>
               <ul className="space-y-3">
-                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агент</li>
-                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> 100 статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> 500 Ответов всего</li>
-                <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> 15 дней использования</li>
-                <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> Доступ к Google Gemini 2.5 Flash</li>
+                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.agents', { count: 3 })}</li>
+                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.kbArticles', { count: 100 })}</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.responsesTotal', { count: 500 })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.instructionsLimit', { count: '30,000' })}</li>
+                <li className="flex gap-3 items-start text-amber-600 dark:text-amber-500"><Clock size={16} className="mt-0.5 shrink-0"/> {t('billing.daysOfUse', { count: 15 })}</li>
               </ul>
            </div>
 
            <button className="w-full py-3 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 rounded-lg text-sm font-bold cursor-not-allowed">
-             Текущий план
+             {t('billing.currentPlanButton')}
            </button>
         </div>
 
@@ -244,89 +234,79 @@ export const Billing: React.FC = () => {
               {prices.launch !== null ? (
                 <>
                   <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${getPrice(prices.launch)}</span>
-                  <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">/месяц</span>
+                  <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">{t('billing.perMonth')}</span>
                 </>
               ) : (
-                 <span className="text-2xl font-bold text-gray-300 dark:text-gray-600 pt-2 block">Недоступно</span>
+                 <span className="text-2xl font-bold text-gray-300 dark:text-gray-600 pt-2 block">{t('billing.notAvailable')}</span>
               )}
            </div>
-           
+
            <p className="text-xs text-gray-400 dark:text-gray-500 mb-6 h-4">
-             {prices.launch === null ? 'для этого количества ответов' : 'Недоступно для этого количества ответов'}
+             {prices.launch === null ? t('billing.notAvailableForResponses') : ''}
            </p>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
-              <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t('billing.whatsIncluded')}</p>
               <ul className="space-y-3">
-                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> 1 агент</li>
-                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> 500 статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {formatNumber(responseCount)} Ответов / месяц</li>
-                <li className="flex gap-3 items-start opacity-50"><span className="w-4 text-center">-</span> Начальные инструкции агента: До 20,000 символов</li>
+                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.agents', { count: 5 })}</li>
+                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.kbArticles', { count: 500 })}</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.responsesPerMonth', { count: formatNumber(responseCount) })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.instructionsLimit', { count: '60,000' })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.sendMedia')}</li>
               </ul>
            </div>
 
-           <button 
+           <button
              disabled={prices.launch === null}
              className={`w-full py-3 rounded-lg text-sm font-bold transition-colors border ${
-               prices.launch === null 
-                 ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed' 
+               prices.launch === null
+                 ? 'bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-600 border-gray-200 dark:border-gray-700 cursor-not-allowed'
                  : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
              }`}
            >
-             {prices.launch === null ? 'Недоступно' : 'Выбрать план'}
+             {prices.launch === null ? t('billing.notAvailable') : t('billing.selectPlan')}
            </button>
         </div>
 
         {/* Scale Plan (Highlighted) */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-[#0078D4] dark:border-[#0078D4] p-6 flex flex-col relative shadow-xl transition-colors">
            <div className="absolute -top-3 right-4 bg-[#0078D4] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide shadow-sm">
-             Самый популярный
+             {t('billing.mostPopular')}
            </div>
            <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white">
               <div className="bg-[#0078D4] rounded-full p-1"><Star size={12} className="text-white" fill="currentColor" /></div>
               <span className="font-bold text-lg">Scale</span>
            </div>
-           
+
            <div className="mb-1 min-h-[60px]">
               <span className="text-5xl font-extrabold text-gray-900 dark:text-white">${getPrice(prices.scale)}</span>
-              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">/месяц</span>
-              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Оплачивается ежемесячно</div>
+              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">{t('billing.perMonth')}</span>
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{t('billing.paidMonthly')}</div>
            </div>
-           
+
            <div className="flex items-center gap-1 mb-6 h-4">
              <span className="text-xs font-medium text-[#0078D4] bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
                 <Info size={10} className="inline mr-1 mb-0.5"/>
-                Около $0.13 за разговор
+                {t('billing.aboutPerConvo', { price: '0.13' })}
              </span>
            </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
-              <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t('billing.whatsIncluded')}</p>
               <ul className="space-y-3">
-                <li className="flex gap-3 items-start"><User size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> 10 агентов</li>
-                <li className="flex gap-3 items-start"><Book size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> 100,000 статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> {formatNumber(responseCount)} Ответов / месяц</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> Начальные инструкции агента: До 20,000 символов</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> Отправка изображений, аудио, видео и документов</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> Входящие голосовые сообщения</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> Входящие сообщения с изображениями</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> Обновление полей сделок и контактов</li>
-                <li className="flex gap-3 items-start">
-                   <div className="w-4 h-4 flex items-center justify-center text-[#0078D4] mt-0.5">•</div>
-                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Доступные модели ИИ:
-                      <ul className="list-disc list-inside mt-1 ml-1 text-[10px]">
-                         <li>OpenAI GPT-4.1</li>
-                         <li>OpenAI GPT-5</li>
-                         <li>Google Gemini 2.5 Flash</li>
-                      </ul>
-                   </div>
-                </li>
+                <li className="flex gap-3 items-start"><User size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> {t('billing.agents', { count: 10 })}</li>
+                <li className="flex gap-3 items-start"><Book size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> {t('billing.kbArticles', { count: '100,000' })}</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-[#0078D4] mt-0.5 shrink-0"/> {t('billing.responsesPerMonth', { count: formatNumber(responseCount) })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> {t('billing.instructionsLimit', { count: '60,000' })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> {t('billing.sendMedia')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> {t('billing.incomingVoice')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> {t('billing.incomingImages')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-[#0078D4]">•</span> {t('billing.updateDealsContacts')}</li>
               </ul>
            </div>
 
            <button className="w-full py-3 bg-[#0078D4] hover:bg-[#006cbd] text-white rounded-lg text-sm font-bold transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2">
-             Выбрать план <ArrowRight size={16} />
+             {t('billing.selectPlan')} <ArrowRight size={16} />
            </button>
         </div>
 
@@ -336,70 +316,44 @@ export const Billing: React.FC = () => {
               <Crown size={20} />
               <span className="font-bold text-lg">Max</span>
            </div>
-           
+
            <div className="mb-1 min-h-[60px]">
               <span className="text-4xl font-extrabold text-gray-900 dark:text-white">${getPrice(prices.max)}</span>
-              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">/месяц</span>
-              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Оплачивается ежемесячно</div>
+              <span className="text-gray-500 dark:text-gray-400 text-sm font-medium">{t('billing.perMonth')}</span>
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{t('billing.paidMonthly')}</div>
            </div>
-           
+
            <div className="flex items-center gap-1 mb-6 h-4">
              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
                 <Info size={10} className="inline mr-1 mb-0.5"/>
-                Около $0.23 за разговор
+                {t('billing.aboutPerConvo', { price: '0.23' })}
              </span>
            </div>
 
            <div className="space-y-4 text-sm text-gray-600 dark:text-gray-300 flex-1 mb-8">
-              <p className="font-medium text-gray-900 dark:text-white">Что включено</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t('billing.whatsIncluded')}</p>
               <ul className="space-y-3">
-                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> Неограниченное количество агентов</li>
-                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> Неограниченное количество статей базы знаний</li>
-                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {formatNumber(responseCount)} Ответов / месяц</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> Начальные инструкции агента: До 40,000 символов</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> Отправка изображений, аудио, видео и документов</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> Входящие голосовые сообщения</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> Входящие сообщения с изображениями</li>
-                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> Обновление полей сделок и контактов</li>
-                <li className="flex gap-3 items-start">
-                   <div className="w-4 h-4 flex items-center justify-center text-gray-400 mt-0.5">•</div>
-                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                      Доступные модели ИИ:
-                      <ul className="list-disc list-inside mt-1 ml-1 text-[10px]">
-                         <li>OpenAI GPT-4.1</li>
-                         <li>OpenAI GPT-5</li>
-                         <li>Google Gemini 2.5 Flash</li>
-                         <li>Claude Sonnet 4</li>
-                      </ul>
-                   </div>
-                </li>
+                <li className="flex gap-3 items-start"><User size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.unlimitedAgents')}</li>
+                <li className="flex gap-3 items-start"><Book size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.unlimitedKbArticles')}</li>
+                <li className="flex gap-3 items-start"><MessageSquare size={16} className="text-gray-400 mt-0.5 shrink-0"/> {t('billing.responsesPerMonth', { count: formatNumber(responseCount) })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.instructionsLimit', { count: '120,000' })}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.sendMedia')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.incomingVoice')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.incomingImages')}</li>
+                <li className="flex gap-3 items-start"><span className="w-4 h-4 flex items-center justify-center text-gray-400">•</span> {t('billing.updateDealsContacts')}</li>
               </ul>
            </div>
 
            <button className="w-full py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2">
-             Выбрать план <ArrowRight size={16} />
+             {t('billing.selectPlan')} <ArrowRight size={16} />
            </button>
         </div>
       </div>
 
-      {/* Guarantee Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-8 text-center border border-gray-200 dark:border-gray-700 max-w-3xl mx-auto">
-         <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mx-auto mb-4">
-            <ShieldCheck size={28} />
-         </div>
-         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">30-дневная гарантия возврата денег</h3>
-         <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
-           Попробуйте любой план без риска. Если вас что-то не устроит в течение первых 30 дней, мы вернём деньги.
-         </p>
-         <p className="text-xs text-gray-400 dark:text-gray-500">
-           Наша служба поддержки готова помочь вам сменить план или отменить подписку в любое время.
-         </p>
-      </div>
-
       {/* FAQ Section */}
       <div className="max-w-3xl mx-auto">
-         <h2 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">Часто задаваемые вопросы</h2>
-         <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-8">Найдите ответы на распространенные вопросы о наших тарифах и планах</p>
+         <h2 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-2">{t('billing.faqTitle')}</h2>
+         <p className="text-center text-gray-500 dark:text-gray-400 text-sm mb-8">{t('billing.faqSubtitle')}</p>
          
          <div className="space-y-4">
             {FAQS.map((faq, index) => (

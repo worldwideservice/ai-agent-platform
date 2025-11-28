@@ -8,6 +8,7 @@ import { evaluateTriggerConditions, TriggerCondition } from '../services/ai-trig
 import { executeTriggerActions } from '../services/trigger-executor.service';
 import { getAgentRoleKnowledge } from '../services/training.service';
 import { systemNotifications } from '../services/system-notifications.service';
+import { canUseResponse, checkAndResetMonthlyLimits } from '../services/plan-limits.service';
 
 /**
  * POST /api/chat/message
@@ -40,6 +41,20 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
     // Проверяем что агент принадлежит пользователю
     if (agent.userId !== userId) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Проверяем и сбрасываем месячные лимиты если нужно
+    await checkAndResetMonthlyLimits(userId);
+
+    // Проверяем лимит ответов ДО генерации
+    const responseLimit = await canUseResponse(userId);
+    if (!responseLimit.allowed) {
+      return res.status(403).json({
+        error: 'Plan limit reached',
+        message: responseLimit.message || 'Достигнут лимит ответов для вашего тарифа',
+        current: responseLimit.current,
+        limit: responseLimit.limit,
+      });
     }
 
     // Получаем расширенные настройки агента
@@ -129,9 +144,12 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       content: message,
     });
 
+    // Используем модель из advanced settings если есть, иначе из agent
+    const modelToUse = advancedSettings?.model || agent.model;
+
     // Отправляем запрос в OpenRouter
     const result = await chatCompletion({
-      model: agent.model,
+      model: modelToUse,
       messages,
       temperature: 0.7,
       max_tokens: 2048,
@@ -146,7 +164,7 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
         agentId: agent.id,
         message,
         response,
-        model: agent.model,
+        model: modelToUse,
         userId,
       },
     });

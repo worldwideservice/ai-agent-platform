@@ -1,4 +1,5 @@
 import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Eye,
     Edit,
@@ -14,6 +15,8 @@ import {
 } from 'lucide-react';
 import { DEAL_FIELDS, CONTACT_FIELDS } from '../services/crmData';
 import { Agent } from '../types';
+import { useSubscription } from '../src/contexts/SubscriptionContext';
+import { RestrictedSection } from './PlanRestriction';
 
 interface UpdateRule {
     id: string;
@@ -35,6 +38,10 @@ export interface AgentDealsContactsRef {
 }
 
 export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, onSave, crmConnected, onSyncCRM }, ref) => {
+    const { t } = useTranslation();
+    const { canUseFeature } = useSubscription();
+    const canUpdateCrmFields = canUseFeature('canUpdateCrmFields');
+
     // Parse CRM data from agent (handles double-encoded JSON)
     const parseCrmData = () => {
         if (!agent?.crmData) return null;
@@ -260,14 +267,14 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                 </div>
                             ))}
                             {availableFields.filter(f => !selectedIds.includes(f.id)).length === 0 && (
-                                <div className="px-3 py-2 text-sm text-gray-400 text-center">Нет доступных полей</div>
+                                <div className="px-3 py-2 text-sm text-gray-400 text-center">{t('agentEditor.dealsContacts.noAvailableFields')}</div>
                             )}
                         </div>
                     )}
                 </div>
 
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Выберите поля, к которым агент сможет получить доступ.
+                    {t('agentEditor.dealsContacts.selectFieldsPlaceholder')}
                 </p>
             </div>
         );
@@ -282,8 +289,8 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                     <div className="flex items-center gap-3">
                         <Eye size={20} className="text-gray-400" />
                         <div>
-                            <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки доступа к данным</h2>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Выберите, какие данные агент может читать и использовать в диалогах</p>
+                            <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.dealsContacts.dataAccessTitle')}</h2>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.dealsContacts.dataAccessDescription')}</p>
                         </div>
                     </div>
                     <button
@@ -292,7 +299,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                         className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 px-3 py-1.5 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-                        {isSyncing ? 'Синхронизация...' : 'Синхронизировать настройки CRM'}
+                        {isSyncing ? t('agentEditor.dealsContacts.syncing') : t('agentEditor.dealsContacts.syncCrmSettings')}
                     </button>
                 </div>
 
@@ -305,23 +312,23 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                         >
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
                                 <Briefcase size={16} className="text-gray-400" />
-                                Данные сделки
+                                {t('agentEditor.dealsContacts.dealData')}
                             </div>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isDealAccessOpen ? 'rotate-180' : ''}`} />
                         </div>
 
                         {isDealAccessOpen && (
                             <div className="pl-6">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Выберите поля сделки, которые агент может читать</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t('agentEditor.dealsContacts.dealDataHint')}</p>
                                 <MultiSelect
-                                    label="Выберите поля сделки"
+                                    label={t('agentEditor.dealsContacts.selectDealFields')}
                                     selectedIds={readDealFields}
                                     onChange={(id) => toggleSelection(id, readDealFields, setReadDealFields)}
-                                    placeholder="Выберите поля, к которым агент сможет получить доступ..."
+                                    placeholder={t('agentEditor.dealsContacts.selectFieldsPlaceholder')}
                                     availableFields={availableDealFields}
                                     dropdownId="deal-fields"
                                 />
-                                <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Дополнительные поля добавляют лишний контекст и могут снизить точность ответов</p>
+                                <p className="text-xs text-gray-400 mt-2">{t('agentEditor.dealsContacts.selectOnlyNeeded')}</p>
                             </div>
                         )}
                     </div>
@@ -336,23 +343,23 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                         >
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
                                 <User size={16} className="text-gray-400" />
-                                Данные контакта
+                                {t('agentEditor.dealsContacts.contactData')}
                             </div>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isContactAccessOpen ? 'rotate-180' : ''}`} />
                         </div>
 
                         {isContactAccessOpen && (
                             <div className="pl-6">
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Выберите, какие поля контакта агент сможет читать</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{t('agentEditor.dealsContacts.contactDataHint')}</p>
                                 <MultiSelect
-                                    label="Выберите поля контакта"
+                                    label={t('agentEditor.dealsContacts.selectContactFields')}
                                     selectedIds={readContactFields}
                                     onChange={(id) => toggleSelection(id, readContactFields, setReadContactFields)}
-                                    placeholder="Выберите поля, к которым агент сможет получить доступ..."
+                                    placeholder={t('agentEditor.dealsContacts.selectFieldsPlaceholder')}
                                     availableFields={availableContactFields}
                                     dropdownId="contact-fields"
                                 />
-                                <p className="text-xs text-gray-400 mt-2">Выбирайте только необходимые поля. Большее количество полей добавляет дополнительный контекст и может снизить точность ответов.</p>
+                                <p className="text-xs text-gray-400 mt-2">{t('agentEditor.dealsContacts.selectOnlyNeeded')}</p>
                             </div>
                         )}
                     </div>
@@ -360,12 +367,17 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
             </div>
 
             {/* Data Input Settings */}
+            <RestrictedSection
+                isAllowed={canUpdateCrmFields}
+                requiredPlan="scale"
+                featureName={t('planRestriction.updateCrmTitle')}
+            >
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
                 <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                     <Edit size={20} className="text-gray-400" />
                     <div>
-                        <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки ввода данных</h2>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Настройте, как агент может изменять данные сделок и контактов в зависимости от контекста разговора</p>
+                        <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.dealsContacts.dataInputTitle')}</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.dealsContacts.dataInputDescription')}</p>
                     </div>
                 </div>
 
@@ -378,14 +390,14 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                         >
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
                                 <Briefcase size={16} className="text-gray-400" />
-                                Данные сделки
+                                {t('agentEditor.dealsContacts.dealData')}
                             </div>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isDealRulesOpen ? 'rotate-180' : ''}`} />
                         </div>
 
                         {isDealRulesOpen && (
                             <div className="pl-6 space-y-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Задайте правила автоматического обновления полей сделки во время разговора</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.dealsContacts.dealUpdateRulesHint')}</p>
 
                                 <div className="space-y-3">
                                     {dealUpdateRules.map((rule, index) => (
@@ -418,26 +430,26 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Поле<span className="text-red-500">*</span></label>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.dealsContacts.field')}<span className="text-red-500">*</span></label>
                                                     <div className="relative">
                                                         <select
                                                             value={rule.fieldId}
                                                             onChange={(e) => updateRule(rule.id, 'fieldId', e.target.value, setDealUpdateRules)}
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
-                                                            <option value="">Выберите поле для обновления</option>
+                                                            <option value="">{t('agentEditor.dealsContacts.selectFieldToUpdate')}</option>
                                                             {availableDealFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Условие обновления<span className="text-red-500">*</span></label>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.dealsContacts.updateCondition')}<span className="text-red-500">*</span></label>
                                                     <input
                                                         type="text"
                                                         value={rule.condition}
                                                         onChange={(e) => updateRule(rule.id, 'condition', e.target.value, setDealUpdateRules)}
-                                                        placeholder="Например: когда клиент упоминает цену"
+                                                        placeholder={t('agentEditor.dealsContacts.dealConditionPlaceholder')}
                                                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none"
                                                     />
                                                 </div>
@@ -445,7 +457,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                             <div className="mt-4 flex items-center gap-3">
                                                 <Toggle checked={rule.overwrite} onChange={(val) => updateRule(rule.id, 'overwrite', val, setDealUpdateRules)} />
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">Перезаписать существующее значение</span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">{t('agentEditor.dealsContacts.overwriteExisting')}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -456,7 +468,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                     className="group w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-medium flex items-center justify-center gap-2"
                                 >
                                     <Plus size={18} className="group-hover:scale-110 transition-transform" />
-                                    <span>Добавить поле</span>
+                                    <span>{t('agentEditor.dealsContacts.addField')}</span>
                                 </button>
                             </div>
                         )}
@@ -472,14 +484,14 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                         >
                             <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
                                 <User size={16} className="text-gray-400" />
-                                Данные контакта
+                                {t('agentEditor.dealsContacts.contactData')}
                             </div>
                             <ChevronDown size={16} className={`text-gray-400 transition-transform ${isContactRulesOpen ? 'rotate-180' : ''}`} />
                         </div>
 
                         {isContactRulesOpen && (
                             <div className="pl-6 space-y-4">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">Определите правила автоматического обновления полей контакта во время разговора</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.dealsContacts.contactUpdateRulesHint')}</p>
 
                                 <div className="space-y-3">
                                     {contactUpdateRules.map((rule, index) => (
@@ -512,26 +524,26 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Поле<span className="text-red-500">*</span></label>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.dealsContacts.field')}<span className="text-red-500">*</span></label>
                                                     <div className="relative">
                                                         <select
                                                             value={rule.fieldId}
                                                             onChange={(e) => updateRule(rule.id, 'fieldId', e.target.value, setContactUpdateRules)}
                                                             className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none"
                                                         >
-                                                            <option value="">Выберите поле для обновления</option>
+                                                            <option value="">{t('agentEditor.dealsContacts.selectFieldToUpdate')}</option>
                                                             {availableContactFields.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
                                                         </select>
                                                         <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Условие обновления<span className="text-red-500">*</span></label>
+                                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.dealsContacts.updateCondition')}<span className="text-red-500">*</span></label>
                                                     <input
                                                         type="text"
                                                         value={rule.condition}
                                                         onChange={(e) => updateRule(rule.id, 'condition', e.target.value, setContactUpdateRules)}
-                                                        placeholder="Например: когда клиент называет своё имя"
+                                                        placeholder={t('agentEditor.dealsContacts.contactConditionPlaceholder')}
                                                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500 outline-none"
                                                     />
                                                 </div>
@@ -539,7 +551,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
 
                                             <div className="mt-4 flex items-center gap-3">
                                                 <Toggle checked={rule.overwrite} onChange={(val) => updateRule(rule.id, 'overwrite', val, setContactUpdateRules)} />
-                                                <span className="text-sm text-gray-700 dark:text-gray-300">Перезаписать существующее значение</span>
+                                                <span className="text-sm text-gray-700 dark:text-gray-300">{t('agentEditor.dealsContacts.overwriteExisting')}</span>
                                             </div>
                                         </div>
                                     ))}
@@ -550,13 +562,14 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                                     className="group w-full py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all font-medium flex items-center justify-center gap-2"
                                 >
                                     <Plus size={18} className="group-hover:scale-110 transition-transform" />
-                                    <span>Добавить поле</span>
+                                    <span>{t('agentEditor.dealsContacts.addField')}</span>
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
+            </RestrictedSection>
 
             {/* Footer Actions */}
             <div className="flex items-center gap-4 pt-4">
@@ -572,13 +585,13 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
                     }}
                     className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
-                    Сохранить
+                    {t('common.save')}
                 </button>
                 <button
                     onClick={onCancel}
                     className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                 >
-                    Отмена
+                    {t('common.cancel')}
                 </button>
             </div>
         </div>

@@ -5,6 +5,7 @@ import {
   GripVertical, Trash2, Plus, Search, LayoutGrid, Edit, ArrowUp, ArrowDown, CheckCircle,
   XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS, MOCK_USERS, MOCK_SALESBOTS } from '../services/crmData';
 import { AgentDealsContacts, AgentDealsContactsRef } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
@@ -137,6 +138,7 @@ const GoogleIcon = () => (
 );
 
 export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const saved = localStorage.getItem('agentEditorActiveTab');
     return (saved as Tab) || 'main';
@@ -171,7 +173,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
 
   // --- Advanced Tab State ---
-  const [advancedModel, setAdvancedModel] = useState('openai/gpt-4o');
+  const [advancedModel, setAdvancedModel] = useState(agent?.model || 'openai/gpt-4o');
   const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [autoLanguage, setAutoLanguage] = useState(false);
@@ -640,14 +642,15 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.log('onSave completed successfully');
 
       // Показываем toast об успешном сохранении с названием агента
-      showToast('success', `Настройки агента "${updatedAgent.name}" сохранены`);
+      showToast('success', t('agentEditor.notifications.settingsSavedFor', { name: updatedAgent.name }));
 
       // Создаём уведомление
       try {
         await notificationsService.createNotification({
           type: 'success',
-          title: 'Настройки агента сохранены',
-          message: `Настройки агента "${updatedAgent.name}" обновлены`,
+          titleKey: 'agentEditor.notifications.agentSettingsSaved',
+          messageKey: 'agentEditor.notifications.agentSettingsUpdated',
+          params: { name: updatedAgent.name },
         });
       } catch (e) { /* ignore */ }
 
@@ -660,11 +663,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
         } catch (docError: any) {
           console.error('Error committing document changes:', docError);
           // Don't fail the entire save, just show a warning
-          setSaveError(docError.message || 'Некоторые документы не удалось обработать');
+          setSaveError(docError.message || t('agentEditor.notifications.someDocsError'));
         }
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Не удалось сохранить изменения. Попробуйте еще раз.';
+      const errorMessage = error.response?.data?.message || t('agentEditor.notifications.saveError');
       setSaveError(errorMessage);
       showToast('error', errorMessage);
       console.error('Failed to save agent:', error);
@@ -690,19 +693,19 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       await refreshIntegrations();
 
       // Создаём уведомление
-      const status = isActive ? 'включена' : 'выключена';
+      const status = isActive ? t('agentEditor.integrations.enabled') : t('agentEditor.integrations.disabled');
       try {
         await notificationsService.createNotification({
           type: 'info',
-          title: 'Интеграция Kommo',
-          message: `Интеграция Kommo ${status} для агента "${agent.name}"`,
+          title: t('agentEditor.notifications.kommoIntegration'),
+          message: t('agentEditor.notifications.kommoIntegrationStatus', { status, name: agent.name }),
         });
       } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to update Kommo integration:', error);
       // Откатываем изменение в случае ошибки
       setKommoActive(!isActive);
-      alert('Не удалось обновить интеграцию Kommo');
+      alert(t('agentEditor.integrations.updateError'));
     }
   };
 
@@ -722,19 +725,19 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       await refreshIntegrations();
 
       // Создаём уведомление
-      const status = isActive ? 'включена' : 'выключена';
+      const status = isActive ? t('agentEditor.integrations.enabled') : t('agentEditor.integrations.disabled');
       try {
         await notificationsService.createNotification({
           type: 'info',
-          title: 'Интеграция Google Calendar',
-          message: `Интеграция Google Calendar ${status} для агента "${agent.name}"`,
+          title: t('agentEditor.notifications.googleCalendarIntegration'),
+          message: t('agentEditor.notifications.googleCalendarIntegrationStatus', { status, name: agent.name }),
         });
       } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Failed to update Google Calendar integration:', error);
       // Откатываем изменение в случае ошибки
       setGoogleCalendarActive(!isActive);
-      alert('Не удалось обновить интеграцию Google Calendar');
+      alert(t('agentEditor.integrations.updateError'));
     }
   };
 
@@ -749,7 +752,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const kommoIntegration = integrations.find((i: any) => i.integrationType === 'kommo');
 
       if (!kommoIntegration) {
-        alert('Интеграция Kommo не найдена. Пожалуйста, сначала создайте интеграцию.');
+        alert(t('agentEditor.integrations.integrationNotFound'));
         return;
       }
 
@@ -760,19 +763,19 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.log('CRM синхронизирована:', result);
 
       alert(
-        `Синхронизация завершена успешно!\n\n` +
-        `Воронок: ${result.stats.pipelines}\n` +
-        `Пользователей: ${result.stats.users}\n` +
-        `Время: ${result.stats.syncTime}\n\n` +
-        `Дата: ${new Date(result.lastSynced).toLocaleString('ru-RU')}`
+        `${t('agentEditor.integrations.syncSuccess')}\n\n` +
+        `${t('agentEditor.integrations.syncPipelines')} ${result.stats.pipelines}\n` +
+        `${t('agentEditor.integrations.syncUsers')} ${result.stats.users}\n` +
+        `${t('agentEditor.integrations.syncTime')} ${result.stats.syncTime}\n\n` +
+        `${t('agentEditor.integrations.syncDate')} ${new Date(result.lastSynced).toLocaleString()}`
       );
 
       // Reload page to update agent with new crmData
       window.location.reload();
     } catch (error: any) {
       console.error('Failed to sync CRM:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Неизвестная ошибка';
-      alert(`Не удалось синхронизировать CRM.\n\nОшибка: ${errorMessage}`);
+      const errorMessage = error.response?.data?.message || error.message || t('agentEditor.integrations.unknownError');
+      alert(`${t('agentEditor.integrations.syncError')}\n\n${t('agentEditor.integrations.error')} ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
@@ -919,18 +922,18 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c));
       // Создаём уведомление
       if (chain) {
-        const status = wasActive ? 'выключена' : 'включена';
+        const status = wasActive ? t('agentEditor.integrations.disabled') : t('agentEditor.integrations.enabled');
         try {
           await notificationsService.createNotification({
             type: 'info',
-            title: 'Статус цепочки изменён',
-            message: `Цепочка "${chain.name}" ${status}`,
+            title: t('agentEditor.notifications.chainStatusTitle'),
+            message: t('agentEditor.notifications.chainStatusMessage', { name: chain.name, status }),
           });
         } catch (e) { /* ignore */ }
       }
     } catch (error) {
       console.error('Failed to toggle chain:', error);
-      alert('Ошибка переключения статуса цепочки');
+      alert(t('agentEditor.chains.toggleError'));
     }
   };
 
@@ -1027,20 +1030,20 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setIsChainModalOpen(false);
     } catch (error) {
       console.error('Failed to save chain:', error);
-      alert('Ошибка сохранения цепочки');
+      alert(t('agentEditor.chains.saveError'));
     }
   };
 
   const handleDeleteChain = async (id: string) => {
     if (!agent?.id) return;
-    if (!confirm('Вы уверены, что хотите удалить эту цепочку?')) return;
+    if (!confirm(t('agentEditor.chains.confirmDelete'))) return;
 
     try {
       await chainsService.deleteChain(agent.id, id);
       setChains(prev => prev.filter(c => c.id !== id));
     } catch (error) {
       console.error('Failed to delete chain:', error);
-      alert('Ошибка удаления цепочки');
+      alert(t('agentEditor.chains.deleteError'));
     }
   };
 
@@ -1083,12 +1086,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       await triggersService.toggleTrigger(agent.id, id);
       // Создаём уведомление
       if (trigger) {
-        const status = wasActive ? 'выключен' : 'включен';
+        const status = wasActive ? t('agentEditor.integrations.disabled') : t('agentEditor.integrations.enabled');
         try {
           await notificationsService.createNotification({
             type: 'info',
-            title: 'Статус триггера изменён',
-            message: `Триггер "${trigger.name}" ${status}`,
+            title: t('agentEditor.notifications.triggerStatusTitle'),
+            message: t('agentEditor.notifications.triggerStatusMessage', { name: trigger.name, status }),
           });
         } catch (e) { /* ignore */ }
       }
@@ -1132,13 +1135,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const handleDeleteTrigger = async (id: string) => {
     if (!agent?.id) return;
 
-    if (confirm('Вы уверены, что хотите удалить этот триггер?')) {
+    if (confirm(t('agentEditor.triggers.confirmDelete'))) {
       try {
         await triggersService.deleteTrigger(agent.id, id);
         setTriggers(prev => prev.filter(t => t.id !== id));
       } catch (error) {
         console.error('Failed to delete trigger:', error);
-        alert('Не удалось удалить триггер');
+        alert(t('agentEditor.triggers.deleteError'));
       }
     }
   };
@@ -1148,17 +1151,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
     // Валидация обязательных полей
     if (!triggerName.trim()) {
-      alert('Пожалуйста, введите название триггера');
+      alert(t('agentEditor.triggers.validation.nameRequired'));
       return;
     }
     if (!triggerCondition.trim()) {
-      alert('Пожалуйста, введите условие срабатывания');
+      alert(t('agentEditor.triggers.validation.conditionRequired'));
       return;
     }
     // Проверяем что есть хотя бы одно действие с выбранным типом
     const validActions = triggerActions.filter(a => a.action && a.action.trim() !== '');
     if (validActions.length === 0) {
-      alert('Пожалуйста, добавьте хотя бы одно действие');
+      alert(t('agentEditor.triggers.validation.actionRequired'));
       return;
     }
 
@@ -1167,69 +1170,69 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       switch (action.action) {
         case 'change_stage':
           if (!action.params?.stageId) {
-            alert('Пожалуйста, выберите этап сделки для действия "Изменить этап сделки"');
+            alert(t('agentEditor.triggers.validation.stageRequired'));
             return;
           }
           break;
         case 'assign_user':
           if (!action.params?.userId) {
-            alert('Пожалуйста, выберите пользователя для действия "Изменить ответственного"');
+            alert(t('agentEditor.triggers.validation.userRequired'));
             return;
           }
           break;
         case 'create_task':
           if (!action.params?.taskDescription?.trim()) {
-            alert('Пожалуйста, введите описание задачи');
+            alert(t('agentEditor.triggers.validation.taskRequired'));
             return;
           }
           break;
         case 'run_salesbot':
           if (!action.params?.salesbotId) {
-            alert('Пожалуйста, выберите Salesbot');
+            alert(t('agentEditor.triggers.validation.salesbotRequired'));
             return;
           }
           break;
         case 'add_deal_tags':
         case 'add_contact_tags':
           if (!action.params?.tags || action.params.tags.length === 0) {
-            alert('Пожалуйста, добавьте хотя бы один тег');
+            alert(t('agentEditor.triggers.validation.tagsRequired'));
             return;
           }
           break;
         case 'add_deal_note':
         case 'add_contact_note':
           if (!action.params?.noteText?.trim()) {
-            alert('Пожалуйста, введите текст примечания');
+            alert(t('agentEditor.triggers.validation.noteRequired'));
             return;
           }
           break;
         case 'send_message':
           if (!action.params?.messageText?.trim()) {
-            alert('Пожалуйста, введите текст сообщения');
+            alert(t('agentEditor.triggers.validation.messageRequired'));
             return;
           }
           break;
         case 'send_email':
           if (!action.params?.emailInstructions?.trim()) {
-            alert('Пожалуйста, введите инструкции для email');
+            alert(t('agentEditor.triggers.validation.emailRequired'));
             return;
           }
           break;
         case 'send_files':
           if (!action.params?.fileUrls || action.params.fileUrls.length === 0) {
-            alert('Пожалуйста, выберите файлы для отправки');
+            alert(t('agentEditor.triggers.validation.filesRequired'));
             return;
           }
           break;
         case 'send_webhook':
           if (!action.params?.webhookUrl?.trim()) {
-            alert('Пожалуйста, введите URL вебхука');
+            alert(t('agentEditor.triggers.validation.webhookRequired'));
             return;
           }
           break;
         case 'send_kb_article':
           if (!action.params?.articleId) {
-            alert('Пожалуйста, выберите статью из базы знаний');
+            alert(t('agentEditor.triggers.validation.articleRequired'));
             return;
           }
           break;
@@ -1287,7 +1290,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setIsTriggerModalOpen(false);
     } catch (error) {
       console.error('Failed to save trigger:', error);
-      alert('Не удалось сохранить триггер');
+      alert(t('agentEditor.triggers.saveError'));
     }
   };
 
@@ -1325,11 +1328,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const integrationName = integrationView === 'kommo' ? 'Kommo' : 'Google Calendar';
       return (
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-          <span>Агенты ИИ</span>
+          <span>{t('agentEditor.breadcrumb.aiAgents')}</span>
           <span>/</span>
           <span>{name}</span>
           <span>/</span>
-          <span>Интеграции</span>
+          <span>{t('agentEditor.breadcrumb.integrations')}</span>
           <span>/</span>
           <span>{integrationName}</span>
         </div>
@@ -1339,28 +1342,28 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     if (activeTab === 'advanced') {
       return (
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-          <span>Агенты ИИ</span>
+          <span>{t('agentEditor.breadcrumb.aiAgents')}</span>
           <span>/</span>
           <span>{name}</span>
           <span>/</span>
-          <span>Редактирование</span>
+          <span>{t('agentEditor.breadcrumb.editing')}</span>
         </div>
       );
     }
 
     return (
       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-        <span>Агенты ИИ</span>
+        <span>{t('agentEditor.breadcrumb.aiAgents')}</span>
         <span>/</span>
         <span>{name}</span>
         <span>/</span>
         <span>{
-          activeTab === 'main' ? 'Основные' :
-            activeTab === 'deals' ? 'Сделки и контакты' :
-              activeTab === 'triggers' ? 'Триггеры' :
-                activeTab === 'chains' ? 'Цепочки' :
-                  activeTab === 'integrations' ? 'Интеграции' :
-                    activeTab === 'advanced' ? 'Расширенные настройки' : 'Редактирование'
+          activeTab === 'main' ? t('agentEditor.tabs.main') :
+            activeTab === 'deals' ? t('agentEditor.tabs.deals') :
+              activeTab === 'triggers' ? t('agentEditor.tabs.triggers') :
+                activeTab === 'chains' ? t('agentEditor.tabs.chains') :
+                  activeTab === 'integrations' ? t('agentEditor.tabs.integrations') :
+                    activeTab === 'advanced' ? t('agentEditor.tabs.advanced') : t('agentEditor.breadcrumb.editing')
         }</span>
       </div>
     );
@@ -1371,11 +1374,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       return integrationView === 'kommo' ? 'Kommo' : 'Google Calendar';
     }
 
-    return activeTab === 'chains' ? 'Цепочки' :
-      activeTab === 'triggers' ? 'Триггеры' :
-        activeTab === 'deals' ? 'Сделки и контакты' :
-          activeTab === 'integrations' ? 'Интеграции' :
-            activeTab === 'advanced' ? 'Расширенные настройки' : `Редактирование ${name}`;
+    return activeTab === 'chains' ? t('agentEditor.chains.title') :
+      activeTab === 'triggers' ? t('agentEditor.triggers.title') :
+        activeTab === 'deals' ? t('agentEditor.tabs.deals') :
+          activeTab === 'integrations' ? t('agentEditor.integrations.title') :
+            activeTab === 'advanced' ? t('agentEditor.tabs.advanced') : `${t('agentEditor.breadcrumb.editing')} ${name}`;
   };
 
   return (
@@ -1390,7 +1393,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
         </div>
         {activeTab === 'main' && (
           <button className="bg-[#DC2626] hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-            Удалить
+            {t('common.delete')}
           </button>
         )}
       </div>
@@ -1399,12 +1402,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
         {/* Tabs */}
         <div className="border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto no-scrollbar pl-[90px]">
-          <TabButton id="main" label="Основные" icon={Settings} />
-          <TabButton id="deals" label="Сделки и контакты" icon={Users} />
-          <TabButton id="triggers" label="Триггеры" icon={Zap} />
-          <TabButton id="chains" label="Цепочки" icon={Clock} />
-          <TabButton id="integrations" label="Интеграции" icon={Puzzle} />
-          <TabButton id="advanced" label="Дополнительно" icon={FilePenLine} />
+          <TabButton id="main" label={t('agentEditor.tabs.main')} icon={Settings} />
+          <TabButton id="deals" label={t('agentEditor.tabs.deals')} icon={Users} />
+          <TabButton id="triggers" label={t('agentEditor.tabs.triggers')} icon={Zap} />
+          <TabButton id="chains" label={t('agentEditor.tabs.chains')} icon={Clock} />
+          <TabButton id="integrations" label={t('agentEditor.tabs.integrations')} icon={Puzzle} />
+          <TabButton id="advanced" label={t('agentEditor.tabs.advanced')} icon={FilePenLine} />
         </div>
 
         {/* Tab Content: Advanced */}
@@ -1415,13 +1418,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Модель ИИ</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.aiModel.title')}</h2>
               </div>
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Выберите модель ИИ<span className="text-red-500">*</span>
-                    {modelsLoading && <span className="ml-2 text-xs text-gray-500">(загрузка...)</span>}
+                    {t('agentEditor.aiModel.selectModel')}<span className="text-red-500">*</span>
+                    {modelsLoading && <span className="ml-2 text-xs text-gray-500">({t('agentEditor.aiModel.loading')})</span>}
                   </label>
                   <div className="relative">
                     <select
@@ -1431,7 +1434,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {availableModels.length === 0 ? (
-                        <option value="">Загрузка моделей...</option>
+                        <option value="">{t('agentEditor.aiModel.loadingModels')}</option>
                       ) : (
                         availableModels.map((model) => (
                           <option key={model.id} value={model.id}>
@@ -1442,7 +1445,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     </select>
                     <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Выберите, насколько умным вы хотите сделать ИИ. Более продвинутые модели стоят дороже.</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.aiModel.description')}</p>
                 </div>
               </div>
             </div>
@@ -1451,24 +1454,24 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Languages size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Язык</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.language.title')}</h2>
               </div>
               <div className="p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <Toggle checked={autoLanguage} onChange={setAutoLanguage} />
-                  <span className="text-sm text-gray-900 dark:text-white">Автоматически определять язык пользователя</span>
+                  <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.language.autoDetect')}</span>
                 </div>
                 {!autoLanguage && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Язык ответа</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{t('agentEditor.language.responseLanguage')}</label>
                     <input
                       type="text"
                       value={responseLanguage}
                       onChange={(e) => setResponseLanguage(e.target.value)}
-                      placeholder="например, Английский"
+                      placeholder={t('agentEditor.language.placeholder')}
                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                     />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Язык, который агент будет использовать для ответов пользователям</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.language.description')}</p>
                   </div>
                 )}
               </div>
@@ -1478,17 +1481,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Clock size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Расписание работы агента</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.schedule.title')}</h2>
               </div>
               <div className="p-6 space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-300">Управляйте временем, когда агент отвечает на входящие сообщения пользователей</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.schedule.description')}</p>
                 <div className="flex items-center gap-3">
                   <Toggle checked={scheduleEnabled} onChange={setScheduleEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Включить расписание</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.schedule.enable')}</span>
                 </div>
                 {scheduleEnabled && (
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Настройте рабочие часы для каждого дня недели</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.schedule.configureHours')}</p>
                     {agentSchedule.map((day) => (
                       <div key={day.day} className="flex items-center justify-between py-1">
                         <div className="flex items-center gap-3 w-40">
@@ -1528,18 +1531,18 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Clock size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Настройки ответа</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.responseSettings.title')}</h2>
               </div>
               <div className="p-6 space-y-6">
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Задержка ответа (секунд)</label>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{t('agentEditor.responseSettings.delayLabel')}</label>
                   <input
                     type="number"
                     value={responseDelay}
                     onChange={(e) => setResponseDelay(Number(e.target.value))}
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Сколько секунд ждать перед ответом. Рекомендуем установить задержку не менее 30 секунд, чтобы избежать дублирования ответов, если клиент отправит другое сообщение, пока агент отвечает.</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.responseSettings.delayDescription')}</p>
                 </div>
               </div>
             </div>
@@ -1548,35 +1551,33 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Память и Контекст</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.memory.title')}</h2>
               </div>
               <div className="p-6 space-y-6">
                 {/* Memory Toggle */}
                 <div className="flex items-center gap-3">
                   <Toggle checked={memoryEnabled} onChange={setMemoryEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">Долговременная память</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.memory.longTermMemory')}</span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Агент запоминает факты о каждом клиенте: имя, бюджет, потребности, возражения.
-                  Эти факты используются в следующих разговорах для персонализации.
+                  {t('agentEditor.memory.longTermMemoryDesc')}
                 </p>
 
                 {/* Graph Toggle */}
                 <div className="flex items-center gap-3">
                   <Toggle checked={graphEnabled} onChange={setGraphEnabled} disabled={!memoryEnabled} />
                   <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                    Граф связей
+                    {t('agentEditor.memory.relationGraph')}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Строить связи между клиентами, компаниями и фактами. Позволяет агенту видеть паттерны:
-                  "Иван из Альфа-Строй, которые партнёры Бета-Логистик - нашего клиента".
+                  {t('agentEditor.memory.relationGraphDesc')}
                 </p>
 
                 {/* Context Window */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Размер контекстного окна
+                    {t('agentEditor.memory.contextWindowSize')}
                   </label>
                   <input
                     type="number"
@@ -1588,7 +1589,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Количество фактов которые агент учитывает при ответе (5-50)
+                    {t('agentEditor.memory.factsCount')}
                   </p>
                 </div>
 
@@ -1596,12 +1597,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <div className="flex items-center gap-3">
                   <Toggle checked={semanticSearchEnabled} onChange={setSemanticSearchEnabled} disabled={!memoryEnabled} />
                   <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                    Семантический поиск
+                    {t('agentEditor.memory.semanticSearch')}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Поиск фактов по смыслу, а не по ключевым словам. Агент найдёт "бюджет ограничен"
-                  даже если клиент говорил "денег мало".
+                  {t('agentEditor.memory.semanticSearchDesc')}
                 </p>
               </div>
             </div>
@@ -1610,18 +1610,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
                 <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">Внутренние модели ИИ</h2>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.internalModels.title')}</h2>
               </div>
               <div className="p-6 space-y-4">
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  Настройте модели для внутренних операций агента. Эти модели используются для служебных задач
-                  и не влияют на основной диалог с клиентом.
+                  {t('agentEditor.internalModels.description')}
                 </p>
 
                 {/* Fact Extraction Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Извлечение фактов
+                    {t('agentEditor.internalModels.factExtraction')}
                   </label>
                   <select
                     value={factExtractionModel}
@@ -1630,7 +1629,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1640,14 +1639,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для извлечения фактов о клиенте из диалога
+                    {t('agentEditor.internalModels.factExtractionDesc')}
                   </p>
                 </div>
 
                 {/* Trigger Evaluation Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Оценка триггеров
+                    {t('agentEditor.internalModels.triggerEvaluation')}
                   </label>
                   <select
                     value={triggerEvaluationModel}
@@ -1656,7 +1655,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1666,14 +1665,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для определения срабатывания AI-триггеров
+                    {t('agentEditor.internalModels.triggerEvaluationDesc')}
                   </p>
                 </div>
 
                 {/* Chain Message Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    AI сообщение в цепочке
+                    {t('agentEditor.internalModels.chainAiMessage')}
                   </label>
                   <select
                     value={chainMessageModel}
@@ -1682,7 +1681,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1692,14 +1691,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для генерации AI-сообщений в цепочках действий
+                    {t('agentEditor.internalModels.chainAiMessageDesc')}
                   </p>
                 </div>
 
                 {/* Email Generation Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Генерация email
+                    {t('agentEditor.internalModels.emailGeneration')}
                   </label>
                   <select
                     value={emailGenerationModel}
@@ -1708,7 +1707,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1718,14 +1717,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для генерации email-сообщений в триггерах
+                    {t('agentEditor.internalModels.emailGenerationDesc')}
                   </p>
                 </div>
 
                 {/* Instruction Parsing Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Парсинг инструкций
+                    {t('agentEditor.internalModels.instructionParsing')}
                   </label>
                   <select
                     value={instructionParsingModel}
@@ -1734,7 +1733,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1744,14 +1743,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для разбора инструкций этапов воронки
+                    {t('agentEditor.internalModels.instructionParsingDesc')}
                   </p>
                 </div>
 
                 {/* KB Analysis Model */}
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Анализ базы знаний
+                    {t('agentEditor.internalModels.kbAnalysis')}
                   </label>
                   <select
                     value={kbAnalysisModel}
@@ -1760,7 +1759,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
                   >
                     {modelsLoading ? (
-                      <option>Загрузка моделей...</option>
+                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
                     ) : (
                       availableModels.map((model) => (
                         <option key={model.id} value={model.id}>
@@ -1770,7 +1769,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     )}
                   </select>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Модель для анализа контента базы знаний (рекомендуется мощная модель)
+                    {t('agentEditor.internalModels.kbAnalysisDesc')}
                   </p>
                 </div>
               </div>
@@ -1783,7 +1782,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 disabled={isSaving}
                 className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSaving ? 'Сохранение...' : 'Сохранить'}
+                {isSaving ? t('common.saving') : t('common.save')}
               </button>
               {saveError && (
                 <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
@@ -1792,7 +1791,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 onClick={handleCancel}
                 className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
             </div>
 
@@ -1811,7 +1810,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <input
                       type="text"
-                      placeholder="Поиск"
+                      placeholder={t('common.search')}
                       className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64 transition-shadow bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                     />
                   </div>
@@ -1821,9 +1820,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <table className="w-full">
                   <thead className="bg-gray-50 dark:bg-gray-750">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Интеграция</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Установлено</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Активно</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('agentEditor.integrations.integration')}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('agentEditor.integrations.installed')}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('agentEditor.integrations.active')}</th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
                     </tr>
                   </thead>
@@ -1850,7 +1849,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           onClick={() => setIntegrationView('google_calendar')}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
                         >
-                          <Settings size={16} /> Настройки
+                          <Settings size={16} /> {t('agentEditor.integrations.settings')}
                         </button>
                       </td>
                     </tr>
@@ -1876,7 +1875,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           onClick={() => setIntegrationView('kommo')}
                           className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center justify-end gap-1 text-sm font-medium"
                         >
-                          <Settings size={16} /> Настройки
+                          <Settings size={16} /> {t('agentEditor.integrations.settings')}
                         </button>
                       </td>
                     </tr>
@@ -1889,32 +1888,32 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             {integrationView === 'kommo' && (
               <>
                 {!kommoConnected ? (
-                  /* Секция "Не подключено" - современный дизайн */
+                  /* Sekция "Не подключено" - современный дизайн */
                   <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                         <LinkIcon size={20} className="text-blue-600 dark:text-blue-400" />
                       </div>
                       <div>
-                        <h3 className="text-base font-medium text-gray-900 dark:text-white">Подключение Kommo CRM</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Синхронизируйте воронки, этапы и пользователей</p>
+                        <h3 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.integrations.kommoTitle')}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.integrations.kommoDescription')}</p>
                       </div>
                     </div>
 
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Как получить токен:</h4>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('agentEditor.integrations.howToGetToken')}</h4>
                       <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
                         <li className="flex items-start gap-2">
                           <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">1</span>
-                          <span>Войдите в Kommo → Настройки → Интеграции</span>
+                          <span>{t('agentEditor.integrations.step1')}</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">2</span>
-                          <span>Создайте приватную интеграцию</span>
+                          <span>{t('agentEditor.integrations.step2')}</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center text-xs font-medium">3</span>
-                          <span>Скопируйте долгосрочный токен</span>
+                          <span>{t('agentEditor.integrations.step3')}</span>
                         </li>
                       </ol>
                     </div>
@@ -1922,20 +1921,20 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     <div className="space-y-4">
                       <div>
                         <label htmlFor="kommoTokenInput" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Долгосрочный токен
+                          {t('agentEditor.integrations.longTermToken')}
                         </label>
                         <textarea
                           id="kommoTokenInput"
                           className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300 resize-none"
                           rows={3}
-                          placeholder="Вставьте токен сюда..."
+                          placeholder={t('agentEditor.integrations.pasteTokenHere')}
                         />
                       </div>
 
                       <button
                         onClick={async () => {
                           if (!agent) {
-                            alert('Ошибка: агент не загружен');
+                            alert(t('agentEditor.integrations.errorAgentNotLoaded'));
                             return;
                           }
 
@@ -1943,7 +1942,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           const token = tokenInput?.value.trim();
 
                           if (!token) {
-                            alert('Вставьте токен в поле выше!');
+                            alert(t('agentEditor.integrations.pasteTokenError'));
                             return;
                           }
 
@@ -1970,10 +1969,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             await refreshIntegrations();
 
                             tokenInput.value = '';
-                            alert('Kommo успешно подключен!');
+                            alert(t('agentEditor.integrations.kommoConnected'));
                           } catch (error: any) {
                             console.error('Failed to connect with token:', error);
-                            alert(`Ошибка: ${error.response?.data?.message || error.message}`);
+                            alert(`${t('agentEditor.integrations.error')} ${error.response?.data?.message || error.message}`);
                           } finally {
                             setIsSaving(false);
                           }
@@ -1984,12 +1983,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         {isSaving ? (
                           <>
                             <RefreshCw size={18} className="animate-spin" />
-                            Подключение...
+                            {t('agentEditor.integrations.connecting')}
                           </>
                         ) : (
                           <>
                             <LinkIcon size={18} />
-                            Подключить Kommo
+                            {t('agentEditor.integrations.connectKommo')}
                           </>
                         )}
                       </button>
@@ -2004,14 +2003,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           <CheckCircle size={20} className="text-green-600 dark:text-green-400" />
                         </div>
                         <div>
-                          <h3 className="text-base font-medium text-gray-900 dark:text-white">Kommo CRM подключен</h3>
-                          <p className="text-sm text-green-600 dark:text-green-400">Интеграция активна</p>
+                          <h3 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.integrations.kommoConnectedTitle')}</h3>
+                          <p className="text-sm text-green-600 dark:text-green-400">{t('agentEditor.integrations.integrationActive')}</p>
                         </div>
                       </div>
                       <button
                         onClick={async () => {
                           if (!agent) return;
-                          if (!confirm('Отключить Kommo CRM?')) return;
+                          if (!confirm(t('agentEditor.integrations.disconnectKommo'))) return;
 
                           try {
                             setKommoConnected(false);
@@ -2025,42 +2024,42 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         }}
                         className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
                       >
-                        Отключить
+                        {t('agentEditor.integrations.disconnect')}
                       </button>
                     </div>
 
-                    {/* Синхронизированные данные */}
+                    {/* Synced data */}
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Синхронизированные данные:</h4>
+                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('agentEditor.integrations.syncedData')}</h4>
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Воронки продаж</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.salesPipelines')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.pipelines || 0}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Этапы воронок</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.pipelineStages')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.stages || 0}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Пользователи CRM</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.crmUsers')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.users || 0}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Поля сделок</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.dealFields')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.dealFields || 0}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Поля контактов</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.contactFields')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.contactFields || 0}</span>
                         </div>
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">Каналы связи</span>
+                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.communicationChannels')}</span>
                           <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.channels || 0}</span>
                         </div>
                       </div>
                       {kommoSyncStats?.lastSync && (
                         <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
-                          Последняя синхронизация: {new Date(kommoSyncStats.lastSync).toLocaleString('ru-RU')}
+                          {t('agentEditor.integrations.lastSync')} {new Date(kommoSyncStats.lastSync).toLocaleString()}
                         </div>
                       )}
                     </div>
@@ -2073,10 +2072,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           await integrationsService.syncKommo(agent.id, '');
                           const stats = await integrationsService.getKommoSyncStats(agent.id);
                           setKommoSyncStats(stats);
-                          alert(`Синхронизация завершена\n${new Date().toLocaleString('ru-RU')}`);
+                          alert(`${t('agentEditor.integrations.syncCompleted')}\n${new Date().toLocaleString()}`);
                         } catch (error: any) {
                           console.error('Failed to sync:', error);
-                          alert(`Ошибка синхронизации: ${error.message}`);
+                          alert(`${t('agentEditor.integrations.syncErrorMessage')} ${error.message}`);
                         } finally {
                           setIsSaving(false);
                         }
@@ -2085,19 +2084,19 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-2.5 transition-colors font-medium text-sm shadow-sm"
                     >
                       <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
-                      {isSaving ? 'Синхронизация...' : 'Синхронизировать'}
+                      {isSaving ? t('agentEditor.integrations.syncing') : t('agentEditor.integrations.sync')}
                     </button>
                   </div>
                 )}
 
-                {/* Общие настройки */}
+                {/* General settings */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">Общие настройки</h3>
+                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">{t('agentEditor.integrations.generalSettings')}</h3>
 
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-sm text-gray-900 dark:text-white">Интеграция активна</span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Включить или отключить использование данных CRM</p>
+                      <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.integrations.integrationActiveToggle')}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('agentEditor.integrations.integrationActiveDesc')}</p>
                     </div>
                     <Toggle checked={kommoActive} onChange={handleKommoActiveChange} />
                   </div>
@@ -2108,13 +2107,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                     onClick={() => setIntegrationView('list')}
                   >
-                    Сохранить изменения
+                    {t('agentEditor.integrations.saveChanges')}
                   </button>
                   <button
                     onClick={() => setIntegrationView('list')}
                     className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                   >
-                    Отменить
+                    {t('common.cancel')}
                   </button>
                 </div>
               </>
@@ -2125,11 +2124,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
               <>
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-base font-medium text-gray-900 dark:text-white">Подключенные сотрудники</h3>
+                    <h3 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.integrations.connectedEmployees')}</h3>
                     <div className="flex items-center gap-3">
                       <Toggle checked={googleCalendarActive} onChange={handleGoogleCalendarActiveChange} />
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {googleCalendarActive ? 'Активно' : 'Неактивно'}
+                        {googleCalendarActive ? t('common.active') : t('common.inactive')}
                       </span>
                     </div>
                   </div>
@@ -2139,8 +2138,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     {calendarEmployees.length === 0 ? (
                       <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center">
                         <Calendar className="mx-auto mb-3 text-gray-400" size={32} />
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Нет подключенных сотрудников</p>
-                        <p className="text-gray-400 dark:text-gray-500 text-xs">Добавьте сотрудников CRM для синхронизации их календарей</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('agentEditor.integrations.noEmployees')}</p>
+                        <p className="text-gray-400 dark:text-gray-500 text-xs">{t('agentEditor.integrations.noEmployeesHint')}</p>
                       </div>
                     ) : (
                       calendarEmployees.map((employee) => (
@@ -2165,14 +2164,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {employee.status === 'connected' ? (
                                 <p className="text-xs text-gray-500 dark:text-gray-400">{employee.googleEmail}</p>
                               ) : (
-                                <p className="text-xs text-amber-600 dark:text-amber-400">Ожидает авторизации</p>
+                                <p className="text-xs text-amber-600 dark:text-amber-400">{t('agentEditor.integrations.awaitingAuthorization')}</p>
                               )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
                             {employee.status === 'connected' ? (
                               <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs rounded-full">
-                                Подключен
+                                {t('agentEditor.integrations.connected')}
                               </span>
                             ) : (
                               <button
@@ -2187,12 +2186,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                 }}
                                 className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-xs"
                               >
-                                Получить ссылку
+                                {t('agentEditor.integrations.getLink')}
                               </button>
                             )}
                             <button
                               onClick={async () => {
-                                if (confirm('Удалить этого сотрудника?')) {
+                                if (confirm(t('agentEditor.integrations.deleteEmployee'))) {
                                   try {
                                     await googleCalendarService.deleteEmployee(employee.id);
                                     const newEmployees = calendarEmployees.filter(e => e.id !== employee.id);
@@ -2227,7 +2226,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
                   >
                     <Plus size={18} />
-                    Добавить сотрудника
+                    {t('agentEditor.integrations.addEmployee')}
                   </button>
                 </div>
 
@@ -2235,7 +2234,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 {inviteUrl && (
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-blue-900 dark:text-blue-300 mb-2">
-                      Ссылка для авторизации ({selectedCrmUser?.name})
+                      {t('agentEditor.integrations.authLinkFor', { name: selectedCrmUser?.name })}
                     </h4>
                     <div className="flex gap-2">
                       <input
@@ -2247,15 +2246,15 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(inviteUrl);
-                          alert('Ссылка скопирована!');
+                          alert(t('agentEditor.integrations.linkCopied'));
                         }}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium"
                       >
-                        Копировать
+                        {t('agentEditor.integrations.copy')}
                       </button>
                     </div>
                     <p className="text-xs text-blue-700 dark:text-blue-400 mt-2">
-                      Отправьте эту ссылку сотруднику. Он должен перейти по ней и авторизоваться через Google.
+                      {t('agentEditor.integrations.sendLinkToEmployee')}
                     </p>
                     <button
                       onClick={() => {
@@ -2264,7 +2263,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       }}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2"
                     >
-                      Закрыть
+                      {t('common.close')}
                     </button>
                   </div>
                 )}
@@ -2274,13 +2273,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                     onClick={() => setIntegrationView('list')}
                   >
-                    Готово
+                    {t('agentEditor.integrations.done')}
                   </button>
                   <button
                     onClick={() => setIntegrationView('list')}
                     className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
                   >
-                    Назад
+                    {t('agentEditor.integrations.back')}
                   </button>
                 </div>
 
@@ -2294,7 +2293,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     }} />
                     <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md">
                       <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Добавить сотрудника</h3>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('agentEditor.integrations.addEmployee')}</h3>
                         <button
                           onClick={() => {
                             setIsAddEmployeeModalOpen(false);
@@ -2308,7 +2307,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       </div>
                       <div className="p-5">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Выберите сотрудника из CRM
+                          {t('agentEditor.integrations.selectCrmEmployee')}
                         </label>
                         <select
                           value={selectedCrmUser?.id || ''}
@@ -2321,7 +2320,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           }}
                           className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                         >
-                          <option value="">Выберите сотрудника...</option>
+                          <option value="">{t('agentEditor.integrations.selectEmployee')}</option>
                           {(crmData?.users || MOCK_USERS).map((user: any) => (
                             <option key={user.id} value={user.id}>{user.name}</option>
                           ))}
@@ -2343,7 +2342,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                 const employees = await googleCalendarService.getEmployees(agent.id);
                                 setCalendarEmployees(employees);
                               } catch (error: any) {
-                                alert(error.response?.data?.message || 'Не удалось создать приглашение');
+                                alert(error.response?.data?.message || t('agentEditor.integrations.inviteCreationError'));
                               } finally {
                                 setIsCreatingInvite(false);
                               }
@@ -2351,13 +2350,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             disabled={isCreatingInvite}
                             className="mt-4 w-full bg-[#0078D4] hover:bg-[#006cbd] disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
                           >
-                            {isCreatingInvite ? 'Создание...' : 'Создать ссылку-приглашение'}
+                            {isCreatingInvite ? t('agentEditor.integrations.creatingInvite') : t('agentEditor.integrations.createInviteLink')}
                           </button>
                         )}
 
                         {inviteUrl && (
                           <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
-                            <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">Ссылка создана!</p>
+                            <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">{t('agentEditor.integrations.linkCreated')}</p>
                             <div className="flex gap-2 mb-2">
                               <input
                                 type="text"
@@ -2368,15 +2367,15 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               <button
                                 onClick={() => {
                                   navigator.clipboard.writeText(inviteUrl);
-                                  alert('Ссылка скопирована!');
+                                  alert(t('agentEditor.integrations.linkCopied'));
                                 }}
                                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-medium"
                               >
-                                Копировать
+                                {t('agentEditor.integrations.copy')}
                               </button>
                             </div>
                             <p className="text-xs text-green-700 dark:text-green-400">
-                              Отправьте эту ссылку сотруднику {selectedCrmUser?.name}
+                              {t('agentEditor.integrations.sendLinkTo', { name: selectedCrmUser?.name })}
                             </p>
                           </div>
                         )}
@@ -2390,7 +2389,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           }}
                           className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-white rounded-lg text-sm font-medium transition-colors"
                         >
-                          Закрыть
+                          {t('common.close')}
                         </button>
                       </div>
                     </div>
@@ -2425,7 +2424,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 disabled={isSaving}
                 className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-3 rounded-md text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSaving ? 'Сохранение...' : 'Сохранить'}
+                {isSaving ? t('common.saving') : t('common.save')}
               </button>
               {saveError && (
                 <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
@@ -2434,7 +2433,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 onClick={handleCancel}
                 className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2.5 rounded-md text-sm font-medium transition-colors shadow-sm"
               >
-                Отмена
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -2457,8 +2456,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           // ... (Triggers tab content code - reused from previous turn)
           <div className="p-6 space-y-6">
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between">
-              <div><h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Триггеры</h2><p className="text-sm text-gray-500">Выполняйте мгновенные действия...</p></div>
-              <button onClick={handleCreateTrigger} className="bg-[#0078D4] text-white px-4 py-2 rounded-md text-sm font-medium">Создать</button>
+              <div><h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">{t('agentEditor.triggers.title')}</h2><p className="text-sm text-gray-500">{t('agentEditor.triggers.subtitle')}</p></div>
+              <button onClick={handleCreateTrigger} className="bg-[#0078D4] text-white px-4 py-2 rounded-md text-sm font-medium">{t('common.create')}</button>
             </div>
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden">
               {triggers.length === 0 ? (
@@ -2468,33 +2467,33 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">Не найдено Триггеры</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Создать Триггер для старта</p>
+                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.triggers.empty')}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.emptyHint')}</p>
                 </div>
               ) : (
                 <table className="w-full">
                   <thead className="bg-gray-50 dark:bg-gray-750">
                     <tr>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">Условие</th>
+                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th>
+                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th>
+                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.triggers.condition')}</th>
                       <th className="p-4 text-right"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {triggers.map(t => (
-                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    {triggers.map(trigger => (
+                      <tr key={trigger.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                         <td className="p-4 text-sm text-gray-900 dark:text-white font-medium">
-                          <button onClick={() => handleEditTrigger(t)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">
-                            {t.name}
+                          <button onClick={() => handleEditTrigger(trigger)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">
+                            {trigger.name}
                           </button>
                         </td>
-                        <td className="p-4"><Toggle checked={t.isActive} onChange={() => toggleTriggerStatus(t.id)} /></td>
-                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs" title={t.condition}>{t.condition}</td>
+                        <td className="p-4"><Toggle checked={trigger.isActive} onChange={() => toggleTriggerStatus(trigger.id)} /></td>
+                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs" title={trigger.condition}>{trigger.condition}</td>
                         <td className="p-4 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-4">
-                            <button onClick={() => handleEditTrigger(t)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
-                            <button onClick={() => handleDeleteTrigger(t.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> Удалить</button>
+                            <button onClick={() => handleEditTrigger(trigger)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> {t('common.edit')}</button>
+                            <button onClick={() => handleDeleteTrigger(trigger.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> {t('common.delete')}</button>
                           </div>
                         </td>
                       </tr>
@@ -2509,18 +2508,18 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsTriggerModalOpen(false)} />
                 <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col transition-colors animate-fadeIn">
                   <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingTriggerId ? 'Редактировать Триггер' : 'Создать Триггер'}</h2>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingTriggerId ? t('agentEditor.triggers.editTrigger') : t('agentEditor.triggers.createTrigger')}</h2>
                     <button onClick={() => setIsTriggerModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={24} /></button>
                   </div>
                   <div className="p-6 space-y-6 overflow-y-auto flex-1">
                     {/* Название */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('common.name')}<span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={triggerName}
                         onChange={(e) => setTriggerName(e.target.value)}
-                        placeholder="Например, запрос оплаты"
+                        placeholder={t('agentEditor.triggers.namePlaceholder')}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                       />
                     </div>
@@ -2528,27 +2527,27 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     {/* Активно */}
                     <div className="flex items-center gap-3">
                       <Toggle checked={triggerActive} onChange={setTriggerActive} />
-                      <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                      <span className="text-sm text-gray-900 dark:text-white">{t('common.active')}</span>
                     </div>
 
                     {/* Условие */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Условие<span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.triggers.condition')}<span className="text-red-500">*</span></label>
                       <textarea
                         value={triggerCondition}
                         onChange={(e) => setTriggerCondition(e.target.value)}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 min-h-[80px]"
-                        placeholder="Опишите условие на естественном языке, например: клиент просит оплатить, клиент интересуется ценой, клиент хочет отменить заказ"
+                        placeholder={t('agentEditor.triggers.conditionPlaceholder')}
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">AI проанализирует сообщение и определит, выполнено ли условие</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.conditionHint')}</p>
                     </div>
 
                     {/* Действия */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Действия<span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.chains.actions')}<span className="text-red-500">*</span></label>
                       <div className="space-y-4">
                         {triggerActions.map((action, index) => {
-                          const actionName = availableActions.find((a: any) => a.id === action.action)?.name || '';
+                          const actionName = action.action ? t(`agentEditor.actions.${action.action}`) : '';
                           return (
                           <div key={action.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
                             <div className="flex items-center justify-between mb-3">
@@ -2560,7 +2559,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       disabled={index === 0}
                                       className={`p-0.5 rounded ${index === 0 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                                       type="button"
-                                      title="Переместить вверх"
+                                      title={t('agentEditor.triggers.moveUp')}
                                     >
                                       <ArrowUp size={14} />
                                     </button>
@@ -2569,7 +2568,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       disabled={index === triggerActions.length - 1}
                                       className={`p-0.5 rounded ${index === triggerActions.length - 1 ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                                       type="button"
-                                      title="Переместить вниз"
+                                      title={t('agentEditor.triggers.moveDown')}
                                     >
                                       <ArrowDown size={14} />
                                     </button>
@@ -2591,17 +2590,17 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                             <div className="space-y-4">
                               <div>
-                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Выберите действие<span className="text-red-500">*</span></label>
+                                <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.selectAction')}<span className="text-red-500">*</span></label>
                                 <select
                                   value={action.action}
                                   onChange={(e) => updateTriggerAction(action.id, e.target.value)}
                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                   style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                 >
-                                  <option value="">Выбрать вариант</option>
+                                  <option value="">{t('agentEditor.triggers.selectOption')}</option>
                                   {availableActions.map((actionOption: any) => (
                                     <option key={actionOption.id} value={actionOption.id}>
-                                      {actionOption.name}
+                                      {t(`agentEditor.actions.${actionOption.id}`)}
                                     </option>
                                   ))}
                                 </select>
@@ -2610,14 +2609,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {/* Dynamic fields based on action type */}
                               {action.action === 'change_stage' && (
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Этап сделки<span className="text-red-500">*</span></label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.dealStage')}<span className="text-red-500">*</span></label>
                                   <select
                                     value={action.params?.stageId || ''}
                                     onChange={(e) => updateTriggerActionParams(action.id, { stageId: e.target.value })}
                                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                     style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                   >
-                                    <option value="">Выберите этап</option>
+                                    <option value="">{t('agentEditor.triggers.selectStage')}</option>
                                     {availablePipelines.map((pipeline: any) => (
                                       <optgroup key={pipeline.id} label={pipeline.name}>
                                         {pipeline.stages.map((stage: any) => (
@@ -2632,28 +2631,28 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {action.action === 'assign_user' && (
                                 <>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Применить к<span className="text-red-500">*</span></label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.applyTo')}<span className="text-red-500">*</span></label>
                                     <select
                                       value={action.params?.applyTo || 'deal'}
                                       onChange={(e) => updateTriggerActionParams(action.id, { applyTo: e.target.value as 'deal' | 'contact' | 'both' })}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                     >
-                                      <option value="deal">Сделка</option>
-                                      <option value="contact">Контакт</option>
-                                      <option value="both">Сделка и контакт</option>
+                                      <option value="deal">{t('agentEditor.triggers.deal')}</option>
+                                      <option value="contact">{t('agentEditor.triggers.contact')}</option>
+                                      <option value="both">{t('agentEditor.triggers.dealAndContact')}</option>
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Выберите, для каких объектов изменить ответственного пользователя</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.applyToHint')}</p>
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Ответственный пользователь<span className="text-red-500">*</span></label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.responsibleUser')}<span className="text-red-500">*</span></label>
                                     <select
                                       value={action.params?.userId || ''}
                                       onChange={(e) => updateTriggerActionParams(action.id, { userId: e.target.value })}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                     >
-                                      <option value="">Выберите ответственного пользователя</option>
+                                      <option value="">{t('agentEditor.triggers.selectResponsible')}</option>
                                       {(crmData?.users || MOCK_USERS).map((user: any) => (
                                         <option key={user.id} value={user.id}>{user.name}</option>
                                       ))}
@@ -2665,29 +2664,29 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {action.action === 'create_task' && (
                                 <>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Описание задачи<span className="text-red-500">*</span></label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.taskDescription')}<span className="text-red-500">*</span></label>
                                     <input
                                       type="text"
                                       value={action.params?.taskDescription || ''}
                                       onChange={(e) => updateTriggerActionParams(action.id, { taskDescription: e.target.value })}
-                                      placeholder="Введите описание задачи"
+                                      placeholder={t('agentEditor.triggers.taskPlaceholder')}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Ответственный пользователь</label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggers.responsibleUser')}</label>
                                     <select
                                       value={action.params?.taskUserId || ''}
                                       onChange={(e) => updateTriggerActionParams(action.id, { taskUserId: e.target.value })}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                       style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                     >
-                                      <option value="">Выберите ответственного пользователя</option>
+                                      <option value="">{t('agentEditor.triggers.selectResponsible')}</option>
                                       {(crmData?.users || MOCK_USERS).map((user: any) => (
                                         <option key={user.id} value={user.id}>{user.name}</option>
                                       ))}
                                     </select>
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Если не выбран, будет использоваться ответственный пользователь сделки</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.taskUserHint')}</p>
                                   </div>
                                 </>
                               )}
@@ -2701,7 +2700,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none"
                                     style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.7rem top 50%', backgroundSize: '0.65rem auto' }}
                                   >
-                                    <option value="">Выберите Salesbot</option>
+                                    <option value="">{t('agentEditor.triggers.selectSalesbot')}</option>
                                     {(crmData?.salesbots?.length ? crmData.salesbots : MOCK_SALESBOTS).map((bot: any) => (
                                       <option key={bot.id} value={bot.id}>{bot.name}</option>
                                     ))}
@@ -2712,7 +2711,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {(action.action === 'add_deal_tags' || action.action === 'add_contact_tags') && (
                                 <div>
                                   <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">
-                                    {action.action === 'add_deal_tags' ? 'Теги сделки' : 'Теги контакта'}<span className="text-red-500">*</span>
+                                    {action.action === 'add_deal_tags' ? t('agentEditor.triggers.dealTags') : t('agentEditor.triggers.contactTags')}<span className="text-red-500">*</span>
                                   </label>
                                   <div className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700">
                                     <input
@@ -2729,7 +2728,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           setNewTagInput(prev => ({ ...prev, [action.id]: '' }));
                                         }
                                       }}
-                                      placeholder="Новый тег"
+                                      placeholder={t('agentEditor.triggers.newTag')}
                                       className="w-full text-sm bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
                                     />
                                     {(action.params?.tags || []).length > 0 && (
@@ -2757,11 +2756,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                               {(action.action === 'add_deal_note' || action.action === 'add_contact_note') && (
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Текст примечания<span className="text-red-500">*</span></label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.noteText')}<span className="text-red-500">*</span></label>
                                   <textarea
                                     value={action.params?.noteText || ''}
                                     onChange={(e) => updateTriggerActionParams(action.id, { noteText: e.target.value })}
-                                    placeholder="Введите текст примечания"
+                                    placeholder={t('agentEditor.triggers.notePlaceholder')}
                                     rows={3}
                                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
                                   />
@@ -2770,11 +2769,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                               {action.action === 'send_message' && (
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Текст сообщения<span className="text-red-500">*</span></label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.messageText')}<span className="text-red-500">*</span></label>
                                   <textarea
                                     value={action.params?.messageText || ''}
                                     onChange={(e) => updateTriggerActionParams(action.id, { messageText: e.target.value })}
-                                    placeholder="Введите текст сообщения"
+                                    placeholder={t('agentEditor.triggers.messagePlaceholder')}
                                     rows={3}
                                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
                                   />
@@ -2784,20 +2783,20 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {action.action === 'send_email' && (
                                 <div className="space-y-4">
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Инструкции для письма<span className="text-red-500">*</span></label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.emailInstructions')}<span className="text-red-500">*</span></label>
                                     <textarea
                                       value={action.params?.emailInstructions || ''}
                                       onChange={(e) => updateTriggerActionParams(action.id, { emailInstructions: e.target.value })}
-                                      placeholder="Например: Отправь приветственное письмо с информацией о наших услугах и контактами менеджера"
+                                      placeholder={t('agentEditor.triggerForm.emailPlaceholder')}
                                       rows={3}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
                                     />
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">AI сгенерирует тему и текст письма. Email отправится на адрес контакта из сделки.</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.emailHint')}</p>
                                   </div>
 
                                   {/* Вложения для email */}
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Вложения</label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.attachments')}</label>
                                     <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-4 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
                                       <input
                                         type="file"
@@ -2822,7 +2821,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       />
                                       <label htmlFor={`email-attachment-${action.id}`} className="cursor-pointer">
                                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                                          Перетащите файлы или <span className="text-blue-600 dark:text-blue-400 hover:underline">выберите</span>
+                                          {t('agentEditor.triggerForm.dragOrSelect')} <span className="text-blue-600 dark:text-blue-400 hover:underline">{t('agentEditor.triggerForm.select')}</span>
                                         </p>
                                       </label>
                                     </div>
@@ -2858,14 +2857,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                         ))}
                                       </div>
                                     )}
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Файлы будут отправлены как вложения к письму.</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.attachmentsHint')}</p>
                                   </div>
                                 </div>
                               )}
 
                               {action.action === 'send_files' && (
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Файлы для отправки<span className="text-red-500">*</span></label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.filesToSend')}<span className="text-red-500">*</span></label>
                                   <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md p-6 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer">
                                     <input
                                       type="file"
@@ -2891,7 +2890,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     />
                                     <label htmlFor={`file-upload-${action.id}`} className="cursor-pointer">
                                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        Перетащите файлы или <span className="text-blue-600 dark:text-blue-400 hover:underline">выберите</span>
+                                        {t('agentEditor.triggerForm.dragOrSelect')} <span className="text-blue-600 dark:text-blue-400 hover:underline">{t('agentEditor.triggerForm.select')}</span>
                                       </p>
                                     </label>
                                   </div>
@@ -2928,14 +2927,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     </div>
                                   )}
 
-                                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Эти файлы (изображения, аудио, видео или документы) будут отправлены клиентам вместе с сообщением.</p>
+                                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.filesHint')}</p>
                                 </div>
                               )}
 
                               {action.action === 'send_webhook' && (
                                 <>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">URL вебхука<span className="text-red-500">*</span></label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.webhookUrl')}<span className="text-red-500">*</span></label>
                                     <input
                                       type="url"
                                       value={action.params?.webhookUrl || ''}
@@ -2943,11 +2942,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       placeholder="https://example.com/webhook"
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                     />
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">URL, который будет получать запрос вебхука.</p>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.webhookUrlHint')}</p>
                                   </div>
                                   <div className="flex gap-4">
                                     <div className="w-1/3">
-                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">HTTP-метод<span className="text-red-500">*</span></label>
+                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.httpMethod')}<span className="text-red-500">*</span></label>
                                       <select
                                         value={action.params?.webhookMethod || 'POST'}
                                         onChange={(e) => updateTriggerActionParams(action.id, { webhookMethod: e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE' })}
@@ -2961,7 +2960,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       </select>
                                     </div>
                                     <div className="w-2/3">
-                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Тело запроса</label>
+                                      <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.requestBody')}</label>
                                       <div className="flex gap-1">
                                         {['form', 'json', 'raw'].map((type) => (
                                           <button
@@ -2979,7 +2978,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Заголовки</label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.headers')}</label>
                                     <div className="space-y-2">
                                       {(action.params?.webhookHeaders || [{ key: '', value: '' }]).map((header, hIndex) => (
                                         <div key={hIndex} className="flex gap-2">
@@ -3025,12 +3024,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                         }}
                                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                                       >
-                                        Добавить строку
+                                        {t('agentEditor.triggers.addRow')}
                                       </button>
                                     </div>
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Тело запроса</label>
+                                    <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.triggerForm.requestBody')}</label>
                                     {(action.params?.webhookBodyType || 'form') === 'raw' ? (
                                       <textarea
                                         value={typeof action.params?.webhookBody === 'string' ? action.params.webhookBody : ''}
@@ -3051,7 +3050,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                 body[bIndex] = { ...body[bIndex], key: e.target.value };
                                                 updateTriggerActionParams(action.id, { webhookBody: body });
                                               }}
-                                              placeholder="Ключ"
+                                              placeholder={t('agentEditor.triggerForm.keyPlaceholder')}
                                               className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                             />
                                             <input
@@ -3062,7 +3061,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                 body[bIndex] = { ...body[bIndex], value: e.target.value };
                                                 updateTriggerActionParams(action.id, { webhookBody: body });
                                               }}
-                                              placeholder="Значение"
+                                              placeholder={t('agentEditor.triggerForm.valuePlaceholder')}
                                               className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                                             />
                                             <button
@@ -3085,7 +3084,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           }}
                                           className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                                         >
-                                          Добавить строку
+                                          {t('agentEditor.triggers.addRow')}
                                         </button>
                                       </div>
                                     )}
@@ -3093,8 +3092,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                   <div className="flex items-center gap-3">
                                     <Toggle checked={action.params?.webhookPassToAI || false} onChange={(val) => updateTriggerActionParams(action.id, { webhookPassToAI: val })} />
                                     <div>
-                                      <span className="text-sm text-gray-900 dark:text-white">Передать ответ вебхука ИИ</span>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Если включено, ответ вебхука будет передан Агенту ИИ для формирования ответа.</p>
+                                      <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.triggerForm.passToAI')}</span>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.passToAIHint')}</p>
                                     </div>
                                   </div>
                                 </>
@@ -3104,34 +3103,34 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               {action.action === 'send_kb_article' && (
                                 <>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Статья из базы знаний</label>
+                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.triggerForm.kbArticle')}</label>
                                     <select
                                       value={action.params?.articleId || ''}
                                       onChange={(e) => updateTriggerActionParams(action.id, { articleId: e.target.value ? parseInt(e.target.value) : undefined })}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
-                                      <option value="">Выберите статью</option>
+                                      <option value="">{t('agentEditor.triggers.selectArticle')}</option>
                                       {kbArticles.filter(a => a.isActive).map(article => (
                                         <option key={article.id} value={article.id}>{article.title}</option>
                                       ))}
                                     </select>
                                     {kbArticles.length === 0 && (
-                                      <p className="mt-1 text-xs text-gray-400">Создайте статьи в базе знаний</p>
+                                      <p className="mt-1 text-xs text-gray-400">{t('agentEditor.triggerForm.createArticlesHint')}</p>
                                     )}
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Канал отправки</label>
+                                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agentEditor.triggerForm.sendChannel')}</label>
                                     <select
                                       value={action.params?.channel || 'chat'}
                                       onChange={(e) => updateTriggerActionParams(action.id, { channel: e.target.value as 'chat' | 'email' })}
                                       className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                                     >
-                                      <option value="chat">В чат мессенджера</option>
-                                      <option value="email">По email</option>
+                                      <option value="chat">{t('agentEditor.triggerForm.inChat')}</option>
+                                      <option value="email">{t('agentEditor.triggerForm.byEmail')}</option>
                                     </select>
                                   </div>
                                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    Содержимое статьи будет отправлено клиенту через выбранный канал
+                                    {t('agentEditor.triggerForm.articleWillBeSent')}
                                   </p>
                                 </>
                               )}
@@ -3145,27 +3144,27 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                           type="button"
                         >
-                          Добавить действие
+                          {t('agentEditor.triggers.addAction')}
                         </button>
                       </div>
                     </div>
 
                     {/* Ответное сообщение */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Ответное сообщение</label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.triggerForm.responseMessage')}</label>
                       <input
                         type="text"
                         value={triggerCancelMessage}
                         onChange={(e) => setTriggerCancelMessage(e.target.value)}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                        placeholder="Например, я обработал ваш запрос и создал задачу для нашей финансовой команды."
+                        placeholder={t('agentEditor.triggerForm.responseMessagePlaceholder')}
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Сообщение, возвращаемое при выполнении триггера</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.responseMessageHint')}</p>
                     </div>
 
                     {/* Лимит запусков в чате */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Лимит запусков в чате</label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.triggerForm.runLimit')}</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -3174,14 +3173,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           min="0"
                           className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">раз</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.times')}</span>
                       </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Максимальное количество запусков этого триггера в одном чате. Установите 0 для неограниченного количества.</p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggerForm.runLimitHint')}</p>
                     </div>
                   </div>
                   <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
                     <button onClick={handleSaveTrigger} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                      {editingTriggerId ? 'Сохранить' : 'Создать'}
+                      {editingTriggerId ? t('common.save') : t('common.create')}
                     </button>
                     <button onClick={() => {
                       handleSaveTrigger();
@@ -3194,10 +3193,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       setNewTagInput({});
                       setSelectedFiles({});
                     }} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                      Создать и создать еще один
+                      {t('agentEditor.triggers.createAndAnother')}
                     </button>
                     <button onClick={() => setIsTriggerModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                      Отменить
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -3212,10 +3211,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
             {/* ... (Chains implementation) ... */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 flex items-center justify-between transition-colors">
               <div>
-                <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Цепочки</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Автоматизируйте отправку последующих сообщений и выполнение действий по расписанию.</p>
+                <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">{t('agentEditor.chains.title')}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.chains.subtitle')}</p>
               </div>
-              <button onClick={handleCreateChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors">Создать</button>
+              <button onClick={handleCreateChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors">{t('common.create')}</button>
             </div>
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
               {chains.length === 0 ? (
@@ -3225,11 +3224,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">Не найдено Цепочки</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Создать Цепочки для старта</p>
+                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.chains.empty')}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.chains.emptyHint')}</p>
                 </div>
               ) : (
-                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Название</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Активно</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">Шаги</th><th className="px-4 py-3 text-right"></th></tr></thead>
+                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.chains.steps')}</th><th className="px-4 py-3 text-right"></th></tr></thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {chains.map(chain => (
                       <tr key={chain.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
@@ -3239,8 +3238,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{chain.steps.length}</td>
                         <td className="px-4 py-4 text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-4">
-                            <button onClick={() => handleEditChain(chain)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> Изменить</button>
-                            <button onClick={() => handleDeleteChain(chain.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> Удалить</button>
+                            <button onClick={() => handleEditChain(chain)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> {t('common.edit')}</button>
+                            <button onClick={() => handleDeleteChain(chain.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> {t('common.delete')}</button>
                           </div>
                         </td>
                       </tr>
@@ -3250,7 +3249,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
               )}
               {/* Pagination Mock */}
               {chains.length > 0 && (
-                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between sm:px-6"><div className="text-sm text-gray-700 dark:text-gray-300">Показано с 1 по {chains.length} из {chains.length}</div></div>
+                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between sm:px-6"><div className="text-sm text-gray-700 dark:text-gray-300">{t('agentEditor.chains.showingFromTo', { count: chains.length, total: chains.length })}</div></div>
               )}
             </div>
             {/* Chain Modal */}
@@ -3259,7 +3258,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsChainModalOpen(false)} />
                 <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col transition-colors animate-fadeIn">
                   <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingChainId ? 'Редактировать Цепочку' : 'Создать Цепочку'}</h2>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">{editingChainId ? t('agentEditor.chains.editChain') : t('agentEditor.chains.createChain')}</h2>
                     <button onClick={() => setIsChainModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                       <X size={24} />
                     </button>
@@ -3268,12 +3267,12 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
                     {/* Name */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">Название<span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">{t('common.name')}<span className="text-red-500">*</span></label>
                       <input
                         type="text"
                         value={chainName}
                         onChange={(e) => setChainName(e.target.value)}
-                        placeholder="Например, Follow-up"
+                        placeholder={t('agentEditor.chains.namePlaceholder')}
                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
                       />
                     </div>
@@ -3281,7 +3280,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     {/* Active */}
                     <div className="flex items-center gap-3">
                       <Toggle checked={chainActive} onChange={setChainActive} />
-                      <span className="text-sm text-gray-900 dark:text-white">Активно</span>
+                      <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.chainForm.active')}</span>
                     </div>
 
                     {/* Conditions Accordion */}
@@ -3295,8 +3294,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             <Settings size={18} />
                           </div>
                           <div className="text-left">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">Условия</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Выберите, когда запускать эту цепочку</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.conditions')}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.conditionsHint')}</div>
                           </div>
                         </div>
                         {isChainConditionsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -3306,39 +3305,43 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-5 bg-white dark:bg-gray-800">
                           <div className="flex items-center gap-3">
                             <Toggle checked={chainAllStages} onChange={setChainAllStages} />
-                            <span className="text-sm text-gray-900 dark:text-white">Любой этап сделки, разрешённый для этого агента ИИ</span>
+                            <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.chainForm.anyStage')}</span>
                           </div>
 
                           {!chainAllStages && (
                             <div>
-                              <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Этапы сделки<span className="text-red-500">*</span></label>
+                              <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.chainForm.dealStages')}<span className="text-red-500">*</span></label>
                               <div className="relative">
                                 <select
                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none focus:ring-2 focus:ring-blue-500"
                                   value={chainStages[0] || ''}
                                   onChange={(e) => setChainStages([e.target.value])}
                                 >
-                                  <option value="">Выберите этапы сделки...</option>
-                                  {availablePipelines.length > 0 && availablePipelines[0].stages.map(stage => (
-                                    <option key={stage.id} value={stage.id}>{stage.name}</option>
+                                  <option value="">{t('agentEditor.chainForm.selectStages')}</option>
+                                  {availablePipelines.map((pipeline: any) => (
+                                    <optgroup key={pipeline.id} label={pipeline.name}>
+                                      {pipeline.stages.map((stage: any) => (
+                                        <option key={stage.id} value={stage.id}>{pipeline.name} - {stage.name}</option>
+                                      ))}
+                                    </optgroup>
                                   ))}
                                 </select>
                                 <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                               </div>
-                              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Если выбранный этап не разрешён в настройках воронки агента ИИ, цепочка не запустится и дальнейшие шаги не будут выполнены.</p>
+                              <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.chainForm.stageNotAllowedHint')}</p>
                             </div>
                           )}
 
                           <div>
-                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Не запускать цепочку, когда</label>
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.chainForm.skipWhen')}</label>
                             <textarea
                               value={chainExcludeCondition}
                               onChange={(e) => setChainExcludeCondition(e.target.value)}
                               rows={3}
                               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                              placeholder="например, клиент попросил не писать или клиенту больше не нужна помощь и т. д."
+                              placeholder={t('agentEditor.chainForm.skipWhenPlaceholder')}
                             />
-                            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Пропускать цепочку, когда это правило истинно (оставьте пустым, если это не требуется).</p>
+                            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.chainForm.skipWhenHint')}</p>
                           </div>
                         </div>
                       )}
@@ -3355,8 +3358,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             <List size={18} />
                           </div>
                           <div className="text-left">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">Шаги</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Добавьте действия для этой цепочки</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.steps')}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.stepsHint')}</div>
                           </div>
                         </div>
                         {isChainStepsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -3377,7 +3380,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     <div className="w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
                                       {stepIndex + 1}
                                     </div>
-                                    Шаг
+                                    {t('agentEditor.chainForm.step')}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -3391,7 +3394,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               <div className="p-4 space-y-4">
                                 {/* Time Delay */}
                                 <div className="bg-gray-50 dark:bg-gray-700/30 rounded-md p-3 border border-gray-100 dark:border-gray-700">
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Время ожидания после предыдущего сообщения</label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.chainForm.waitTime')}</label>
                                   <div className="flex gap-2">
                                     <input
                                       type="number"
@@ -3413,9 +3416,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                         }}
                                         className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                       >
-                                        <option value="Минуты">Минуты</option>
-                                        <option value="Часы">Часы</option>
-                                        <option value="Дни">Дни</option>
+                                        <option value="Минуты">{t('agentEditor.chains.minutes')}</option>
+                                        <option value="Часы">{t('agentEditor.chains.hours')}</option>
+                                        <option value="Дни">{t('agentEditor.chains.days')}</option>
                                       </select>
                                       <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                     </div>
@@ -3424,7 +3427,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                                 {/* Actions List */}
                                 <div>
-                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">Действия<span className="text-red-500">*</span></label>
+                                  <label className="block text-xs font-medium text-gray-900 dark:text-white mb-2">{t('agentEditor.chainForm.actions')}<span className="text-red-500">*</span></label>
                                   <div className="space-y-3">
                                     {step.actions.map((action, actionIndex) => (
                                       <div key={action.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800 relative group">
@@ -3435,7 +3438,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                               <ArrowDown size={12} />
                                             </div>
                                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                              {action.type === 'generate_message' ? 'Сгенерировать сообщение' : 'Действие'}
+                                              {action.type === 'generate_message' ? t('agentEditor.chainForm.generateMessage') : t('agentEditor.chainForm.action')}
                                             </span>
                                           </div>
                                           <button
@@ -3448,7 +3451,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                                         <div className="space-y-3">
                                           <div>
-                                            <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Выберите действие<span className="text-red-500">*</span></label>
+                                            <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.selectActionRequired')}<span className="text-red-500">*</span></label>
                                             <div className="relative">
                                               <select
                                                 value={action.type}
@@ -3459,10 +3462,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                 }}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                               >
-                                                <option value="">Выберите действие</option>
+                                                <option value="">{t('agentEditor.chainForm.selectActionRequired')}</option>
                                                 {availableActions.map((actionOption: any) => (
                                                   <option key={actionOption.id} value={actionOption.id}>
-                                                    {actionOption.name}
+                                                    {t(`agentEditor.actions.${actionOption.id}`)}
                                                   </option>
                                                 ))}
                                               </select>
@@ -3474,13 +3477,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           {/* Dynamic fields based on action type */}
                                           {action.type === 'change_stage' && (
                                             <div>
-                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Этап сделки<span className="text-red-500">*</span></label>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.triggers.dealStage')}<span className="text-red-500">*</span></label>
                                               <select
                                                 value={action.params?.stageId || ''}
                                                 onChange={(e) => updateChainActionParams(step.id, action.id, { stageId: e.target.value })}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                               >
-                                                <option value="">Выберите этап</option>
+                                                <option value="">{t('agentEditor.triggers.selectStage')}</option>
                                                 {availablePipelines.map((pipeline: any) => (
                                                   <optgroup key={pipeline.id} label={pipeline.name}>
                                                     {pipeline.stages.map((stage: any) => (
@@ -3495,25 +3498,25 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           {action.type === 'assign_user' && (
                                             <>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Применить к<span className="text-red-500">*</span></label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.applyTo')}<span className="text-red-500">*</span></label>
                                                 <select
                                                   value={action.params?.applyTo || 'deal'}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { applyTo: e.target.value })}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                                 >
-                                                  <option value="deal">Сделка</option>
-                                                  <option value="contact">Контакт</option>
-                                                  <option value="both">Сделка и контакт</option>
+                                                  <option value="deal">{t('agentEditor.triggers.deal')}</option>
+                                                  <option value="contact">{t('agentEditor.triggers.contact')}</option>
+                                                  <option value="both">{t('agentEditor.triggers.dealAndContact')}</option>
                                                 </select>
                                               </div>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Ответственный<span className="text-red-500">*</span></label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.responsible')}<span className="text-red-500">*</span></label>
                                                 <select
                                                   value={action.params?.userId || ''}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { userId: e.target.value })}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                                 >
-                                                  <option value="">Выберите пользователя</option>
+                                                  <option value="">{t('agentEditor.chainForm.selectUser')}</option>
                                                   {(crmData?.users || MOCK_USERS).map((user: any) => (
                                                     <option key={user.id} value={user.id}>{user.name}</option>
                                                   ))}
@@ -3525,23 +3528,23 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           {action.type === 'create_task' && (
                                             <>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Описание задачи<span className="text-red-500">*</span></label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.taskDescription')}<span className="text-red-500">*</span></label>
                                                 <input
                                                   type="text"
                                                   value={action.params?.taskDescription || ''}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { taskDescription: e.target.value })}
-                                                  placeholder="Введите описание задачи"
+                                                  placeholder={t('agentEditor.triggers.taskPlaceholder')}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 outline-none"
                                                 />
                                               </div>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Ответственный</label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.responsible')}</label>
                                                 <select
                                                   value={action.params?.taskUserId || ''}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { taskUserId: e.target.value })}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                                 >
-                                                  <option value="">Ответственный сделки</option>
+                                                  <option value="">{t('agentEditor.chainForm.dealResponsible')}</option>
                                                   {(crmData?.users || MOCK_USERS).map((user: any) => (
                                                     <option key={user.id} value={user.id}>{user.name}</option>
                                                   ))}
@@ -3558,7 +3561,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                 onChange={(e) => updateChainActionParams(step.id, action.id, { salesbotId: e.target.value })}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                               >
-                                                <option value="">Выберите Salesbot</option>
+                                                <option value="">{t('agentEditor.triggers.selectSalesbot')}</option>
                                                 {(crmData?.salesbots?.length ? crmData.salesbots : MOCK_SALESBOTS).map((bot: any) => (
                                                   <option key={bot.id} value={bot.id}>{bot.name}</option>
                                                 ))}
@@ -3569,7 +3572,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           {(action.type === 'add_deal_tags' || action.type === 'add_contact_tags') && (
                                             <div>
                                               <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">
-                                                {action.type === 'add_deal_tags' ? 'Теги сделки' : 'Теги контакта'}<span className="text-red-500">*</span>
+                                                {action.type === 'add_deal_tags' ? t('agentEditor.chainForm.dealTags') : t('agentEditor.chainForm.contactTags')}<span className="text-red-500">*</span>
                                               </label>
                                               <div className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700">
                                                 <input
@@ -3586,7 +3589,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                       setNewTagInput(prev => ({ ...prev, [`chain-${action.id}`]: '' }));
                                                     }
                                                   }}
-                                                  placeholder="Новый тег (Enter для добавления)"
+                                                  placeholder={t('agentEditor.chainForm.newTagPlaceholder')}
                                                   className="w-full text-sm bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-400"
                                                 />
                                                 {(action.params?.tags || []).length > 0 && (
@@ -3614,11 +3617,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                                           {(action.type === 'add_deal_note' || action.type === 'add_contact_note') && (
                                             <div>
-                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Текст примечания<span className="text-red-500">*</span></label>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.noteText')}<span className="text-red-500">*</span></label>
                                               <textarea
                                                 value={action.params?.noteText || ''}
                                                 onChange={(e) => updateChainActionParams(step.id, action.id, { noteText: e.target.value })}
-                                                placeholder="Введите текст примечания"
+                                                placeholder={t('agentEditor.triggers.notePlaceholder')}
                                                 rows={2}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
                                               />
@@ -3627,11 +3630,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                                           {action.type === 'send_message' && (
                                             <div>
-                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Текст сообщения<span className="text-red-500">*</span></label>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.messageText')}<span className="text-red-500">*</span></label>
                                               <textarea
                                                 value={action.params?.messageText || ''}
                                                 onChange={(e) => updateChainActionParams(step.id, action.id, { messageText: e.target.value })}
-                                                placeholder="Введите текст сообщения"
+                                                placeholder={t('agentEditor.triggers.messagePlaceholder')}
                                                 rows={3}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
                                               />
@@ -3640,15 +3643,15 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                                           {action.type === 'send_email' && (
                                             <div>
-                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Инструкции для письма<span className="text-red-500">*</span></label>
+                                              <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.emailInstructions')}<span className="text-red-500">*</span></label>
                                               <textarea
                                                 value={action.params?.emailInstructions || ''}
                                                 onChange={(e) => updateChainActionParams(step.id, action.id, { emailInstructions: e.target.value })}
-                                                placeholder="Например: Отправь приветственное письмо с информацией о наших услугах"
+                                                placeholder={t('agentEditor.chainForm.emailPlaceholder')}
                                                 rows={3}
                                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none outline-none"
                                               />
-                                              <p className="mt-1 text-[10px] text-gray-400">AI сгенерирует тему и текст письма</p>
+                                              <p className="mt-1 text-[10px] text-gray-400">{t('agentEditor.chainForm.emailHint')}</p>
                                             </div>
                                           )}
 
@@ -3665,7 +3668,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                                 />
                                               </div>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Метод</label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.method')}</label>
                                                 <select
                                                   value={action.params?.webhookMethod || 'POST'}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { webhookMethod: e.target.value })}
@@ -3692,34 +3695,34 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                           {action.type === 'send_kb_article' && (
                                             <>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Статья<span className="text-red-500">*</span></label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.article')}<span className="text-red-500">*</span></label>
                                                 <select
                                                   value={action.params?.articleId || ''}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { articleId: e.target.value })}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                                 >
-                                                  <option value="">Выберите статью</option>
+                                                  <option value="">{t('agentEditor.triggers.selectArticle')}</option>
                                                   {kbArticles.filter(a => a.isActive).map(article => (
                                                     <option key={article.id} value={article.id}>{article.title}</option>
                                                   ))}
                                                 </select>
                                               </div>
                                               <div>
-                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Канал отправки<span className="text-red-500">*</span></label>
+                                                <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.sendChannel')}<span className="text-red-500">*</span></label>
                                                 <select
                                                   value={action.params?.channel || 'chat'}
                                                   onChange={(e) => updateChainActionParams(step.id, action.id, { channel: e.target.value })}
                                                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none outline-none"
                                                 >
-                                                  <option value="chat">В чат</option>
-                                                  <option value="email">По email</option>
+                                                  <option value="chat">{t('agentEditor.chainForm.inChat')}</option>
+                                                  <option value="email">{t('agentEditor.triggers.byEmail')}</option>
                                                 </select>
                                               </div>
                                             </>
                                           )}
 
                                           <div>
-                                            <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">Инструкция<span className="text-red-500">*</span></label>
+                                            <label className="block text-[10px] uppercase tracking-wider font-medium text-gray-500 dark:text-gray-400 mb-1">{t('agentEditor.chainForm.instruction')}<span className="text-red-500">*</span></label>
                                             <textarea
                                               value={action.instruction}
                                               onChange={(e) => {
@@ -3729,9 +3732,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                               }}
                                               rows={3}
                                               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
-                                              placeholder="например: попросите клиента подтвердить заказ"
+                                              placeholder={t('agentEditor.chainForm.instructionPlaceholder')}
                                             />
-                                            <p className="mt-1 text-[10px] text-gray-400">ИИ создаст персонализированное сообщение на основе этой инструкции и контекста разговора.</p>
+                                            <p className="mt-1 text-[10px] text-gray-400">{t('agentEditor.chainForm.instructionHint')}</p>
                                           </div>
                                         </div>
                                       </div>
@@ -3742,7 +3745,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                       onClick={() => addChainAction(step.id)}
                                       className="px-4 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                                     >
-                                      Добавить действие
+                                      {t('agentEditor.triggers.addAction')}
                                     </button>
                                   </div>
                                 </div>
@@ -3755,7 +3758,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               onClick={addChainStep}
                               className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm"
                             >
-                              Добавить шаг
+                              {t('agentEditor.chainForm.addStep')}
                             </button>
                           </div>
                         </div>
@@ -3773,8 +3776,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             <Clock size={18} />
                           </div>
                           <div className="text-left">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">Рабочие часы цепочки</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Автоматические шаги цепочки выполняются только в указанные часы. Если время наступает вне рабочих часов, выполнение переносится на начало следующего рабочего дня.</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.workingHoursTitle')}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.workingHoursHint')}</div>
                           </div>
                         </div>
                         {isChainScheduleOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -3827,7 +3830,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             <Settings2 size={18} />
                           </div>
                           <div className="text-left">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">Дополнительные настройки</div>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.additionalSettings')}</div>
                           </div>
                         </div>
                         {isChainSettingsOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -3836,7 +3839,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       {isChainSettingsOpen && (
                         <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-4 bg-white dark:bg-gray-800">
                           <div>
-                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">Лимит запусков в чате</label>
+                            <label className="block text-xs font-medium text-gray-900 dark:text-white mb-1.5">{t('agentEditor.chainForm.runLimit')}</label>
                             <div className="relative">
                               <input
                                 type="number"
@@ -3845,9 +3848,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                 min="0"
                                 className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white pr-10"
                               />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">раз</span>
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.chainForm.times')}</span>
                             </div>
-                            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">Максимальное количество запусков этой цепочки в одном чате. Установите 0 для неограниченного количества.</p>
+                            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.chainForm.runLimitHint')}</p>
                           </div>
                         </div>
                       )}
@@ -3857,10 +3860,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
                   <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
                     <button onClick={handleSaveChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                      {editingChainId ? 'Сохранить' : 'Создать'}
+                      {editingChainId ? t('common.save') : t('common.create')}
                     </button>
                     <button onClick={() => setIsChainModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
-                      Отменить
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>

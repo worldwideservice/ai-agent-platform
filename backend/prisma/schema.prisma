@@ -10,21 +10,25 @@ datasource db {
 }
 
 model User {
-  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  email          String    @unique
-  password       String
-  name           String?
-  company        String?
-  avatarUrl      String?   @map("avatar_url")
-  timezone       String    @default("Europe/Kiev")
-  language       String    @default("ru")
-  role           String    @default("USER")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  currentPlan    String    @default("trial") @map("current_plan")
-  trialEndsAt    DateTime? @map("trial_ends_at") @db.Timestamptz(6)
-  responsesUsed  Int       @default(0) @map("responses_used")
-  responsesLimit Int       @default(5000) @map("responses_limit")
+  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  email             String    @unique
+  password          String
+  name              String?
+  role              String    @default("USER")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  currentPlan       String    @default("trial") @map("current_plan")
+  trialEndsAt       DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  responsesUsed     Int       @default(0) @map("responses_used")
+  responsesLimit    Int       @default(500) @map("responses_limit")
+  avatarUrl         String?   @map("avatar_url")
+  company           String?
+  language          String    @default("ru")
+  timezone          String    @default("Europe/Kiev")
+  agentsLimit       Int       @default(3) @map("agents_limit")
+  instructionsLimit Int       @default(30000) @map("instructions_limit")
+  kbArticlesLimit   Int       @default(100) @map("kb_articles_limit")
+  responsesResetAt  DateTime? @map("responses_reset_at") @db.Timestamptz(6)
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
@@ -43,10 +47,10 @@ model Agent {
   crmType            String?  @map("crm_type")
   crmConnected       Boolean  @default(false) @map("crm_connected")
   crmData            Json?    @map("crm_data")
-  trainingRoleId     String?  @map("training_role_id")
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   userId             String   @map("user_id")
+  trainingRoleId     String?  @map("training_role_id")
 
   @@index([isActive], map: "idx_agents_is_active")
   @@index([userId], map: "idx_agents_user_id")
@@ -54,20 +58,19 @@ model Agent {
   @@map("agents")
 }
 
-// Документы агента для отправки клиентам
 model AgentDocument {
-  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  agentId       String   @map("agent_id")
-  fileName      String   @map("file_name")        // Оригинальное имя файла
-  fileType      String   @map("file_type")        // Расширение (pdf, docx, jpg и т.д.)
-  mimeType      String   @map("mime_type")        // MIME тип (application/pdf и т.д.)
-  fileSize      Int      @map("file_size")        // Размер в байтах
-  storageKey    String   @map("storage_key")      // Уникальное имя на диске
-  thumbnailKey  String?  @map("thumbnail_key")    // Путь к миниатюре
-  description   String?                           // Описание документа (опционально)
-  isEnabled     Boolean  @default(true) @map("is_enabled")  // Доступен для отправки
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId      String   @map("agent_id")
+  fileName     String   @map("file_name")
+  fileType     String   @map("file_type")
+  mimeType     String   @map("mime_type")
+  fileSize     Int      @map("file_size")
+  storageKey   String   @map("storage_key")
+  thumbnailKey String?  @map("thumbnail_key")
+  description  String?
+  isEnabled    Boolean  @default(true) @map("is_enabled")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@index([agentId], map: "idx_agent_documents_agent_id")
   @@index([isEnabled], map: "idx_agent_documents_is_enabled")
@@ -75,13 +78,12 @@ model AgentDocument {
 }
 
 model KbCategory {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name      String
-  parentId  String?  @map("parent_id")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  userId    String   @map("user_id")
-
+  id                String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name              String
+  parentId          String?           @map("parent_id")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId            String            @map("user_id")
   articleCategories ArticleCategory[]
 
   @@index([parentId], map: "idx_kb_categories_parent_id")
@@ -90,15 +92,14 @@ model KbCategory {
 }
 
 model KbArticle {
-  id              Int      @id @default(autoincrement())
-  title           String
-  content         String
-  isActive        Boolean  @default(true) @map("is_active")
-  relatedArticles String?  @map("related_articles")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  userId          String   @map("user_id")
-
+  id                Int               @id @default(autoincrement())
+  title             String
+  content           String
+  isActive          Boolean           @default(true) @map("is_active")
+  relatedArticles   String?           @map("related_articles")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userId            String            @map("user_id")
   articleCategories ArticleCategory[]
 
   @@index([isActive], map: "idx_kb_articles_is_active")
@@ -107,9 +108,8 @@ model KbArticle {
 }
 
 model ArticleCategory {
-  articleId  Int    @map("article_id")
-  categoryId String @map("category_id")
-
+  articleId  Int        @map("article_id")
+  categoryId String     @map("category_id")
   article    KbArticle  @relation(fields: [articleId], references: [id], onDelete: Cascade)
   category   KbCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
@@ -131,15 +131,17 @@ model UserSettings {
   @@map("user_settings")
 }
 
-// Уведомления пользователя (история toast-сообщений)
 model Notification {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId    String   @map("user_id")
-  type      String   // success, error, warning, info
-  title     String   // Заголовок уведомления
-  message   String   // Текст уведомления
-  isRead    Boolean  @default(true) @map("is_read") // По умолчанию прочитано (т.к. toast уже показан)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId     String   @map("user_id")
+  type       String
+  title      String
+  message    String
+  isRead     Boolean  @default(true) @map("is_read")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  messageKey String?  @map("message_key")
+  params     String?
+  titleKey   String?  @map("title_key")
 
   @@index([userId], map: "idx_notifications_user_id")
   @@index([isRead], map: "idx_notifications_is_read")
@@ -163,16 +165,15 @@ model ChatLog {
 }
 
 model Trigger {
-  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  agentId       String   @map("agent_id")
+  id            String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId       String          @map("agent_id")
   name          String
-  isActive      Boolean  @default(true) @map("is_active")
+  isActive      Boolean         @default(true) @map("is_active")
   condition     String
-  cancelMessage String?  @map("cancel_message")
-  runLimit      Int?     @map("run_limit")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
+  cancelMessage String?         @map("cancel_message")
+  runLimit      Int?            @map("run_limit")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   actions       TriggerAction[]
 
   @@index([agentId], map: "idx_triggers_agent_id")
@@ -187,7 +188,6 @@ model TriggerAction {
   order     Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   params    String?
-
   trigger   Trigger  @relation(fields: [triggerId], references: [id], onDelete: Cascade)
 
   @@index([triggerId], map: "idx_trigger_actions_trigger_id")
@@ -195,19 +195,18 @@ model TriggerAction {
 }
 
 model Chain {
-  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  agentId          String   @map("agent_id")
+  id               String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId          String           @map("agent_id")
   name             String
-  isActive         Boolean  @default(true) @map("is_active")
-  conditionType    String   @map("condition_type")
-  conditionExclude String?  @map("condition_exclude")
-  runLimit         Int?     @map("run_limit")
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
+  isActive         Boolean          @default(true) @map("is_active")
+  conditionType    String           @map("condition_type")
+  conditionExclude String?          @map("condition_exclude")
+  runLimit         Int?             @map("run_limit")
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   conditions       ChainCondition[]
-  steps            ChainStep[]
   schedules        ChainSchedule[]
+  steps            ChainStep[]
 
   @@index([agentId], map: "idx_chains_agent_id")
   @@index([isActive], map: "idx_chains_is_active")
@@ -219,7 +218,6 @@ model ChainCondition {
   chainId   String   @map("chain_id")
   stageId   String   @map("stage_id")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
   chain     Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 
   @@index([chainId], map: "idx_chain_conditions_chain_id")
@@ -227,16 +225,15 @@ model ChainCondition {
 }
 
 model ChainStep {
-  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  chainId    String   @map("chain_id")
-  stepOrder  Int      @map("step_order")
-  delayValue Int      @map("delay_value")
-  delayUnit  String   @map("delay_unit")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  chain      Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  id         String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  chainId    String            @map("chain_id")
+  stepOrder  Int               @map("step_order")
+  delayValue Int               @map("delay_value")
+  delayUnit  String            @map("delay_unit")
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   actions    ChainStepAction[]
+  chain      Chain             @relation(fields: [chainId], references: [id], onDelete: Cascade)
 
   @@index([chainId], map: "idx_chain_steps_chain_id")
   @@index([stepOrder], map: "idx_chain_steps_step_order")
@@ -244,14 +241,13 @@ model ChainStep {
 }
 
 model ChainStepAction {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  stepId      String   @map("step_id")
-  actionType  String   @map("action_type")
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  stepId      String    @map("step_id")
+  actionType  String    @map("action_type")
   instruction String
-  params      Json?    @default("{}")
-  actionOrder Int      @default(0) @map("action_order")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
+  actionOrder Int       @default(0) @map("action_order")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  params      Json?     @default("{}")
   step        ChainStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
 
   @@index([stepId], map: "idx_chain_step_actions_step_id")
@@ -267,7 +263,6 @@ model ChainSchedule {
   endTime   String   @map("end_time")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
   chain     Chain    @relation(fields: [chainId], references: [id], onDelete: Cascade)
 
   @@index([chainId], map: "idx_chain_schedules_chain_id")
@@ -293,28 +288,26 @@ model Integration {
 }
 
 model AgentAdvancedSettings {
-  id                     String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  agentId                String   @unique @map("agent_id")
-  model                  String   @default("OpenAI GPT-4.1")
-  autoDetectLanguage     Boolean  @default(false) @map("auto_detect_language")
-  responseLanguage       String?  @map("response_language")
-  scheduleEnabled        Boolean  @default(false) @map("schedule_enabled")
-  scheduleData           String?  @db.Text @map("schedule_data") // JSON: [{day: "Понедельник", enabled: true, start: "08:00", end: "22:00"}, ...]
-  responseDelaySeconds   Int      @default(45) @map("response_delay_seconds")
-  // Memory & Context Settings
-  memoryEnabled          Boolean  @default(true) @map("memory_enabled") // Долгосрочная память (факты о клиенте)
-  graphEnabled           Boolean  @default(true) @map("graph_enabled") // Граф связей между фактами
-  contextWindow          Int      @default(20) @map("context_window") // Количество фактов для контекста
-  semanticSearchEnabled  Boolean  @default(true) @map("semantic_search_enabled") // Семантический поиск по смыслу
-  // Internal AI Models Settings
-  factExtractionModel      String  @default("openai/gpt-4o-mini") @map("fact_extraction_model") // Модель для извлечения фактов
-  triggerEvaluationModel   String  @default("openai/gpt-4o-mini") @map("trigger_evaluation_model") // Модель для оценки триггеров
-  chainMessageModel        String  @default("openai/gpt-4o-mini") @map("chain_message_model") // Модель для AI сообщений в цепочках
-  emailGenerationModel     String  @default("openai/gpt-4o-mini") @map("email_generation_model") // Модель для генерации email
-  instructionParsingModel  String  @default("openai/gpt-4o-mini") @map("instruction_parsing_model") // Модель для парсинга инструкций
-  kbAnalysisModel          String  @default("anthropic/claude-3.5-sonnet") @map("kb_analysis_model") // Модель для анализа KB
-  createdAt              DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
-  updatedAt              DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+  id                      String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  agentId                 String   @unique @map("agent_id")
+  model                   String   @default("OpenAI GPT-4.1")
+  autoDetectLanguage      Boolean  @default(false) @map("auto_detect_language")
+  responseLanguage        String?  @map("response_language")
+  scheduleEnabled         Boolean  @default(false) @map("schedule_enabled")
+  responseDelaySeconds    Int      @default(45) @map("response_delay_seconds")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  scheduleData            String?  @map("schedule_data")
+  memoryEnabled           Boolean  @default(true) @map("memory_enabled")
+  graphEnabled            Boolean  @default(true) @map("graph_enabled")
+  contextWindow           Int      @default(20) @map("context_window")
+  semanticSearchEnabled   Boolean  @default(true) @map("semantic_search_enabled")
+  chainMessageModel       String   @default("openai/gpt-4o-mini") @map("chain_message_model")
+  emailGenerationModel    String   @default("openai/gpt-4o-mini") @map("email_generation_model")
+  factExtractionModel     String   @default("openai/gpt-4o-mini") @map("fact_extraction_model")
+  instructionParsingModel String   @default("openai/gpt-4o-mini") @map("instruction_parsing_model")
+  kbAnalysisModel         String   @default("anthropic/claude-3.5-sonnet") @map("kb_analysis_model")
+  triggerEvaluationModel  String   @default("openai/gpt-4o-mini") @map("trigger_evaluation_model")
 
   @@index([agentId], map: "idx_agent_advanced_settings_agent_id")
   @@map("agent_advanced_settings")
@@ -920,29 +913,19 @@ model subscriptions {
   @@index([price_id], map: "idx_subscriptions_price_id")
 }
 
-// ============================================
-// CONVERSATIONAL AI MODELS
-// ============================================
-
-// Диалог с клиентом (привязан к сделке leadId)
 model LeadConversation {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  agentId       String    @map("agent_id")
-  integrationId String    @map("integration_id")
-  leadId        Int       @map("lead_id")
-
-  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
-  messageCount  Int       @default(0) @map("message_count")
-  summary       String?
-
-  // Пауза агента (когда отвечает сотрудник)
-  pausedAt      DateTime? @map("paused_at") @db.Timestamptz(6)
-  pausedByUserId Int?     @map("paused_by_user_id") // ID сотрудника Kommo
-
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  messages      LeadMessage[]
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  agentId        String        @map("agent_id")
+  integrationId  String        @map("integration_id")
+  leadId         Int           @map("lead_id")
+  lastMessageAt  DateTime?     @map("last_message_at") @db.Timestamptz(6)
+  messageCount   Int           @default(0) @map("message_count")
+  summary        String?
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  pausedAt       DateTime?     @map("paused_at") @db.Timestamptz(6)
+  pausedByUserId Int?          @map("paused_by_user_id")
+  messages       LeadMessage[]
 
   @@unique([leadId, integrationId])
   @@index([agentId], map: "idx_lead_conversations_agent_id")
@@ -950,23 +933,17 @@ model LeadConversation {
   @@map("lead_conversations")
 }
 
-// Сообщение в диалоге (chat + email)
 model LeadMessage {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversationId String   @map("conversation_id") @db.Uuid
-
-  channel        String   // "chat" | "email"
-  role           String   // "user" | "assistant"
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  channel        String
+  role           String
   content        String
-
-  emailSubject   String?  @map("email_subject")
-  emailFrom      String?  @map("email_from")
-  emailTo        String?  @map("email_to")
-
-  chatId         String?  @map("chat_id")
-
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
+  emailSubject   String?          @map("email_subject")
+  emailFrom      String?          @map("email_from")
+  emailTo        String?          @map("email_to")
+  chatId         String?          @map("chat_id")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
   conversation   LeadConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt], map: "idx_lead_messages_conversation_created")
@@ -974,19 +951,13 @@ model LeadMessage {
   @@map("lead_messages")
 }
 
-
-// ============================================
-// TRAINING LIBRARY MODELS (Библиотека знаний)
-// ============================================
-
-// Источник знаний (книги, методологии, техники)
 model TrainingSource {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String
   author      String?
   description String?
-  category    String   // 'sales' | 'negotiations' | 'psychology' | 'methodology' | 'custom'
-  content     String   @db.Text
+  category    String
+  content     String
   isBuiltIn   Boolean  @default(false) @map("is_built_in")
   userId      String?  @map("user_id")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -998,13 +969,12 @@ model TrainingSource {
   @@map("training_sources")
 }
 
-// Роль для обучения агента (набор источников)
 model TrainingRole {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String
   description String?
   icon        String   @default("briefcase")
-  sourceIds   String   @map("source_ids") @db.Text  // JSON array of source IDs
+  sourceIds   String   @map("source_ids")
   isBuiltIn   Boolean  @default(false) @map("is_built_in")
   userId      String?  @map("user_id")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -1015,30 +985,21 @@ model TrainingRole {
   @@map("training_roles")
 }
 
-// ============================================
-// CHAIN EXECUTION TRACKING MODELS
-// ============================================
-
-// Запуск цепочки для конкретного лида
 model ChainRun {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  chainId         String    @map("chain_id")
-  integrationId   String    @map("integration_id")
-  leadId          Int       @map("lead_id")
-  stageId         String    @map("stage_id") // Стейдж на момент запуска
-  chatId          String?   @map("chat_id")
-
-  status          String    @default("running") // "running" | "completed" | "cancelled" | "failed"
-  currentStep     Int       @default(1) @map("current_step")
-
-  startedAt       DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
-  completedAt     DateTime? @map("completed_at") @db.Timestamptz(6)
-  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
-  cancelReason    String?   @map("cancel_reason")
-
-  error           String?
-
-  scheduledSteps  ScheduledChainStep[]
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chainId        String               @map("chain_id")
+  integrationId  String               @map("integration_id")
+  leadId         Int                  @map("lead_id")
+  stageId        String               @map("stage_id")
+  chatId         String?              @map("chat_id")
+  status         String               @default("running")
+  currentStep    Int                  @default(1) @map("current_step")
+  startedAt      DateTime             @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt    DateTime?            @map("completed_at") @db.Timestamptz(6)
+  cancelledAt    DateTime?            @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason   String?              @map("cancel_reason")
+  error          String?
+  scheduledSteps ScheduledChainStep[]
 
   @@unique([chainId, leadId], map: "unique_chain_run_per_lead")
   @@index([chainId], map: "idx_chain_runs_chain_id")
@@ -1048,24 +1009,19 @@ model ChainRun {
   @@map("chain_runs")
 }
 
-// Отложенный шаг цепочки для выполнения
 model ScheduledChainStep {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  chainRunId  String   @map("chain_run_id") @db.Uuid
-  stepId      String   @map("step_id") // ID из ChainStep
-  stepOrder   Int      @map("step_order")
-
-  executeAt   DateTime @map("execute_at") @db.Timestamptz(6)
-  status      String   @default("pending") // "pending" | "executed" | "cancelled" | "failed"
-
-  context     String?  @db.Text // JSON: {leadId, chatId, stageId, ...}
-  result      String?  @db.Text // Результат выполнения
-  error       String?
-
-  executedAt  DateTime? @map("executed_at") @db.Timestamptz(6)
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  chainRun    ChainRun @relation(fields: [chainRunId], references: [id], onDelete: Cascade)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chainRunId String    @map("chain_run_id") @db.Uuid
+  stepId     String    @map("step_id")
+  stepOrder  Int       @map("step_order")
+  executeAt  DateTime  @map("execute_at") @db.Timestamptz(6)
+  status     String    @default("pending")
+  context    String?
+  result     String?
+  error      String?
+  executedAt DateTime? @map("executed_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  chainRun   ChainRun  @relation(fields: [chainRunId], references: [id], onDelete: Cascade)
 
   @@index([chainRunId], map: "idx_scheduled_steps_chain_run_id")
   @@index([executeAt], map: "idx_scheduled_steps_execute_at")

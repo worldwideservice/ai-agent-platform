@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Folder, Edit, Trash2, Filter, LayoutGrid, ChevronDown, Copy, ArrowLeft, X, Search, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface KbCategoriesProps {
   onCreate: () => void;
@@ -26,6 +27,14 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
   onCreateArticle,
   onEditArticle
 }) => {
+  const { t } = useTranslation();
+
+  // Helper function to translate category names
+  const getCategoryName = (name: string): string => {
+    const translatedName = t(`knowledgeBase.defaultCategories.${name}`, { defaultValue: '' });
+    return translatedName || name;
+  };
+
   // Фильтруем категории по текущему parentId
   const displayedCategories = categories.filter(cat => cat.parentId === currentCategoryId);
 
@@ -99,15 +108,15 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
 
   // Построить путь breadcrumbs
   const buildBreadcrumbs = (): { id: string | null; name: string }[] => {
-    if (!currentCategoryId) return [{ id: null, name: 'Категории' }];
+    if (!currentCategoryId) return [{ id: null, name: t('knowledgeBase.categories') }];
 
-    const path: { id: string | null; name: string }[] = [{ id: null, name: 'Категории' }];
+    const path: { id: string | null; name: string }[] = [{ id: null, name: t('knowledgeBase.categories') }];
     let currentId: string | null = currentCategoryId;
 
     while (currentId) {
       const category = categories.find(c => c.id === currentId);
       if (!category) break;
-      path.push({ id: category.id, name: category.name });
+      path.push({ id: category.id, name: getCategoryName(category.name) });
       currentId = category.parentId;
     }
 
@@ -151,7 +160,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
             ))}
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {currentCategory ? currentCategory.name : 'Категории'}
+            {currentCategory ? getCategoryName(currentCategory.name) : t('knowledgeBase.categories')}
           </h1>
         </div>
         <div className="flex items-center gap-3">
@@ -165,14 +174,14 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
               className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2"
             >
               <ArrowLeft size={16} />
-              Назад к родительской категории
+              {t('knowledgeBase.backToParent')}
             </button>
           )}
           <button
             onClick={onCreate}
             className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm"
           >
-            Создать
+            {t('common.create')}
           </button>
         </div>
       </div>
@@ -185,7 +194,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
             ref={filterButtonRef}
             onClick={() => setShowFilterPanel(!showFilterPanel)}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative"
-            title="Фильтры"
+            title={t('common.filters')}
           >
             <Filter size={16} />
             {filters.parentCategory !== 'all' && (
@@ -196,7 +205,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
             ref={columnsButtonRef}
             onClick={() => setShowColumnsPanel(!showColumnsPanel)}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors"
-            title="Столбцы"
+            title={t('common.columns')}
           >
             <LayoutGrid size={16} />
           </button>
@@ -206,27 +215,27 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
         {showFilterPanel && (
           <div ref={filterPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-gray-900 dark:text-white">Фильтры</h3>
+              <h3 className="font-medium text-gray-900 dark:text-white">{t('common.filters')}</h3>
               <button
                 onClick={() => setFilters({ parentCategory: 'all' })}
                 className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
               >
-                Сбросить
+                {t('common.reset')}
               </button>
             </div>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Родительская категория
+                  {t('knowledgeBase.parentCategory')}
                 </label>
                 <select
                   value={filters.parentCategory}
                   onChange={(e) => setFilters(prev => ({ ...prev, parentCategory: e.target.value }))}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  <option value="all">Все</option>
+                  <option value="all">{t('common.all')}</option>
                   {categories.filter(cat => cat.parentId === null).map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    <option key={cat.id} value={cat.id}>{getCategoryName(cat.name)}</option>
                   ))}
                 </select>
               </div>
@@ -237,7 +246,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
         {/* Columns Panel - Боковая панель столбцов */}
         {showColumnsPanel && (
           <div ref={columnsPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
-            <h3 className="font-medium text-gray-900 dark:text-white mb-3">Столбцы</h3>
+            <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('common.columns')}</h3>
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -246,7 +255,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                   onChange={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
                   className="w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Заголовок</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.title')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -255,7 +264,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                   onChange={() => setVisibleColumns(prev => ({ ...prev, subcategories: !prev.subcategories }))}
                   className="w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Подкатегории</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.subcategories')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -264,7 +273,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                   onChange={() => setVisibleColumns(prev => ({ ...prev, articles: !prev.articles }))}
                   className="w-4 h-4 text-blue-600"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Статьи</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.articles')}</span>
               </label>
             </div>
           </div>
@@ -276,7 +285,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
               <X size={24} className="text-gray-400 dark:text-gray-500" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Нет подкатегорий</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">{t('knowledgeBase.noSubcategories')}</h3>
           </div>
         ) : (
           <>
@@ -293,16 +302,16 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                   </th>
                   {visibleColumns.title && (
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                      Заголовок <ChevronDown size={14} className="inline ml-1" />
+                      {t('knowledgeBase.title')} <ChevronDown size={14} className="inline ml-1" />
                     </th>
                   )}
                   {visibleColumns.subcategories && (
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Подкатегории</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('knowledgeBase.subcategories')}</th>
                   )}
                   {visibleColumns.articles && (
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Статьи</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('knowledgeBase.articles')}</th>
                   )}
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">Действия</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -331,7 +340,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
                           <Folder size={18} className="text-gray-400 dark:text-gray-500" />
-                          <span className="text-sm text-gray-900 dark:text-white">{category.name}</span>
+                          <span className="text-sm text-gray-900 dark:text-white">{getCategoryName(category.name)}</span>
                         </div>
                       </td>
                     )}
@@ -388,7 +397,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
       {currentCategory && (
         <div className="space-y-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Статьи в «{currentCategory.name}»
+            {t('knowledgeBase.articlesInCategory', { name: getCategoryName(currentCategory.name) })}
           </h2>
 
           <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
@@ -398,7 +407,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="Поиск"
+                  placeholder={t('common.search')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-transparent"
@@ -412,9 +421,9 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
                   <X size={24} className="text-gray-400 dark:text-gray-500" />
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">Статьи не найдены</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">{t('knowledgeBase.noArticlesFound')}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  Статьи, добавленные в эту категорию, появятся здесь.
+                  {t('knowledgeBase.articlesWillAppearHere')}
                 </p>
                 {onCreateArticle && (
                   <button
@@ -422,7 +431,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                     className="inline-flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm"
                   >
                     <Plus size={16} />
-                    Создать статью
+                    {t('knowledgeBase.createArticle')}
                   </button>
                 )}
               </div>
@@ -431,10 +440,10 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                 <thead className="bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                      Заголовок
+                      {t('knowledgeBase.title')}
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                      Статус
+                      {t('common.status')}
                     </th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider"></th>
                   </tr>
@@ -459,7 +468,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                             ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
                         }`}>
-                          {article.isActive ? 'Активна' : 'Неактивна'}
+                          {article.isActive ? t('knowledgeBase.isActive') : t('knowledgeBase.isInactive')}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -483,7 +492,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
               <span></span>
               <div className="flex items-center gap-2">
-                <span>на страницу</span>
+                <span>{t('common.perPage')}</span>
                 <select className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                   <option>10</option>
                   <option>25</option>
