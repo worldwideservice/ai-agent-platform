@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, MessageSquare, Trash2, Edit2, X } from 'lucide-react';
+import { Plus, MessageSquare, Trash2, Edit2, X, Search } from 'lucide-react';
 
 interface Conversation {
   id: string;
@@ -61,10 +61,19 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [editTitle, setEditTitle] = React.useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const groups = groupConversations(conversations);
+  // Filter conversations by search query
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    return conversations.filter(conv =>
+      conv.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [conversations, searchQuery]);
+
+  const groups = groupConversations(filteredConversations);
 
   const handleStartEdit = (conv: Conversation) => {
     setEditingId(conv.id);
@@ -169,9 +178,9 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between mb-4 lg:hidden">
+        {/* Mobile header */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 lg:hidden">
+          <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900 dark:text-white">
               {t('chat.conversations')}
             </h2>
@@ -179,14 +188,39 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <X size={20} />
             </button>
           </div>
+        </div>
 
+        {/* Actions */}
+        <div className="p-4 pt-4 lg:pt-4 space-y-3">
           <button
             onClick={onNewConversation}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
           >
             <Plus size={18} />
             {t('chat.newChat')}
           </button>
+
+          {/* Search input */}
+          {conversations.length > 0 && (
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder={t('chat.searchConversations')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-100 dark:bg-gray-800 border-0 rounded-lg text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Conversation list */}
@@ -196,6 +230,12 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <MessageSquare size={32} className="mx-auto mb-2 opacity-50" />
               <p className="text-sm">{t('chat.noConversations')}</p>
               <p className="text-xs mt-1">{t('chat.startNewChat')}</p>
+            </div>
+          ) : filteredConversations.length === 0 ? (
+            <div className="text-center text-gray-500 dark:text-gray-400 py-8 px-4">
+              <Search size={32} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">{t('chat.noSearchResults')}</p>
+              <p className="text-xs mt-1">{t('chat.tryDifferentSearch')}</p>
             </div>
           ) : (
             <>

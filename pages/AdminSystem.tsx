@@ -76,7 +76,7 @@ export const AdminSystem: React.FC = () => {
           </label>
           <button
             onClick={loadData}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Обновить

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, Menu, Send } from 'lucide-react';
+import { Bot, Menu, Send, MessageSquare, Lightbulb, Search, HelpCircle, Zap, ChevronDown, Paperclip, Mic, Command } from 'lucide-react';
 import { apiClient } from '../src/services/api/apiClient';
 import { conversationsService, Conversation, ConversationMessage, MessageSources } from '../src/services/api/conversations.service';
 import { ChatSidebar } from '../components/chat/ChatSidebar';
@@ -19,6 +19,13 @@ interface LocalMessage {
   isNew?: boolean;
 }
 
+// Suggestion cards for empty state
+interface SuggestionCard {
+  icon: React.ReactNode;
+  titleKey: string;
+  promptKey: string;
+}
+
 export const Chat: React.FC<ChatProps> = ({ agents }) => {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
@@ -28,7 +35,30 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAgentDropdown, setShowAgentDropdown] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Suggestion cards data
+  const suggestionCards: SuggestionCard[] = [
+    { icon: <MessageSquare size={20} />, titleKey: 'chat.suggestions.tellAbout', promptKey: 'chat.suggestions.tellAboutPrompt' },
+    { icon: <Lightbulb size={20} />, titleKey: 'chat.suggestions.helpWith', promptKey: 'chat.suggestions.helpWithPrompt' },
+    { icon: <Search size={20} />, titleKey: 'chat.suggestions.findInfo', promptKey: 'chat.suggestions.findInfoPrompt' },
+    { icon: <HelpCircle size={20} />, titleKey: 'chat.suggestions.explainHow', promptKey: 'chat.suggestions.explainHowPrompt' },
+  ];
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAgentDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const activeAgents = agents.filter(agent => agent.isActive);
 
@@ -193,7 +223,74 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     setSelectedAgent(agent || null);
     setCurrentConversationId(null);
     setMessages([]);
+    setShowAgentDropdown(false);
   };
+
+  // Handle suggestion card click
+  const handleSuggestionClick = (promptKey: string) => {
+    const prompt = t(promptKey);
+    setInput(prompt);
+  };
+
+  // Handle voice recording
+  const handleVoiceRecording = useCallback(() => {
+    // Check if browser supports speech recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert(t('chat.voiceNotSupported'));
+      return;
+    }
+
+    if (isRecording && recognitionRef.current) {
+      // Stop recording
+      recognitionRef.current.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    // Start recording
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'ru-RU'; // Default to Russian, can be made configurable
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+
+      setInput(transcript);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      if (event.error === 'not-allowed') {
+        alert(t('chat.voiceMicrophoneError'));
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [isRecording, t]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   return (
     <div className="h-[calc(100vh-140px)] flex">
@@ -211,106 +308,237 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Header */}
-        <div className="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
-          >
-            <Menu size={20} />
-          </button>
-
-          <div className="flex-1 flex items-center gap-4">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white hidden sm:block">
-              {t('chat.title')}
-            </h1>
-
-            <select
-              value={selectedAgent?.id || ''}
-              onChange={(e) => handleAgentChange(e.target.value)}
-              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none max-w-xs"
+        {/* Header - Improved */}
+        <div className="p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <option value="" disabled>
-                {t('chat.selectAgent')}
-              </option>
-              {activeAgents.map(agent => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name} ({agent.model})
-                </option>
-              ))}
-            </select>
+              <Menu size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+
+            {/* Title with breadcrumbs */}
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {t('chat.title')}
+              </h1>
+              {currentConversationId && (
+                <>
+                  <span className="text-gray-300 dark:text-gray-600">›</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 max-w-[200px] truncate">
+                    {conversations.find(c => c.id === currentConversationId)?.title || t('chat.newConversation')}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          {selectedAgent && (
-            <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <Bot size={16} className="text-blue-600 dark:text-blue-400" />
-              <span>{t('chat.model')} {selectedAgent.model}</span>
+          <div className="flex items-center gap-4">
+            {/* Agent selector - Custom dropdown */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowAgentDropdown(!showAgentDropdown)}
+                className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className={`w-2 h-2 rounded-full ${selectedAgent?.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 max-w-[180px] truncate">
+                  {selectedAgent?.name || t('chat.selectAgent')}
+                </span>
+                <ChevronDown size={16} className={`text-gray-400 transition-transform ${showAgentDropdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showAgentDropdown && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                  <div className="p-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider px-2">{t('chat.availableAgents')}</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {activeAgents.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {t('chat.noActiveAgents')}
+                      </div>
+                    ) : (
+                      activeAgents.map(agent => (
+                        <button
+                          key={agent.id}
+                          onClick={() => handleAgentChange(agent.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${selectedAgent?.id === agent.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                            {agent.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 text-left">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{agent.name}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">{agent.model}</div>
+                          </div>
+                          {selectedAgent?.id === agent.id && (
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                          )}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Agent status badge */}
+            {selectedAgent && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                <Zap size={14} className="text-blue-500" />
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-300">{selectedAgent.model}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50">
+        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900/50">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
-              <Bot size={48} className="mb-4 opacity-50" />
-              <p className="text-lg font-medium">{t('chat.selectAgentPrompt')}</p>
-              <p className="text-sm mt-2">{t('chat.startNewChat')}</p>
+            /* Empty State - Enhanced with suggestion cards */
+            <div className="h-full flex flex-col items-center justify-center px-6 py-12">
+              {/* Gradient background effect */}
+              <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-100 dark:bg-blue-900/20 rounded-full blur-3xl opacity-50" />
+                <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-100 dark:bg-purple-900/20 rounded-full blur-3xl opacity-50" />
+              </div>
+
+              <div className="relative z-10 text-center max-w-2xl mx-auto">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                  {t('chat.emptyState.title')}
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
+                  {t('chat.emptyState.subtitle')}
+                </p>
+
+                {/* Suggestion cards grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
+                  {suggestionCards.map((card, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSuggestionClick(card.promptKey)}
+                      disabled={!selectedAgent}
+                      className="group flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-md transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                        {card.icon}
+                      </div>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                        {t(card.titleKey)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {!selectedAgent && (
+                  <p className="mt-6 text-sm text-amber-600 dark:text-amber-400 flex items-center justify-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    {t('chat.selectAgentFirst')}
+                  </p>
+                )}
+              </div>
             </div>
           ) : (
-            messages.map((msg, idx) => (
-              <ChatMessage
-                key={msg.id || idx}
-                role={msg.role}
-                content={msg.content}
-                sources={msg.sources}
-                isNew={msg.isNew}
-              />
-            ))
-          )}
+            <div className="p-6 space-y-6">
+              {messages.map((msg, idx) => (
+                <ChatMessage
+                  key={msg.id || idx}
+                  role={msg.role}
+                  content={msg.content}
+                  sources={msg.sources}
+                  isNew={msg.isNew}
+                />
+              ))}
 
-          {isLoading && (
-            <div className="flex gap-4">
-              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                <Bot size={18} />
-              </div>
-              <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl rounded-bl-none px-5 py-3">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              {isLoading && (
+                <div className="flex gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shadow-md">
+                    <Bot size={18} />
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm">
+                    <div className="flex space-x-1.5">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+              <div ref={bottomRef} />
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
-        {/* Input Area */}
+        {/* Input Area - Enhanced */}
         <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex gap-3 items-center max-w-4xl mx-auto">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={t('chat.typeMessage')}
-              disabled={!selectedAgent}
-              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed transition-colors"
-            />
+          <div className="max-w-4xl mx-auto">
+            {/* Main input container */}
+            <div className="relative flex items-center gap-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-2 focus-within:border-blue-400 dark:focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/30 transition-all">
+              {/* Attachment button */}
+              <button
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                title={t('chat.attachFile')}
+              >
+                <Paperclip size={18} />
+              </button>
 
-            <button
-              onClick={handleSend}
-              disabled={isLoading || !input.trim() || !selectedAgent}
-              className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl font-medium transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send size={20} />
-            </button>
+              {/* Input field */}
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder={t('chat.typeMessage')}
+                disabled={!selectedAgent}
+                className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 outline-none disabled:cursor-not-allowed py-2"
+              />
+
+              {/* Voice button */}
+              <button
+                onClick={handleVoiceRecording}
+                disabled={!selectedAgent}
+                className={`p-2 rounded-lg transition-colors ${
+                  isRecording
+                    ? 'text-red-500 bg-red-100 dark:bg-red-900/30 animate-pulse'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={isRecording ? t('chat.stopRecording') : t('chat.voiceInput')}
+              >
+                <Mic size={18} />
+              </button>
+
+              {/* Send button */}
+              <button
+                onClick={handleSend}
+                disabled={isLoading || !input.trim() || !selectedAgent}
+                className="bg-[#0078D4] hover:bg-[#006cbd] text-white p-2.5 rounded-xl font-medium transition-all flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#0078D4] shadow-sm hover:shadow-md"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+
+            {/* Hints row */}
+            <div className="flex items-center justify-between mt-2 px-2">
+              <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-gray-500">
+                <span className="flex items-center gap-1">
+                  <Command size={12} />
+                  <span>Enter</span>
+                  <span className="text-gray-300 dark:text-gray-600 mx-1">-</span>
+                  <span>{t('chat.sendHint')}</span>
+                </span>
+              </div>
+              {selectedAgent && (
+                <span className="text-xs text-gray-400 dark:text-gray-500">
+                  {t('chat.poweredBy')} {selectedAgent.model}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

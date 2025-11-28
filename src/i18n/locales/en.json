@@ -210,6 +210,33 @@
     "confirmDelete": "Are you sure you want to delete this conversation?",
     "noConversations": "No saved conversations",
     "startNewChat": "Start a new conversation",
+    "newConversation": "New conversation",
+    "availableAgents": "Available agents",
+    "selectAgentFirst": "Please select an agent first",
+    "searchConversations": "Search conversations...",
+    "noSearchResults": "No results found",
+    "tryDifferentSearch": "Try a different search query",
+    "attachFile": "Attach file",
+    "voiceInput": "Voice input",
+    "stopRecording": "Stop recording",
+    "voiceNotSupported": "Your browser doesn't support speech recognition. Try Chrome or Edge.",
+    "voiceMicrophoneError": "No microphone access. Please allow access in browser settings.",
+    "sendHint": "send message",
+    "poweredBy": "Powered by",
+    "emptyState": {
+      "title": "Start a conversation with an agent",
+      "subtitle": "Select an agent and ask a question or use the suggestions below"
+    },
+    "suggestions": {
+      "tellAbout": "Tell me about the product",
+      "tellAboutPrompt": "Tell me more about your product and its features",
+      "helpWith": "Help me create",
+      "helpWithPrompt": "Help me create a description for the client",
+      "findInfo": "Find information",
+      "findInfoPrompt": "Find information about the topic I'm interested in",
+      "explainHow": "Explain how it works",
+      "explainHowPrompt": "Explain how your service works"
+    },
     "sources": {
       "knowledgeBase": "Knowledge Base",
       "trainingRole": "Training Role",

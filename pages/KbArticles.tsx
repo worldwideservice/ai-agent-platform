@@ -107,8 +107,8 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-end">
-        <div>
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
             <span>{t('knowledgeBase.articles')}</span>
             <span>/</span>
@@ -116,12 +116,14 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('knowledgeBase.articles')}</h1>
         </div>
-        <button
-          onClick={onCreate}
-          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-        >
-          {t('common.create')}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onCreate}
+            className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm"
+          >
+            {t('common.create')}
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area */}

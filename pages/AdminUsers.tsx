@@ -135,7 +135,7 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
               <button
                 onClick={() => handleAction('add_responses', addResponses)}
                 disabled={loading}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
               >
                 Добавить
               </button>
@@ -395,7 +395,7 @@ export const AdminUsers: React.FC = () => {
         </select>
         <button
           onClick={handleSearch}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
         >
           Поиск
         </button>

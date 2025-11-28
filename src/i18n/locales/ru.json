@@ -210,6 +210,33 @@
     "confirmDelete": "Вы уверены, что хотите удалить этот разговор?",
     "noConversations": "Нет сохранённых разговоров",
     "startNewChat": "Начните новый разговор",
+    "newConversation": "Новый разговор",
+    "availableAgents": "Доступные агенты",
+    "selectAgentFirst": "Сначала выберите агента",
+    "searchConversations": "Поиск по разговорам...",
+    "noSearchResults": "Ничего не найдено",
+    "tryDifferentSearch": "Попробуйте другой запрос",
+    "attachFile": "Прикрепить файл",
+    "voiceInput": "Голосовой ввод",
+    "stopRecording": "Остановить запись",
+    "voiceNotSupported": "Ваш браузер не поддерживает распознавание речи. Попробуйте Chrome или Edge.",
+    "voiceMicrophoneError": "Нет доступа к микрофону. Разрешите доступ в настройках браузера.",
+    "sendHint": "отправить сообщение",
+    "poweredBy": "Работает на",
+    "emptyState": {
+      "title": "Начните разговор с агентом",
+      "subtitle": "Выберите агента и задайте вопрос или воспользуйтесь подсказками ниже"
+    },
+    "suggestions": {
+      "tellAbout": "Расскажи о продукте",
+      "tellAboutPrompt": "Расскажи подробнее о вашем продукте и его возможностях",
+      "helpWith": "Помоги составить",
+      "helpWithPrompt": "Помоги составить описание для клиента",
+      "findInfo": "Найди информацию",
+      "findInfoPrompt": "Найди информацию по интересующему вопросу",
+      "explainHow": "Объясни как работает",
+      "explainHowPrompt": "Объясни как работает ваш сервис"
+    },
     "sources": {
       "knowledgeBase": "База знаний",
       "trainingRole": "Роль обучения",

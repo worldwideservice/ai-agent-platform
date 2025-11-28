@@ -56,7 +56,7 @@ export const AdminDashboard: React.FC = () => {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Админ-панель</h1>
         <button
           onClick={loadStats}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
         >
           Обновить
         </button>
@@ -66,8 +66,8 @@ export const AdminDashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <Users className="w-6 h-6 text-gray-500 dark:text-gray-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Пользователи</p>
@@ -79,8 +79,8 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-              <Bot className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <Bot className="w-6 h-6 text-gray-500 dark:text-gray-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Агенты</p>
@@ -92,8 +92,8 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-              <FileText className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <FileText className="w-6 h-6 text-gray-500 dark:text-gray-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">База знаний</p>
@@ -105,8 +105,8 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <MessageSquare className="w-6 h-6 text-green-600 dark:text-green-400" />
+            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
+              <MessageSquare className="w-6 h-6 text-gray-500 dark:text-gray-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Разговоры</p>

@@ -1382,7 +1382,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-20 px-12">
+    <div className="space-y-6 pb-20">
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -1401,7 +1401,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       {/* Tabs Container */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
         {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700 flex overflow-x-auto no-scrollbar pl-[90px]">
+        <div className="border-b border-gray-200 dark:border-gray-700 flex justify-center overflow-x-auto no-scrollbar">
           <TabButton id="main" label={t('agentEditor.tabs.main')} icon={Settings} />
           <TabButton id="deals" label={t('agentEditor.tabs.deals')} icon={Users} />
           <TabButton id="triggers" label={t('agentEditor.tabs.triggers')} icon={Zap} />
@@ -1978,7 +1978,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           }
                         }}
                         disabled={isSaving}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-3 transition-colors font-medium text-sm shadow-sm"
+                        className="w-full flex items-center justify-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] disabled:bg-[#0078D4]/50 text-white rounded-md px-6 py-2.5 transition-colors font-medium text-sm shadow-sm"
                       >
                         {isSaving ? (
                           <>
@@ -2081,7 +2081,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         }
                       }}
                       disabled={isSaving}
-                      className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg px-4 py-2.5 transition-colors font-medium text-sm shadow-sm"
+                      className="inline-flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] disabled:bg-[#0078D4]/50 text-white rounded-md px-6 py-2.5 transition-colors font-medium text-sm shadow-sm"
                     >
                       <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
                       {isSaving ? t('agentEditor.integrations.syncing') : t('agentEditor.integrations.sync')}
@@ -2248,7 +2248,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           navigator.clipboard.writeText(inviteUrl);
                           alert(t('agentEditor.integrations.linkCopied'));
                         }}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium"
+                        className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
                       >
                         {t('agentEditor.integrations.copy')}
                       </button>

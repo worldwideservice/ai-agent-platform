@@ -221,10 +221,9 @@ export const TrainingRoles: React.FC = () => {
         </div>
         <button
           onClick={handleCreateRole}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
         >
-          <Plus size={18} />
-          {t('training.createRole')}
+          {t('common.create')}
         </button>
       </div>
 
@@ -423,7 +422,7 @@ export const TrainingRoles: React.FC = () => {
               <button
                 onClick={handleSaveRole}
                 disabled={!formData.name || formData.sourceIds.length === 0}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check size={18} />
                 {editingRole ? t('common.save') : t('common.create')}
