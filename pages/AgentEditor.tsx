@@ -705,7 +705,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.error('Failed to update Kommo integration:', error);
       // Откатываем изменение в случае ошибки
       setKommoActive(!isActive);
-      alert(t('agentEditor.integrations.updateError'));
+      showToast('error', t('agentEditor.integrations.updateError'));
     }
   };
 
@@ -737,7 +737,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.error('Failed to update Google Calendar integration:', error);
       // Откатываем изменение в случае ошибки
       setGoogleCalendarActive(!isActive);
-      alert(t('agentEditor.integrations.updateError'));
+      showToast('error', t('agentEditor.integrations.updateError'));
     }
   };
 
@@ -752,7 +752,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const kommoIntegration = integrations.find((i: any) => i.integrationType === 'kommo');
 
       if (!kommoIntegration) {
-        alert(t('agentEditor.integrations.integrationNotFound'));
+        showToast('error', t('agentEditor.integrations.integrationNotFound'));
         return;
       }
 
@@ -762,20 +762,14 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       console.log('CRM синхронизирована:', result);
 
-      alert(
-        `${t('agentEditor.integrations.syncSuccess')}\n\n` +
-        `${t('agentEditor.integrations.syncPipelines')} ${result.stats.pipelines}\n` +
-        `${t('agentEditor.integrations.syncUsers')} ${result.stats.users}\n` +
-        `${t('agentEditor.integrations.syncTime')} ${result.stats.syncTime}\n\n` +
-        `${t('agentEditor.integrations.syncDate')} ${new Date(result.lastSynced).toLocaleString()}`
-      );
+      showToast('success', `${t('agentEditor.integrations.syncSuccess')} (${t('agentEditor.integrations.syncPipelines')} ${result.stats.pipelines}, ${t('agentEditor.integrations.syncUsers')} ${result.stats.users})`);
 
       // Reload page to update agent with new crmData
       window.location.reload();
     } catch (error: any) {
       console.error('Failed to sync CRM:', error);
       const errorMessage = error.response?.data?.message || error.message || t('agentEditor.integrations.unknownError');
-      alert(`${t('agentEditor.integrations.syncError')}\n\n${t('agentEditor.integrations.error')} ${errorMessage}`);
+      showToast('error', `${t('agentEditor.integrations.syncError')}: ${errorMessage}`);
     } finally {
       setIsSaving(false);
     }
@@ -933,7 +927,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       }
     } catch (error) {
       console.error('Failed to toggle chain:', error);
-      alert(t('agentEditor.chains.toggleError'));
+      showToast('error', t('agentEditor.chains.toggleError'));
     }
   };
 
@@ -1030,7 +1024,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setIsChainModalOpen(false);
     } catch (error) {
       console.error('Failed to save chain:', error);
-      alert(t('agentEditor.chains.saveError'));
+      showToast('error', t('agentEditor.chains.saveError'));
     }
   };
 
@@ -1043,7 +1037,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setChains(prev => prev.filter(c => c.id !== id));
     } catch (error) {
       console.error('Failed to delete chain:', error);
-      alert(t('agentEditor.chains.deleteError'));
+      showToast('error', t('agentEditor.chains.deleteError'));
     }
   };
 
@@ -1141,7 +1135,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
         setTriggers(prev => prev.filter(t => t.id !== id));
       } catch (error) {
         console.error('Failed to delete trigger:', error);
-        alert(t('agentEditor.triggers.deleteError'));
+        showToast('error', t('agentEditor.triggers.deleteError'));
       }
     }
   };
@@ -1151,11 +1145,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
     // Валидация обязательных полей
     if (!triggerName.trim()) {
-      alert(t('agentEditor.triggers.validation.nameRequired'));
+      showToast('error', t('agentEditor.triggers.validation.nameRequired'));
       return;
     }
     if (!triggerCondition.trim()) {
-      alert(t('agentEditor.triggers.validation.conditionRequired'));
+      showToast('error', t('agentEditor.triggers.validation.conditionRequired'));
       return;
     }
     // Проверяем что есть хотя бы одно действие с выбранным типом
@@ -1303,9 +1297,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
           setIntegrationView('list');
         }
       }}
-      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === id
-        ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
-        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+      className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${activeTab === id
+        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-gray-700/50'
         }`}
     >
       <Icon size={16} />
@@ -1400,14 +1394,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
       {/* Tabs Container */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-        {/* Tabs */}
-        <div className="border-b border-gray-200 dark:border-gray-700 flex justify-center overflow-x-auto no-scrollbar">
-          <TabButton id="main" label={t('agentEditor.tabs.main')} icon={Settings} />
-          <TabButton id="deals" label={t('agentEditor.tabs.deals')} icon={Users} />
-          <TabButton id="triggers" label={t('agentEditor.tabs.triggers')} icon={Zap} />
-          <TabButton id="chains" label={t('agentEditor.tabs.chains')} icon={Clock} />
-          <TabButton id="integrations" label={t('agentEditor.tabs.integrations')} icon={Puzzle} />
-          <TabButton id="advanced" label={t('agentEditor.tabs.advanced')} icon={FilePenLine} />
+        {/* Tabs - Modern glassmorphism style */}
+        <div className="flex justify-center p-2">
+          <div className="inline-flex items-center gap-1 p-1.5 bg-gray-100/80 dark:bg-gray-900/50 backdrop-blur-sm rounded-xl">
+            <TabButton id="main" label={t('agentEditor.tabs.main')} icon={Settings} />
+            <TabButton id="deals" label={t('agentEditor.tabs.deals')} icon={Users} />
+            <TabButton id="triggers" label={t('agentEditor.tabs.triggers')} icon={Zap} />
+            <TabButton id="chains" label={t('agentEditor.tabs.chains')} icon={Clock} />
+            <TabButton id="integrations" label={t('agentEditor.tabs.integrations')} icon={Puzzle} />
+            <TabButton id="advanced" label={t('agentEditor.tabs.advanced')} icon={FilePenLine} />
+          </div>
         </div>
 
         {/* Tab Content: Advanced */}

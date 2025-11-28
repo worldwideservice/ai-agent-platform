@@ -232,6 +232,11 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     setInput(prompt);
   };
 
+  // Store the text that was in input before recording started
+  const baseTextRef = useRef<string>('');
+  // Store finalized transcripts from previous segments
+  const finalizedTextRef = useRef<string>('');
+
   // Handle voice recording
   const handleVoiceRecording = useCallback(() => {
     // Check if browser supports speech recognition
@@ -243,28 +248,51 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     }
 
     if (isRecording && recognitionRef.current) {
-      // Stop recording
+      // Stop recording - user clicked to stop
       recognitionRef.current.stop();
       setIsRecording(false);
       return;
     }
 
-    // Start recording
+    // Start recording - save current input as base text
+    baseTextRef.current = input;
+    finalizedTextRef.current = '';
+
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = 'ru-RU'; // Default to Russian, can be made configurable
+    recognition.continuous = true; // Keep recording until user stops
+    recognition.interimResults = true; // Show text in real-time
+    recognition.lang = 'ru-RU';
 
     recognition.onstart = () => {
       setIsRecording(true);
     };
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
+      let interimTranscript = '';
+      let finalTranscript = '';
 
-      setInput(transcript);
+      // Process results - separate final from interim
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      // Accumulate finalized text
+      if (finalTranscript) {
+        finalizedTextRef.current += (finalizedTextRef.current ? ' ' : '') + finalTranscript;
+      }
+
+      // Combine: base text + finalized + current interim
+      const separator = baseTextRef.current ? ' ' : '';
+      const fullText = baseTextRef.current +
+        (finalizedTextRef.current ? separator + finalizedTextRef.current : '') +
+        (interimTranscript ? (finalizedTextRef.current || baseTextRef.current ? ' ' : '') + interimTranscript : '');
+
+      setInput(fullText);
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -281,7 +309,7 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [isRecording, t]);
+  }, [isRecording, t, input]);
 
   // Cleanup on unmount
   useEffect(() => {
