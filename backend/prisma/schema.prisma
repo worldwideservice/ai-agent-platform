@@ -1028,3 +1028,31 @@ model ScheduledChainStep {
   @@index([status], map: "idx_scheduled_steps_status")
   @@map("scheduled_chain_steps")
 }
+
+model TestConversation {
+  id        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String                  @map("user_id")
+  agentId   String                  @map("agent_id")
+  title     String                  @default("Новый разговор")
+  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  messages  TestConversationMessage[]
+
+  @@index([userId], map: "idx_test_conversations_user_id")
+  @@index([agentId], map: "idx_test_conversations_agent_id")
+  @@index([updatedAt(sort: Desc)], map: "idx_test_conversations_updated_at")
+  @@map("test_conversations")
+}
+
+model TestConversationMessage {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  role           String
+  content        String
+  sources        String?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  conversation   TestConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId], map: "idx_test_conversation_messages_conversation_id")
+  @@map("test_conversation_messages")
+}

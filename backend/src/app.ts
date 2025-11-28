@@ -29,6 +29,7 @@ import agentDocumentsRoutes from './routes/agent-documents';
 import profileRoutes from './routes/profile';
 import notificationsRoutes from './routes/notifications';
 import testRoutes from './routes/test';
+import conversationsRoutes from './routes/conversations';
 
 // Public routes (без авторизации)
 import { getPublicDocumentFile } from './controllers/agent-documents';
@@ -90,6 +91,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/training', trainingRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/conversations', conversationsRoutes);
 app.use('/api/test', testRoutes); // Test endpoints для симуляции
 
 // Public routes (без авторизации - для доступа Kommo к файлам)

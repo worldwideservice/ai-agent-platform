@@ -71,6 +71,7 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
 
     // Получаем релевантные статьи из базы знаний (если БЗ настроена)
     let knowledgeContext: string | null = null;
+    let usedKnowledgeArticles: Array<{ id: number; title: string; categoryName?: string; relevanceScore?: number }> = [];
     if (agent.kbSettings) {
       try {
         const knowledgeArticles = await getRelevantKnowledge(
@@ -84,6 +85,13 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
 
         if (knowledgeContext) {
           console.log(`📚 Using ${knowledgeArticles.length} knowledge base articles for context`);
+          // Сохраняем метаданные статей для источников
+          usedKnowledgeArticles = knowledgeArticles.map((article: any) => ({
+            id: article.id,
+            title: article.title,
+            categoryName: article.categoryName,
+            relevanceScore: article.similarity,
+          }));
         }
       } catch (error: any) {
         console.error('Error fetching knowledge base:', error);
@@ -95,8 +103,18 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
 
     // Получаем знания из роли (методологии продаж, техники)
     let roleKnowledge: string | null = null;
+    let usedRole: { id: string; name: string } | null = null;
     if (agent.trainingRoleId) {
       try {
+        // Получаем информацию о роли
+        const role = await prisma.trainingRole.findUnique({
+          where: { id: agent.trainingRoleId },
+          select: { id: true, name: true },
+        });
+        if (role) {
+          usedRole = { id: role.id, name: role.name };
+        }
+
         roleKnowledge = await getAgentRoleKnowledge(agent.trainingRoleId, userId);
         if (roleKnowledge) {
           console.log(`📖 Using role knowledge (${roleKnowledge.length} chars)`);
@@ -205,6 +223,7 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
 
     // Оцениваем AI триггеры на основе сообщения пользователя
     let triggeredActions: string[] = [];
+    let matchedTriggers: Array<{ id: string; name: string; confidence: number }> = [];
     try {
       console.log(`🔍 Looking for triggers for agent: ${agent.id}`);
 
@@ -250,6 +269,11 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
           if (result.matched) {
             console.log(`✅ Trigger matched: ${result.triggerName} (confidence: ${result.confidence})`);
             triggeredActions.push(result.triggerName);
+            matchedTriggers.push({
+              id: result.triggerId,
+              name: result.triggerName,
+              confidence: result.confidence,
+            });
 
             const trigger = triggers.find(t => t.id === result.triggerId);
             if (trigger) {
@@ -274,10 +298,31 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       // Не прерываем ответ пользователю, просто логируем ошибку
     }
 
+    // Формируем объект источников
+    const sources: any = {};
+    if (usedKnowledgeArticles.length > 0) {
+      sources.knowledgeBase = {
+        articles: usedKnowledgeArticles,
+      };
+    }
+    if (usedRole) {
+      sources.trainingRole = usedRole;
+    }
+    if (matchedTriggers.length > 0) {
+      sources.triggers = matchedTriggers;
+    }
+    if (stageInstructions && pipelineId && stageId) {
+      sources.pipeline = {
+        pipelineId,
+        stageId,
+      };
+    }
+
     return res.json({
       response,
       message: 'Message sent successfully',
       triggeredActions: triggeredActions.length > 0 ? triggeredActions : undefined,
+      sources: Object.keys(sources).length > 0 ? sources : undefined,
     });
   } catch (error: any) {
     console.error('Error sending chat message:', error);

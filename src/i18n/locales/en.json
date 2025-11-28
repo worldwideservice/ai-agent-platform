@@ -190,7 +190,27 @@
     "simulationAgentCannotRespond": "[TEST] Check: Agent CANNOT respond (paused)",
     "simulationAgentResumed": "[TEST] Agent resumed forcefully",
     "agentResumedNotification": "Agent resumed",
-    "agentResumedMessage": "Agent \"{{name}}\" resumed forcefully"
+    "agentResumedMessage": "Agent \"{{name}}\" resumed forcefully",
+    "newChat": "New Chat",
+    "conversations": "Conversation History",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "earlier": "Earlier",
+    "deleteConversation": "Delete conversation",
+    "renameConversation": "Rename",
+    "copyMessage": "Copy",
+    "copied": "Copied!",
+    "confirmDelete": "Are you sure you want to delete this conversation?",
+    "noConversations": "No saved conversations",
+    "startNewChat": "Start a new conversation",
+    "sources": {
+      "knowledgeBase": "Knowledge Base",
+      "trainingRole": "Training Role",
+      "trigger": "Trigger",
+      "pipeline": "Pipeline Stage",
+      "articlesUsed": "Articles used: {{count}}"
+    }
   },
   "billing": {
     "title": "Billing Plans",

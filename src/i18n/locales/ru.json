@@ -190,7 +190,27 @@
     "simulationAgentCannotRespond": "[ТЕСТ] Проверка: Агент НЕ может отвечать (на паузе)",
     "simulationAgentResumed": "[ТЕСТ] Агент возобновлён принудительно",
     "agentResumedNotification": "Агент возобновлён",
-    "agentResumedMessage": "Агент \"{{name}}\" возобновлён принудительно"
+    "agentResumedMessage": "Агент \"{{name}}\" возобновлён принудительно",
+    "newChat": "Новый чат",
+    "conversations": "История разговоров",
+    "today": "Сегодня",
+    "yesterday": "Вчера",
+    "thisWeek": "На этой неделе",
+    "earlier": "Ранее",
+    "deleteConversation": "Удалить разговор",
+    "renameConversation": "Переименовать",
+    "copyMessage": "Копировать",
+    "copied": "Скопировано!",
+    "confirmDelete": "Вы уверены, что хотите удалить этот разговор?",
+    "noConversations": "Нет сохранённых разговоров",
+    "startNewChat": "Начните новый разговор",
+    "sources": {
+      "knowledgeBase": "База знаний",
+      "trainingRole": "Роль обучения",
+      "trigger": "Триггер",
+      "pipeline": "Этап воронки",
+      "articlesUsed": "Использовано статей: {{count}}"
+    }
   },
   "billing": {
     "title": "Тарифные планы",

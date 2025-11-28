@@ -1,225 +1,294 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, User, Trash2 } from 'lucide-react';
+import { Bot, Menu, Send } from 'lucide-react';
 import { apiClient } from '../src/services/api/apiClient';
+import { conversationsService, Conversation, ConversationMessage, MessageSources } from '../src/services/api/conversations.service';
+import { ChatSidebar } from '../components/chat/ChatSidebar';
+import { ChatMessage } from '../components/chat/ChatMessage';
 import { Agent } from '../types';
 
 interface ChatProps {
   agents: Agent[];
 }
 
+interface LocalMessage {
+  id?: string;
+  role: 'user' | 'model';
+  content: string;
+  sources?: MessageSources;
+  isNew?: boolean;
+}
+
 export const Chat: React.FC<ChatProps> = ({ agents }) => {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<{role: 'user' | 'model', text: string}[]>([]);
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Автоматически выбираем первого активного агента при загрузке
+  const activeAgents = agents.filter(agent => agent.isActive);
+
+  // Load conversations when agent changes
+  useEffect(() => {
+    if (selectedAgent) {
+      loadConversations();
+    }
+  }, [selectedAgent?.id]);
+
+  // Auto-select first active agent
   useEffect(() => {
     if (activeAgents.length > 0 && !selectedAgent) {
       setSelectedAgent(activeAgents[0]);
     }
   }, [agents]);
 
-  // Set initial message depending on selected agent
+  // Scroll to bottom on new messages
   useEffect(() => {
-    if (selectedAgent) {
-      const welcomeMessage = selectedAgent.systemInstructions
-        ? t('chat.welcomeMessageWithInstructions', { name: selectedAgent.name, instructions: selectedAgent.systemInstructions.substring(0, 150) })
-        : t('chat.welcomeMessage', { name: selectedAgent.name });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-      setMessages([
-        { role: 'model', text: welcomeMessage }
-      ]);
-    } else {
-      setMessages([
-        { role: 'model', text: t('chat.noAvailableAgents') }
-      ]);
+  const loadConversations = async () => {
+    if (!selectedAgent) return;
+    try {
+      const convs = await conversationsService.getConversations(selectedAgent.id);
+      setConversations(convs);
+    } catch (error) {
+      console.error('Error loading conversations:', error);
     }
-  }, [selectedAgent, t]);
+  };
+
+  const handleNewConversation = async () => {
+    if (!selectedAgent) return;
+
+    try {
+      const conv = await conversationsService.createConversation(selectedAgent.id);
+      setConversations(prev => [conv, ...prev]);
+      setCurrentConversationId(conv.id);
+      setMessages([]);
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+    }
+  };
+
+  const handleSelectConversation = async (id: string) => {
+    try {
+      const { conversation } = await conversationsService.getConversation(id);
+      setCurrentConversationId(id);
+      setMessages(
+        conversation.messages.map((msg: ConversationMessage) => ({
+          id: msg.id,
+          role: msg.role as 'user' | 'model',
+          content: msg.content,
+          sources: msg.sources,
+        }))
+      );
+      setSidebarOpen(false);
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+    }
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    try {
+      await conversationsService.deleteConversation(id);
+      setConversations(prev => prev.filter(c => c.id !== id));
+      if (currentConversationId === id) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
+  const handleRenameConversation = async (id: string, newTitle: string) => {
+    try {
+      await conversationsService.updateConversation(id, newTitle);
+      setConversations(prev =>
+        prev.map(c => (c.id === id ? { ...c, title: newTitle } : c))
+      );
+    } catch (error) {
+      console.error('Error renaming conversation:', error);
+    }
+  };
 
   const handleSend = async () => {
-    if (!input.trim()) return;
-
-    // Check that agent is selected
-    if (!selectedAgent) {
-      alert(t('chat.pleaseSelectAgent'));
-      return;
-    }
+    if (!input.trim() || !selectedAgent) return;
 
     const userMsg = input;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+
+    // Create new conversation if none exists
+    let convId = currentConversationId;
+    if (!convId) {
+      try {
+        const conv = await conversationsService.createConversation(selectedAgent.id);
+        convId = conv.id;
+        setCurrentConversationId(conv.id);
+        setConversations(prev => [conv, ...prev]);
+      } catch (error) {
+        console.error('Error creating conversation:', error);
+        return;
+      }
+    }
+
+    // Add user message to UI
+    const userMessage: LocalMessage = { role: 'user', content: userMsg, isNew: true };
+    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
 
     try {
-      // Вызываем бэкенд API для обработки сообщения (включая триггеры)
+      // Save user message to DB
+      await conversationsService.addMessage(convId, 'user', userMsg);
+
+      // Get AI response
       const result = await apiClient.post('/chat/message', {
         agentId: selectedAgent.id,
         message: userMsg,
         history: messages.map(m => ({
           role: m.role,
-          text: m.text
-        }))
+          text: m.content,
+        })),
       });
 
       const responseText = result.data.response || t('chat.errorGettingResponse');
-      setMessages(prev => [...prev, { role: 'model', text: responseText }]);
+      const sources = result.data.sources;
 
-      // Log triggered actions
-      if (result.data.triggeredActions?.length > 0) {
-        console.log('🎯 Triggered actions:', result.data.triggeredActions);
-      }
+      // Add assistant message to UI
+      const assistantMessage: LocalMessage = {
+        role: 'model',
+        content: responseText,
+        sources,
+        isNew: true,
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // Save assistant message to DB
+      await conversationsService.addMessage(convId, 'model', responseText, sources);
+
+      // Update conversation in list
+      loadConversations();
     } catch (error: any) {
       console.error('Error sending message:', error);
-      setMessages(prev => [...prev, {
-        role: 'model',
-        text: `${t('chat.error')} ${error.response?.data?.message || error.message}`
-      }]);
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'model',
+          content: `${t('chat.error')} ${error.response?.data?.message || error.message}`,
+          isNew: true,
+        },
+      ]);
     }
 
     setIsLoading(false);
   };
 
-  const handleClearChat = () => {
-    if (selectedAgent) {
-      const welcomeMessage = selectedAgent.systemInstructions
-        ? t('chat.welcomeMessageWithInstructions', { name: selectedAgent.name, instructions: selectedAgent.systemInstructions.substring(0, 150) })
-        : t('chat.welcomeMessage', { name: selectedAgent.name });
-
-      setMessages([
-        { role: 'model', text: welcomeMessage }
-      ]);
-    } else {
-      setMessages([
-        { role: 'model', text: t('chat.selectAgentPrompt') }
-      ]);
-    }
+  const handleAgentChange = (agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    setSelectedAgent(agent || null);
+    setCurrentConversationId(null);
+    setMessages([]);
   };
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Фильтруем только активные агенты
-  const activeAgents = agents.filter(agent => agent.isActive);
-
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col">
-      <div className="mb-4">
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
-            <span>{t('chat.breadcrumbAgents')}</span>
-            <span>/</span>
-            <span>{t('chat.breadcrumbChat')}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('chat.title')}</h1>
-          <div className="flex items-center gap-3">
-            {selectedAgent && (
-              <button
-                onClick={handleClearChat}
-                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                <Trash2 size={16} />
-                {t('chat.clear')}
-              </button>
-            )}
+    <div className="h-[calc(100vh-140px)] flex">
+      {/* Sidebar */}
+      <ChatSidebar
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={handleSelectConversation}
+        onNewConversation={handleNewConversation}
+        onDeleteConversation={handleDeleteConversation}
+        onRenameConversation={handleRenameConversation}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <div className="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center gap-4">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="flex-1 flex items-center gap-4">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white hidden sm:block">
+              {t('chat.title')}
+            </h1>
+
+            <select
+              value={selectedAgent?.id || ''}
+              onChange={(e) => handleAgentChange(e.target.value)}
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none max-w-xs"
+            >
+              <option value="" disabled>
+                {t('chat.selectAgent')}
+              </option>
+              {activeAgents.map(agent => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.name} ({agent.model})
+                </option>
+              ))}
+            </select>
           </div>
-        </div>
-      </div>
 
-      <div className="flex-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm flex flex-col overflow-hidden transition-colors">
-
-        {/* Selected agent info */}
-        {selectedAgent && (
-          <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800 flex items-center gap-3">
-            <Bot size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
-            <div className="text-sm flex-1 min-w-0">
-              <span className="font-medium text-gray-900 dark:text-white">
-                {t('chat.testing')} {selectedAgent.name}
-              </span>
-              <span className="text-gray-500 dark:text-gray-400 ml-2">
-                • {t('chat.model')} {selectedAgent.model}
-              </span>
-              {!selectedAgent.isActive && (
-                <span className="ml-2 text-orange-600 dark:text-orange-400">
-                  ⚠️ {t('chat.agentNotActive')}
-                </span>
-              )}
+          {selectedAgent && (
+            <div className="hidden md:flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <Bot size={16} className="text-blue-600 dark:text-blue-400" />
+              <span>{t('chat.model')} {selectedAgent.model}</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Chat Area */}
+        {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50 dark:bg-gray-900/50">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
               <Bot size={48} className="mb-4 opacity-50" />
               <p className="text-lg font-medium">{t('chat.selectAgentPrompt')}</p>
-              <p className="text-sm mt-2">{t('chat.selectActiveAgent')}</p>
+              <p className="text-sm mt-2">{t('chat.startNewChat')}</p>
             </div>
           ) : (
             messages.map((msg, idx) => (
-              <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'model' && (
-                  <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white flex-shrink-0">
-                    <Bot size={18} />
-                  </div>
-                )}
-                <div className={`max-w-[70%] rounded-2xl px-5 py-3 text-sm leading-relaxed shadow-sm ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-bl-none'
-                }`}>
-                  {msg.text}
-                </div>
-                {msg.role === 'user' && (
-                   <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-300 flex-shrink-0">
-                    <User size={18} />
-                  </div>
-                )}
-              </div>
+              <ChatMessage
+                key={msg.id || idx}
+                role={msg.role}
+                content={msg.content}
+                sources={msg.sources}
+                isNew={msg.isNew}
+              />
             ))
           )}
+
           {isLoading && (
-             <div className="flex gap-4">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
-                  <Bot size={18} />
+            <div className="flex gap-4">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white">
+                <Bot size={18} />
+              </div>
+              <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl rounded-bl-none px-5 py-3">
+                <div className="flex space-x-2">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
-                <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl rounded-bl-none px-5 py-3">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                </div>
-             </div>
+              </div>
+            </div>
           )}
           <div ref={bottomRef} />
         </div>
 
         {/* Input Area */}
         <div className="p-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex gap-2 items-stretch">
-             {/* Agent Select - с реальными данными */}
-             <select
-               value={selectedAgent?.id || ''}
-               onChange={(e) => {
-                 const agent = agents.find(a => a.id === e.target.value);
-                 setSelectedAgent(agent || null);
-               }}
-               className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none w-64 flex-shrink-0"
-             >
-                <option value="" disabled>{t('chat.selectAgent')}</option>
-                {activeAgents.map(agent => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name} ({agent.model})
-                  </option>
-                ))}
-             </select>
-
+          <div className="flex gap-3 items-center max-w-4xl mx-auto">
             <input
               type="text"
               value={input}
@@ -232,19 +301,35 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
               }}
               placeholder={t('chat.typeMessage')}
               disabled={!selectedAgent}
-              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed transition-colors"
             />
 
             <button
               onClick={handleSend}
               disabled={isLoading || !input.trim() || !selectedAgent}
-              className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              className="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-xl font-medium transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>{t('chat.send')}</span>
+              <Send size={20} />
             </button>
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };
