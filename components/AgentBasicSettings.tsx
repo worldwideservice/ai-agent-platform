@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     User,
@@ -6,6 +6,7 @@ import {
     ChevronDown,
     ChevronUp,
     CheckCircle,
+    Check,
     XCircle,
     HelpCircle,
     Book,
@@ -90,6 +91,20 @@ export interface AgentBasicSettingsRef {
     commitDocumentChanges: (agentId: string) => Promise<void>;
     getPendingDocumentCount: () => { uploads: number; deletes: number };
 }
+
+// Toggle component - memoized to prevent unnecessary re-renders
+const Toggle = memo(({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
+    <button
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+        style={{ transition: 'background-color 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+    >
+        <span
+            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-md ring-0 ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+            style={{ transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+        />
+    </button>
+));
 
 export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSettingsProps>(({ agent, onCancel, crmConnected, kbCategories, kbArticles = [], onNavigateToKbArticles, onSyncCRM }, ref) => {
     const { t } = useTranslation();
@@ -574,15 +589,6 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
         setExpandedStages(prev => ({ ...prev, [stageKey]: !prev[stageKey] }));
     };
 
-    const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
-        <button
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-        >
-            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${checked ? 'translate-x-4 scale-110' : 'translate-x-0 scale-100'}`} />
-        </button>
-    );
-
     const MultiSelect = ({
         options,
         selectedIds,
@@ -651,7 +657,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
     };
 
     return (
-        <div className="space-y-6 mt-6">
+        <div className="space-y-6">
 
             {/* Profile Section */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
@@ -1088,7 +1094,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                     >
                     <div>
                         <div className="flex items-center gap-2 mb-3">
-                            <Share2 size={16} className="text-blue-500" />
+                            <Share2 size={16} className="text-gray-400" />
                             <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.basicSettings.documentsTitle')}</span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
@@ -1169,12 +1175,12 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                         >
                                             {/* Selection checkbox when allowAllDocuments is off */}
                                             {!allowAllDocuments && !isPendingDelete && (
-                                                <div className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                                <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
                                                     doc.isEnabled
-                                                        ? 'bg-blue-500 border-blue-500'
+                                                        ? 'bg-[#0078D4] border-[#0078D4]'
                                                         : 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600'
                                                 }`}>
-                                                    {doc.isEnabled && <CheckCircle size={12} className="text-white" />}
+                                                    {doc.isEnabled && <Check size={12} className="text-white" strokeWidth={3} />}
                                                 </div>
                                             )}
 
@@ -1285,7 +1291,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         )}
 
                         {agentDocuments.filter(d => d.isEnabled).length > 0 && (
-                            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                                 {t('agentEditor.basicSettings.availableToSend', { count: allowAllDocuments ? agentDocuments.length : agentDocuments.filter(d => d.isEnabled).length })}
                             </p>
                         )}

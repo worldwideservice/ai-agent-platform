@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { CheckCircle, X } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 
 export interface Toast {
     id: string;
-    type: 'success' | 'error' | 'info';
+    type: 'success' | 'error' | 'info' | 'warning';
     message: string;
 }
 
@@ -25,13 +25,32 @@ export const ToastNotification: React.FC<ToastProps> = ({ toast, onClose }) => {
         switch (toast.type) {
             case 'success':
                 return <CheckCircle size={24} className="text-green-600 dark:text-green-400" />;
+            case 'error':
+                return <XCircle size={24} className="text-red-600 dark:text-red-400" />;
+            case 'warning':
+                return <AlertCircle size={24} className="text-amber-600 dark:text-amber-400" />;
+            case 'info':
             default:
-                return <CheckCircle size={24} className="text-blue-600 dark:text-blue-400" />;
+                return <AlertCircle size={24} className="text-blue-600 dark:text-blue-400" />;
+        }
+    };
+
+    const getBorderColor = () => {
+        switch (toast.type) {
+            case 'success':
+                return 'border-l-green-500';
+            case 'error':
+                return 'border-l-red-500';
+            case 'warning':
+                return 'border-l-amber-500';
+            case 'info':
+            default:
+                return 'border-l-blue-500';
         }
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 flex items-center gap-3 min-w-[300px] max-w-md animate-fadeIn">
+        <div className={`bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 border-l-4 ${getBorderColor()} rounded-lg shadow-lg p-4 flex items-center gap-3 min-w-[300px] max-w-md animate-fadeIn`}>
             {getIcon()}
             <span className="flex-1 text-gray-900 dark:text-white text-sm font-medium">
                 {toast.message}

@@ -1,10 +1,13 @@
 import apiClient from './apiClient';
 
 export interface DashboardStats {
-  activeAgents: number;
-  totalMessages: number;
-  newLeads: number;
-  responseRate: string;
+  responsesThisMonth: number;
+  responsesLast7Days: number;
+  responsesToday: number;
+  totalAgents: number;
+  changePercent: string;
+  trend: 'up' | 'down';
+  miniChartData: number[];
 }
 
 export interface ChartData {
@@ -17,6 +20,8 @@ export interface DashboardAnalytics {
   charts: {
     messagesData: ChartData[];
     conversionsData: ChartData[];
+    monthlyData: ChartData[];
+    hourlyData: ChartData[];
   };
 }
 

@@ -109,10 +109,28 @@ model KbArticle {
   updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   userId            String            @map("user_id")
   articleCategories ArticleCategory[]
+  files             KbArticleFile[]
 
   @@index([isActive], map: "idx_kb_articles_is_active")
   @@index([userId], map: "idx_kb_articles_user_id")
   @@map("kb_articles")
+}
+
+model KbArticleFile {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  articleId    Int       @map("article_id")
+  fileName     String    @map("file_name")
+  fileType     String    @map("file_type")
+  mimeType     String    @map("mime_type")
+  fileSize     Int       @map("file_size")
+  storageKey   String    @map("storage_key")
+  thumbnailKey String?   @map("thumbnail_key")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  article      KbArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([articleId], map: "idx_kb_article_files_article_id")
+  @@map("kb_article_files")
 }
 
 model ArticleCategory {

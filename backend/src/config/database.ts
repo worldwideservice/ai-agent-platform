@@ -1,4 +1,4 @@
-import { Pool, QueryResult } from 'pg';
+import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 
 // PostgreSQL Connection Pool
@@ -31,10 +31,10 @@ function toCamelCase(obj: any): any {
   return converted;
 }
 
-// Helper to convert camelCase to snake_case
-function toSnakeCase(str: string): string {
-  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-}
+// Helper to convert camelCase to snake_case (reserved for future use)
+// function toSnakeCase(str: string): string {
+//   return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+// }
 
 // Agent model operations
 export const agent = {
@@ -176,6 +176,20 @@ export const agent = {
     return { id: where.id };
   },
 
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM agents WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
+
   async findUnique({ where }: any) {
     return this.findFirst({ where });
   },
@@ -304,6 +318,12 @@ export const user = {
     const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
     const result = await pool.query(query, params);
 
+    return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+
+  async delete({ where }: any) {
+    const query = 'DELETE FROM users WHERE id = $1 RETURNING *';
+    const result = await pool.query(query, [where.id]);
     return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
 };
@@ -487,6 +507,20 @@ export const kbCategory = {
     const result = await pool.query(query, [where.id]);
     return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM kb_categories WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
 };
 
 export const kbArticle = {
@@ -584,6 +618,20 @@ export const kbArticle = {
     return articles;
   },
   async create() { return null; },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM kb_articles WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
 
   async count({ where }: any = {}) {
     let query = 'SELECT COUNT(*)::int as count FROM kb_articles WHERE 1=1';
@@ -901,6 +949,20 @@ export const userSettings = {
     } else {
       return this.create({ data: create });
     }
+  },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM user_settings WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
   },
 };
 
@@ -1648,7 +1710,7 @@ export const leadConversation = {
 
 // LeadMessage model operations
 export const leadMessage = {
-  async findMany({ where, orderBy, take, select }: any) {
+  async findMany({ where, orderBy, take, select: _select }: any) {
     let query = 'SELECT * FROM lead_messages WHERE 1=1';
     const params: any[] = [];
     let paramIndex = 1;
@@ -1987,6 +2049,20 @@ export const trainingSource = {
     const result = await pool.query(query, [where.id]);
     return result.rows[0] ? toCamelCase(result.rows[0]) : null;
   },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM training_sources WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
+  },
 };
 
 // TrainingRole model operations
@@ -2106,6 +2182,20 @@ export const trainingRole = {
     const query = 'DELETE FROM training_roles WHERE id = $1 RETURNING *';
     const result = await pool.query(query, [where.id]);
     return result.rows[0] ? toCamelCase(result.rows[0]) : null;
+  },
+
+  async deleteMany({ where }: any) {
+    let query = 'DELETE FROM training_roles WHERE 1=1';
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (where?.userId) {
+      query += ` AND user_id = $${paramIndex++}`;
+      params.push(where.userId);
+    }
+
+    const result = await pool.query(query, params);
+    return { count: result.rowCount || 0 };
   },
 };
 

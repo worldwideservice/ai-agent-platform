@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle, memo } from 'react';
 import {
   User, RefreshCw, MessageSquare, Book, Settings, Share2, Zap, Link as LinkIcon, MoreHorizontal,
   ChevronDown, ChevronUp, X, Clock, Puzzle, FilePenLine, Users, Eye, Briefcase, PenSquare,
   GripVertical, Trash2, Plus, Search, LayoutGrid, Edit, ArrowUp, ArrowDown, CheckCircle,
-  XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus
+  XCircle, Settings2, Cpu, Languages, SlidersHorizontal, Sparkles, Check, Calendar, List, Minus,
+  Database, GitBranch, FileText, Phone, ChevronRight
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES, MOCK_CRM_FIELDS, CRM_ACTIONS, MOCK_USERS, MOCK_SALESBOTS } from '../services/crmData';
 import { AgentDealsContacts, AgentDealsContactsRef } from '../components/AgentDealsContacts';
 import { AgentBasicSettings } from '../components/AgentBasicSettings';
-import { Agent } from '../types';
+import { AgentAdvancedSettings, AgentAdvancedSettingsRef } from '../components/AgentAdvancedSettings';
+import { Agent, Page } from '../types';
 import { AgentBasicSettingsRef } from '../components/AgentBasicSettings';
 import { integrationsService, triggersService, chainsService, googleService, agentService, notificationsService } from '../src/services/api';
 import { useToast } from '../src/contexts/ToastContext';
@@ -25,7 +27,7 @@ interface AgentEditorProps {
   onCancel: () => void;
   onSave: (agent: Agent) => Promise<void>;
   kbCategories: { id: string; name: string }[];
-  onNavigate: (page: string) => void;
+  onNavigate: (page: Page) => void;
 }
 
 type Tab = 'main' | 'deals' | 'triggers' | 'chains' | 'integrations' | 'advanced';
@@ -137,6 +139,20 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// Toggle component - memoized to prevent unnecessary re-renders
+const Toggle = memo(({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
+  <button
+    onClick={() => onChange(!checked)}
+    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+    style={{ transition: 'background-color 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+  >
+    <span
+      className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-md ring-0 ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+      style={{ transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+    />
+  </button>
+));
+
 export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSave, kbCategories, onNavigate }) => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -145,6 +161,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   });
   const basicSettingsRef = useRef<AgentBasicSettingsRef>(null);
   const dealsContactsRef = useRef<AgentDealsContactsRef>(null);
+  const advancedSettingsRef = useRef<AgentAdvancedSettingsRef>(null);
   const { showToast } = useToast();
 
   // --- Loading and Error States ---
@@ -154,6 +171,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // --- Modal States ---
   const [isTriggerModalOpen, setIsTriggerModalOpen] = useState(false);
   const [isChainModalOpen, setIsChainModalOpen] = useState(false);
+  const [isSavingChain, setIsSavingChain] = useState(false);
+  const [isSavingTrigger, setIsSavingTrigger] = useState(false);
 
   // --- Integrations State ---
   const [integrationView, setIntegrationView] = useState<IntegrationView>('list');
@@ -164,6 +183,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
   const [googleCalendarConnected, setGoogleCalendarConnected] = useState(false);
   const [kommoSyncStats, setKommoSyncStats] = useState<KommoSyncStats | null>(null);
+  const [syncDataExpanded, setSyncDataExpanded] = useState(true);
 
   // Google Calendar Employees State
   const [calendarEmployees, setCalendarEmployees] = useState<GoogleCalendarEmployee[]>([]);
@@ -172,30 +192,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
 
-  // --- Advanced Tab State ---
-  const [advancedModel, setAdvancedModel] = useState(agent?.model || 'openai/gpt-4o');
-  const [availableModels, setAvailableModels] = useState<Array<{ id: string; name: string; description?: string }>>([]);
-  const [modelsLoading, setModelsLoading] = useState(false);
-  const [autoLanguage, setAutoLanguage] = useState(false);
-  const [responseLanguage, setResponseLanguage] = useState('');
-  const [scheduleEnabled, setScheduleEnabled] = useState(false);
-  const [agentSchedule, setAgentSchedule] = useState<WorkingDay[]>(DEFAULT_WORKING_HOURS);
-  const [responseDelay, setResponseDelay] = useState(45);
-  const [advancedSettingsLoaded, setAdvancedSettingsLoaded] = useState(false);
-
-  // --- Memory & Context State ---
-  const [memoryEnabled, setMemoryEnabled] = useState(true);
-  const [graphEnabled, setGraphEnabled] = useState(true);
-  const [contextWindow, setContextWindow] = useState(20);
-  const [semanticSearchEnabled, setSemanticSearchEnabled] = useState(true);
-
-  // --- Internal AI Models State ---
-  const [factExtractionModel, setFactExtractionModel] = useState('openai/gpt-4o-mini');
-  const [triggerEvaluationModel, setTriggerEvaluationModel] = useState('openai/gpt-4o-mini');
-  const [chainMessageModel, setChainMessageModel] = useState('openai/gpt-4o-mini');
-  const [emailGenerationModel, setEmailGenerationModel] = useState('openai/gpt-4o-mini');
-  const [instructionParsingModel, setInstructionParsingModel] = useState('openai/gpt-4o-mini');
-  const [kbAnalysisModel, setKbAnalysisModel] = useState('anthropic/claude-3.5-sonnet');
+  // --- Confirmation Modals State ---
+  const [showKommoDisconnectModal, setShowKommoDisconnectModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<GoogleCalendarEmployee | null>(null);
 
   // --- Triggers Data ---
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -229,50 +228,6 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // Всегда используем статический список действий - динамические данные (pipelines, users, salesbots) берутся из crmData
   const availableActions = CRM_ACTIONS;
 
-  // Загружаем список моделей с сервера
-  useEffect(() => {
-    const fetchModels = async () => {
-      setModelsLoading(true);
-      try {
-        const response = await apiClient.get('/models');
-        if (response.data.success && response.data.models) {
-          const models = response.data.models;
-          setAvailableModels(models);
-
-          // Если у агента есть модель, проверяем что она существует в списке
-          if (agent?.model) {
-            const modelExists = models.some((m: { id: string }) => m.id === agent.model);
-            if (modelExists) {
-              setAdvancedModel(agent.model);
-            } else {
-              // Если модель не найдена, используем первую из списка
-              console.warn(`Model "${agent.model}" not found in available models, using default`);
-              setAdvancedModel(models[0]?.id || 'openai/gpt-4o');
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch models:', error);
-        // Если не удалось загрузить модели, используем модели по умолчанию
-        const defaultModels = [
-          { id: 'openai/gpt-4o', name: 'OpenAI GPT-4o' },
-          { id: 'openai/gpt-4-turbo', name: 'OpenAI GPT-4 Turbo' },
-          { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-        ];
-        setAvailableModels(defaultModels);
-
-        if (agent?.model) {
-          const modelExists = defaultModels.some(m => m.id === agent.model);
-          setAdvancedModel(modelExists ? agent.model : 'openai/gpt-4o');
-        }
-      } finally {
-        setModelsLoading(false);
-      }
-    };
-
-    fetchModels();
-  }, [agent]);
-
   // Загружаем статьи KB для выбора в инструкциях этапов
   useEffect(() => {
     const fetchKbArticles = async () => {
@@ -297,6 +252,13 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   React.useEffect(() => {
     localStorage.setItem('agentEditorActiveTab', activeTab);
   }, [activeTab]);
+
+  // Синхронизируем name с agent.name при изменении агента
+  useEffect(() => {
+    if (agent?.name) {
+      setName(agent.name);
+    }
+  }, [agent?.name]);
 
   // Загружаем интеграции при монтировании компонента
   useEffect(() => {
@@ -478,84 +440,6 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     fetchChains();
   }, [agent?.id]);
 
-  // Загружаем расширенные настройки агента при монтировании
-  useEffect(() => {
-    const fetchAdvancedSettings = async () => {
-      if (!agent?.id) return;
-
-      try {
-        setAdvancedSettingsLoaded(false);
-        const settings = await agentService.getAdvancedSettings(agent.id);
-        // Устанавливаем все значения из загруженных настроек
-        if (settings.model) setAdvancedModel(settings.model);
-        setAutoLanguage(settings.autoDetectLanguage ?? false);
-        setResponseLanguage(settings.responseLanguage ?? '');
-        setScheduleEnabled(settings.scheduleEnabled ?? false);
-        if (settings.scheduleData && Array.isArray(settings.scheduleData)) {
-          setAgentSchedule(settings.scheduleData);
-        }
-        setResponseDelay(settings.responseDelaySeconds ?? 45);
-        // Memory & Context Settings
-        setMemoryEnabled(settings.memoryEnabled ?? true);
-        setGraphEnabled(settings.graphEnabled ?? true);
-        setContextWindow(settings.contextWindow ?? 20);
-        setSemanticSearchEnabled(settings.semanticSearchEnabled ?? true);
-        // Internal AI Models Settings
-        setFactExtractionModel(settings.factExtractionModel ?? 'openai/gpt-4o-mini');
-        setTriggerEvaluationModel(settings.triggerEvaluationModel ?? 'openai/gpt-4o-mini');
-        setChainMessageModel(settings.chainMessageModel ?? 'openai/gpt-4o-mini');
-        setEmailGenerationModel(settings.emailGenerationModel ?? 'openai/gpt-4o-mini');
-        setInstructionParsingModel(settings.instructionParsingModel ?? 'openai/gpt-4o-mini');
-        setKbAnalysisModel(settings.kbAnalysisModel ?? 'anthropic/claude-3.5-sonnet');
-        console.log('✅ Advanced settings loaded:', settings);
-        // Устанавливаем флаг после небольшой задержки, чтобы пропустить первый save
-        setTimeout(() => setAdvancedSettingsLoaded(true), 600);
-      } catch (error) {
-        console.error('Failed to fetch advanced settings:', error);
-        // В случае ошибки разрешаем сохранение
-        setAdvancedSettingsLoaded(true);
-      }
-    };
-
-    fetchAdvancedSettings();
-  }, [agent?.id]);
-
-  // Сохраняем расширенные настройки агента при изменении
-  useEffect(() => {
-    // Не сохраняем пока не загружены настройки
-    if (!agent?.id || !advancedSettingsLoaded) return;
-
-    const timeoutId = setTimeout(async () => {
-      try {
-        await agentService.updateAdvancedSettings(agent.id, {
-          model: advancedModel,
-          autoDetectLanguage: autoLanguage,
-          responseLanguage: responseLanguage,
-          scheduleEnabled: scheduleEnabled,
-          scheduleData: agentSchedule,
-          responseDelaySeconds: responseDelay,
-          // Memory & Context Settings
-          memoryEnabled: memoryEnabled,
-          graphEnabled: graphEnabled,
-          contextWindow: contextWindow,
-          semanticSearchEnabled: semanticSearchEnabled,
-          // Internal AI Models Settings
-          factExtractionModel: factExtractionModel,
-          triggerEvaluationModel: triggerEvaluationModel,
-          chainMessageModel: chainMessageModel,
-          emailGenerationModel: emailGenerationModel,
-          instructionParsingModel: instructionParsingModel,
-          kbAnalysisModel: kbAnalysisModel,
-        });
-        console.log('✅ Advanced settings saved');
-      } catch (error) {
-        console.error('Failed to save advanced settings:', error);
-      }
-    }, 500); // debounce 500ms
-
-    return () => clearTimeout(timeoutId);
-  }, [agent?.id, advancedSettingsLoaded, advancedModel, autoLanguage, responseLanguage, scheduleEnabled, agentSchedule, responseDelay, memoryEnabled, graphEnabled, contextWindow, semanticSearchEnabled, factExtractionModel, triggerEvaluationModel, chainMessageModel, emailGenerationModel, instructionParsingModel, kbAnalysisModel]);
-
   // Функция для обновления списка интеграций
   const refreshIntegrations = async () => {
     if (!agent?.id) return;
@@ -582,6 +466,47 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     }
   };
 
+  // --- Kommo Disconnect Handler ---
+  const handleKommoDisconnect = async () => {
+    if (!agent) return;
+
+    try {
+      setKommoConnected(false);
+      setKommoActive(false);
+      setKommoSyncStats(null);
+      await integrationsService.upsertIntegration(agent.id, 'kommo', false, false);
+      await refreshIntegrations();
+    } catch (error) {
+      console.error('Failed to disconnect Kommo:', error);
+    } finally {
+      setShowKommoDisconnectModal(false);
+    }
+  };
+
+  // --- Delete Calendar Employee Handler ---
+  const handleDeleteEmployee = async () => {
+    if (!employeeToDelete || !agent) return;
+
+    try {
+      await googleCalendarService.deleteEmployee(employeeToDelete.id);
+      const newEmployees = calendarEmployees.filter(e => e.id !== employeeToDelete.id);
+      setCalendarEmployees(newEmployees);
+
+      // Если удалён последний connected сотрудник - автовыключаем интеграцию
+      const hasConnected = newEmployees.some(e => e.status === 'connected');
+      if (!hasConnected && googleCalendarActive) {
+        setGoogleCalendarActive(false);
+        setGoogleCalendarConnected(false);
+        integrationsService.upsertIntegration(agent.id, 'google_calendar', false, false)
+          .catch(err => console.error('Failed to disable Google Calendar:', err));
+      }
+    } catch (error) {
+      console.error('Failed to delete employee:', error);
+    } finally {
+      setEmployeeToDelete(null);
+    }
+  };
+
   // --- Save Handler ---
   const handleSave = async () => {
     console.log('=== handleSave called ===');
@@ -603,6 +528,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       // Get data from deals & contacts settings
       const dealsContactsData = dealsContactsRef.current?.getData() || {};
       console.log('Deals/Contacts data:', dealsContactsData);
+
+      // Get data from advanced settings
+      const advancedData = advancedSettingsRef.current?.getData() || {};
+      console.log('Advanced data:', advancedData);
 
       // Parse existing crmData and merge with new deals/contacts settings (handles double-encoded JSON)
       let crmData = {};
@@ -632,7 +561,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       const updatedAgent: Agent = {
         ...agent,
         ...basicData,
-        model: advancedModel,  // Сохраняем выбранную модель
+        model: advancedData?.model || agent.model,  // Сохраняем выбранную модель
         crmData: updatedCrmData  // Отправляем объект, не строку!
       };
 
@@ -640,6 +569,16 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       console.log('Calling onSave...');
       await onSave(updatedAgent);
       console.log('onSave completed successfully');
+
+      // Сохраняем расширенные настройки отдельно
+      if (advancedData?.advancedSettings) {
+        try {
+          await agentService.updateAdvancedSettings(agent.id, advancedData.advancedSettings);
+          console.log('Advanced settings saved successfully');
+        } catch (advancedError) {
+          console.error('Failed to save advanced settings:', advancedError);
+        }
+      }
 
       // Показываем toast об успешном сохранении с названием агента
       showToast('success', t('agentEditor.notifications.settingsSavedFor', { name: updatedAgent.name }));
@@ -784,6 +723,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   // --- Chains Data ---
   const [chains, setChains] = useState<Chain[]>([]);
   const [editingChainId, setEditingChainId] = useState<string | null>(null);
+  const [deleteChainId, setDeleteChainId] = useState<string | null>(null);
+  const [deleteTriggerIndex, setDeleteTriggerIndex] = useState<string | null>(null);
+  const [selectedTriggers, setSelectedTriggers] = useState<Set<string>>(new Set());
+  const [selectedChains, setSelectedChains] = useState<Set<string>>(new Set());
 
   // --- Chain Modal Form State ---
   const [chainName, setChainName] = useState('');
@@ -808,7 +751,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const [chainRunLimit, setChainRunLimit] = useState(0);
 
   // --- General State ---
-  const [name, setName] = useState('АИ ассистент');
+  const [name, setName] = useState(agent?.name || 'АИ ассистент');
   const [isActive, setIsActive] = useState(false);
   const [systemInstructions, setSystemInstructions] = useState(
     `ОТВЕЧАЙ ТОЛЬКО НА АНГЛИЙСКОМ ЯЗЫКЕ - ВСЕГДА !!`
@@ -903,29 +846,30 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     setChainSchedule(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
   };
 
-  const toggleAgentWorkingDay = (day: string) => {
-    setAgentSchedule(prev => prev.map(d => d.day === day ? { ...d, enabled: !d.enabled } : d));
-  };
-
   const toggleChainStatus = async (id: string) => {
     if (!agent?.id) return;
     const chain = chains.find(c => c.id === id);
+    if (!chain) return;
+
+    const wasActive = chain.isActive;
+
+    // Optimistic update - сначала UI, потом сервер
+    setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c));
+
     try {
       await chainsService.toggleChain(agent.id, id);
-      const wasActive = chain?.isActive;
-      setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: !c.isActive } : c));
       // Создаём уведомление
-      if (chain) {
-        const status = wasActive ? t('agentEditor.integrations.disabled') : t('agentEditor.integrations.enabled');
-        try {
-          await notificationsService.createNotification({
-            type: 'info',
-            title: t('agentEditor.notifications.chainStatusTitle'),
-            message: t('agentEditor.notifications.chainStatusMessage', { name: chain.name, status }),
-          });
-        } catch (e) { /* ignore */ }
-      }
+      const status = wasActive ? t('agentEditor.integrations.disabled') : t('agentEditor.integrations.enabled');
+      try {
+        await notificationsService.createNotification({
+          type: 'info',
+          title: t('agentEditor.notifications.chainStatusTitle'),
+          message: t('agentEditor.notifications.chainStatusMessage', { name: chain.name, status }),
+        });
+      } catch (e) { /* ignore */ }
     } catch (error) {
+      // Revert on error
+      setChains(prev => prev.map(c => c.id === id ? { ...c, isActive: wasActive } : c));
       console.error('Failed to toggle chain:', error);
       showToast('error', t('agentEditor.chains.toggleError'));
     }
@@ -963,7 +907,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   };
 
   const handleSaveChain = async () => {
-    if (!agent?.id) return;
+    if (!agent?.id || isSavingChain) return;
+    setIsSavingChain(true);
 
     // Маппинг frontend -> backend
     const backendData = {
@@ -1022,19 +967,22 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       }));
       setChains(formattedChains);
       setIsChainModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save chain:', error);
-      showToast('error', t('agentEditor.chains.saveError'));
+      const errorMessage = error.response?.data?.message || error.message || t('agentEditor.chains.saveError');
+      showToast('error', errorMessage);
+    } finally {
+      setIsSavingChain(false);
     }
   };
 
   const handleDeleteChain = async (id: string) => {
     if (!agent?.id) return;
-    if (!confirm(t('agentEditor.chains.confirmDelete'))) return;
 
     try {
       await chainsService.deleteChain(agent.id, id);
       setChains(prev => prev.filter(c => c.id !== id));
+      setDeleteChainId(null);
     } catch (error) {
       console.error('Failed to delete chain:', error);
       showToast('error', t('agentEditor.chains.deleteError'));
@@ -1129,19 +1077,18 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
   const handleDeleteTrigger = async (id: string) => {
     if (!agent?.id) return;
 
-    if (confirm(t('agentEditor.triggers.confirmDelete'))) {
-      try {
-        await triggersService.deleteTrigger(agent.id, id);
-        setTriggers(prev => prev.filter(t => t.id !== id));
-      } catch (error) {
-        console.error('Failed to delete trigger:', error);
-        showToast('error', t('agentEditor.triggers.deleteError'));
-      }
+    try {
+      await triggersService.deleteTrigger(agent.id, id);
+      setTriggers(prev => prev.filter(t => t.id !== id));
+      setDeleteTriggerIndex(null);
+    } catch (error) {
+      console.error('Failed to delete trigger:', error);
+      showToast('error', t('agentEditor.triggers.deleteError'));
     }
   };
 
   const handleSaveTrigger = async () => {
-    if (!agent?.id) return;
+    if (!agent?.id || isSavingTrigger) return;
 
     // Валидация обязательных полей
     if (!triggerName.trim()) {
@@ -1155,7 +1102,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     // Проверяем что есть хотя бы одно действие с выбранным типом
     const validActions = triggerActions.filter(a => a.action && a.action.trim() !== '');
     if (validActions.length === 0) {
-      alert(t('agentEditor.triggers.validation.actionRequired'));
+      showToast('error', t('agentEditor.triggers.validation.actionRequired'));
       return;
     }
 
@@ -1164,69 +1111,69 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       switch (action.action) {
         case 'change_stage':
           if (!action.params?.stageId) {
-            alert(t('agentEditor.triggers.validation.stageRequired'));
+            showToast('error', t('agentEditor.triggers.validation.stageRequired'));
             return;
           }
           break;
         case 'assign_user':
           if (!action.params?.userId) {
-            alert(t('agentEditor.triggers.validation.userRequired'));
+            showToast('error', t('agentEditor.triggers.validation.userRequired'));
             return;
           }
           break;
         case 'create_task':
           if (!action.params?.taskDescription?.trim()) {
-            alert(t('agentEditor.triggers.validation.taskRequired'));
+            showToast('error', t('agentEditor.triggers.validation.taskRequired'));
             return;
           }
           break;
         case 'run_salesbot':
           if (!action.params?.salesbotId) {
-            alert(t('agentEditor.triggers.validation.salesbotRequired'));
+            showToast('error', t('agentEditor.triggers.validation.salesbotRequired'));
             return;
           }
           break;
         case 'add_deal_tags':
         case 'add_contact_tags':
           if (!action.params?.tags || action.params.tags.length === 0) {
-            alert(t('agentEditor.triggers.validation.tagsRequired'));
+            showToast('error', t('agentEditor.triggers.validation.tagsRequired'));
             return;
           }
           break;
         case 'add_deal_note':
         case 'add_contact_note':
           if (!action.params?.noteText?.trim()) {
-            alert(t('agentEditor.triggers.validation.noteRequired'));
+            showToast('error', t('agentEditor.triggers.validation.noteRequired'));
             return;
           }
           break;
         case 'send_message':
           if (!action.params?.messageText?.trim()) {
-            alert(t('agentEditor.triggers.validation.messageRequired'));
+            showToast('error', t('agentEditor.triggers.validation.messageRequired'));
             return;
           }
           break;
         case 'send_email':
           if (!action.params?.emailInstructions?.trim()) {
-            alert(t('agentEditor.triggers.validation.emailRequired'));
+            showToast('error', t('agentEditor.triggers.validation.emailRequired'));
             return;
           }
           break;
         case 'send_files':
           if (!action.params?.fileUrls || action.params.fileUrls.length === 0) {
-            alert(t('agentEditor.triggers.validation.filesRequired'));
+            showToast('error', t('agentEditor.triggers.validation.filesRequired'));
             return;
           }
           break;
         case 'send_webhook':
           if (!action.params?.webhookUrl?.trim()) {
-            alert(t('agentEditor.triggers.validation.webhookRequired'));
+            showToast('error', t('agentEditor.triggers.validation.webhookRequired'));
             return;
           }
           break;
         case 'send_kb_article':
           if (!action.params?.articleId) {
-            alert(t('agentEditor.triggers.validation.articleRequired'));
+            showToast('error', t('agentEditor.triggers.validation.articleRequired'));
             return;
           }
           break;
@@ -1245,6 +1192,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       runLimit: triggerRunLimit || undefined,
     };
 
+    setIsSavingTrigger(true);
     try {
       if (editingTriggerId) {
         // Обновляем существующий триггер
@@ -1284,7 +1232,9 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
       setIsTriggerModalOpen(false);
     } catch (error) {
       console.error('Failed to save trigger:', error);
-      alert(t('agentEditor.triggers.saveError'));
+      showToast('error', t('agentEditor.triggers.saveError'));
+    } finally {
+      setIsSavingTrigger(false);
     }
   };
 
@@ -1304,15 +1254,6 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
     >
       <Icon size={16} />
       {label}
-    </button>
-  );
-
-  const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-    >
-      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${checked ? 'translate-x-4 scale-110' : 'translate-x-0 scale-100'}`} />
     </button>
   );
 
@@ -1408,371 +1349,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
 
         {/* Tab Content: Advanced */}
         {activeTab === 'advanced' && (
-          <div className="p-6 space-y-6">
-
-            {/* Model Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.aiModel.title')}</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.aiModel.selectModel')}<span className="text-red-500">*</span>
-                    {modelsLoading && <span className="ml-2 text-xs text-gray-500">({t('agentEditor.aiModel.loading')})</span>}
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={advancedModel}
-                      onChange={(e) => setAdvancedModel(e.target.value)}
-                      disabled={modelsLoading}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white appearance-none focus:ring-1 focus:ring-blue-500 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {availableModels.length === 0 ? (
-                        <option value="">{t('agentEditor.aiModel.loadingModels')}</option>
-                      ) : (
-                        availableModels.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.name}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.aiModel.description')}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Language Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Languages size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.language.title')}</h2>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="flex items-center gap-3">
-                  <Toggle checked={autoLanguage} onChange={setAutoLanguage} />
-                  <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.language.autoDetect')}</span>
-                </div>
-                {!autoLanguage && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{t('agentEditor.language.responseLanguage')}</label>
-                    <input
-                      type="text"
-                      value={responseLanguage}
-                      onChange={(e) => setResponseLanguage(e.target.value)}
-                      placeholder={t('agentEditor.language.placeholder')}
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.language.description')}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Schedule Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Clock size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.schedule.title')}</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.schedule.description')}</p>
-                <div className="flex items-center gap-3">
-                  <Toggle checked={scheduleEnabled} onChange={setScheduleEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.schedule.enable')}</span>
-                </div>
-                {scheduleEnabled && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.schedule.configureHours')}</p>
-                    {agentSchedule.map((day) => (
-                      <div key={day.day} className="flex items-center justify-between py-1">
-                        <div className="flex items-center gap-3 w-40">
-                          <Toggle checked={day.enabled} onChange={() => toggleAgentWorkingDay(day.day)} />
-                          <span className={`text-sm ${day.enabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>{day.day}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <input
-                            type="time"
-                            value={day.start}
-                            disabled={!day.enabled}
-                            onChange={(e) => {
-                              const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, start: e.target.value } : d);
-                              setAgentSchedule(newSchedule);
-                            }}
-                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <input
-                            type="time"
-                            value={day.end}
-                            disabled={!day.enabled}
-                            onChange={(e) => {
-                              const newSchedule = agentSchedule.map(d => d.day === day.day ? { ...d, end: e.target.value } : d);
-                              setAgentSchedule(newSchedule);
-                            }}
-                            className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Response Settings Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Clock size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.responseSettings.title')}</h2>
-              </div>
-              <div className="p-6 space-y-6">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{t('agentEditor.responseSettings.delayLabel')}</label>
-                  <input
-                    type="number"
-                    value={responseDelay}
-                    onChange={(e) => setResponseDelay(Number(e.target.value))}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{t('agentEditor.responseSettings.delayDescription')}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Memory & Context Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.memory.title')}</h2>
-              </div>
-              <div className="p-6 space-y-6">
-                {/* Memory Toggle */}
-                <div className="flex items-center gap-3">
-                  <Toggle checked={memoryEnabled} onChange={setMemoryEnabled} />
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.memory.longTermMemory')}</span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('agentEditor.memory.longTermMemoryDesc')}
-                </p>
-
-                {/* Graph Toggle */}
-                <div className="flex items-center gap-3">
-                  <Toggle checked={graphEnabled} onChange={setGraphEnabled} disabled={!memoryEnabled} />
-                  <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {t('agentEditor.memory.relationGraph')}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('agentEditor.memory.relationGraphDesc')}
-                </p>
-
-                {/* Context Window */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.memory.contextWindowSize')}
-                  </label>
-                  <input
-                    type="number"
-                    value={contextWindow}
-                    onChange={(e) => setContextWindow(Number(e.target.value))}
-                    min="5"
-                    max="50"
-                    disabled={!memoryEnabled}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    {t('agentEditor.memory.factsCount')}
-                  </p>
-                </div>
-
-                {/* Semantic Search Toggle */}
-                <div className="flex items-center gap-3">
-                  <Toggle checked={semanticSearchEnabled} onChange={setSemanticSearchEnabled} disabled={!memoryEnabled} />
-                  <span className={`text-sm font-medium ${memoryEnabled ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {t('agentEditor.memory.semanticSearch')}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('agentEditor.memory.semanticSearchDesc')}
-                </p>
-              </div>
-            </div>
-
-            {/* Internal AI Models Card */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">
-              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
-                <Cpu size={20} className="text-gray-400" />
-                <h2 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.internalModels.title')}</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  {t('agentEditor.internalModels.description')}
-                </p>
-
-                {/* Fact Extraction Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.factExtraction')}
-                  </label>
-                  <select
-                    value={factExtractionModel}
-                    onChange={(e) => setFactExtractionModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.factExtractionDesc')}
-                  </p>
-                </div>
-
-                {/* Trigger Evaluation Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.triggerEvaluation')}
-                  </label>
-                  <select
-                    value={triggerEvaluationModel}
-                    onChange={(e) => setTriggerEvaluationModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.triggerEvaluationDesc')}
-                  </p>
-                </div>
-
-                {/* Chain Message Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.chainAiMessage')}
-                  </label>
-                  <select
-                    value={chainMessageModel}
-                    onChange={(e) => setChainMessageModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.chainAiMessageDesc')}
-                  </p>
-                </div>
-
-                {/* Email Generation Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.emailGeneration')}
-                  </label>
-                  <select
-                    value={emailGenerationModel}
-                    onChange={(e) => setEmailGenerationModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.emailGenerationDesc')}
-                  </p>
-                </div>
-
-                {/* Instruction Parsing Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.instructionParsing')}
-                  </label>
-                  <select
-                    value={instructionParsingModel}
-                    onChange={(e) => setInstructionParsingModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.instructionParsingDesc')}
-                  </p>
-                </div>
-
-                {/* KB Analysis Model */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('agentEditor.internalModels.kbAnalysis')}
-                  </label>
-                  <select
-                    value={kbAnalysisModel}
-                    onChange={(e) => setKbAnalysisModel(e.target.value)}
-                    disabled={modelsLoading}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50"
-                  >
-                    {modelsLoading ? (
-                      <option>{t('agentEditor.aiModel.loadingModels')}</option>
-                    ) : (
-                      availableModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t('agentEditor.internalModels.kbAnalysisDesc')}
-                  </p>
-                </div>
-              </div>
-            </div>
+          <>
+            <AgentAdvancedSettings ref={advancedSettingsRef} agent={agent} />
 
             {/* Footer Actions (Advanced) */}
-            <div className="flex items-center gap-4 pt-4">
+            <div className="flex items-center gap-4 p-6 pt-0">
               <button
                 onClick={handleSave}
                 disabled={isSaving}
@@ -1790,10 +1371,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                 {t('common.cancel')}
               </button>
             </div>
-
-          </div>
+          </>
         )}
 
+        {/* Old Advanced tab content removed - now in AgentAdvancedSettings component */}
         {/* ... (Previous Tab Contents: Integrations, Chains, etc.) ... */}
         {activeTab === 'integrations' && (
           <div className="p-6 space-y-6">
@@ -1930,7 +1511,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <button
                         onClick={async () => {
                           if (!agent) {
-                            alert(t('agentEditor.integrations.errorAgentNotLoaded'));
+                            showToast('error', t('agentEditor.integrations.errorAgentNotLoaded'));
                             return;
                           }
 
@@ -1938,7 +1519,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                           const token = tokenInput?.value.trim();
 
                           if (!token) {
-                            alert(t('agentEditor.integrations.pasteTokenError'));
+                            showToast('error', t('agentEditor.integrations.pasteTokenError'));
                             return;
                           }
 
@@ -1965,10 +1546,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                             await refreshIntegrations();
 
                             tokenInput.value = '';
-                            alert(t('agentEditor.integrations.kommoConnected'));
+                            showToast('success', t('agentEditor.integrations.kommoConnected'));
                           } catch (error: any) {
                             console.error('Failed to connect with token:', error);
-                            alert(`${t('agentEditor.integrations.error')} ${error.response?.data?.message || error.message}`);
+                            showToast('error', `${t('agentEditor.integrations.error')} ${error.response?.data?.message || error.message}`);
                           } finally {
                             setIsSaving(false);
                           }
@@ -1991,112 +1572,197 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     </div>
                   </div>
                 ) : (
-                  /* Секция "Подключено" - статус и статистика */
-                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                          <CheckCircle size={20} className="text-green-600 dark:text-green-400" />
+                  /* Секция "Подключено" - минималистичный стиль */
+                  <div className="space-y-4">
+                    {/* Status Card */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-11 h-11 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center">
+                            <CheckCircle size={22} className="text-green-500" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-white">{t('agentEditor.integrations.kommoConnectedTitle')}</h3>
+                            <p className="text-sm text-green-600 dark:text-green-400">{t('agentEditor.integrations.integrationActive')}</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-base font-medium text-gray-900 dark:text-white">{t('agentEditor.integrations.kommoConnectedTitle')}</h3>
-                          <p className="text-sm text-green-600 dark:text-green-400">{t('agentEditor.integrations.integrationActive')}</p>
-                        </div>
+                        <button
+                          onClick={() => setShowKommoDisconnectModal(true)}
+                          className="text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                        >
+                          {t('agentEditor.integrations.disconnect')}
+                        </button>
                       </div>
+                    </div>
+
+                    {/* Synced Data Accordion */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
                       <button
-                        onClick={async () => {
-                          if (!agent) return;
-                          if (!confirm(t('agentEditor.integrations.disconnectKommo'))) return;
-
-                          try {
-                            setKommoConnected(false);
-                            setKommoActive(false);
-                            setKommoSyncStats(null);
-                            await integrationsService.upsertIntegration(agent.id, 'kommo', false, false);
-                            await refreshIntegrations();
-                          } catch (error) {
-                            console.error('Failed to disconnect Kommo:', error);
-                          }
-                        }}
-                        className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-medium"
+                        onClick={() => setSyncDataExpanded(!syncDataExpanded)}
+                        className="w-full flex items-center justify-between p-5 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                       >
-                        {t('agentEditor.integrations.disconnect')}
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center">
+                            <Database size={20} className="text-gray-500 dark:text-gray-400" />
+                          </div>
+                          <div className="text-left">
+                            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{t('agentEditor.integrations.syncedData')}</h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                              {(kommoSyncStats?.pipelines || 0) + (kommoSyncStats?.stages || 0) + (kommoSyncStats?.users || 0) + (kommoSyncStats?.dealFields || 0) + (kommoSyncStats?.contactFields || 0) + (kommoSyncStats?.channels || 0)} {t('agentEditor.integrations.totalItems')}
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronDown
+                          size={20}
+                          className={`text-gray-400 transition-transform duration-200 ${syncDataExpanded ? 'rotate-180' : ''}`}
+                        />
                       </button>
-                    </div>
 
-                    {/* Synced data */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6">
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('agentEditor.integrations.syncedData')}</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.salesPipelines')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.pipelines || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.pipelineStages')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.stages || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.crmUsers')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.users || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.dealFields')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.dealFields || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.contactFields')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.contactFields || 0}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-600 dark:text-gray-400">{t('agentEditor.integrations.communicationChannels')}</span>
-                          <span className="font-medium text-gray-900 dark:text-white">{kommoSyncStats?.channels || 0}</span>
+                      <div className={`transition-all duration-200 ease-in-out ${syncDataExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                        <div className="px-5 pb-5">
+                          {/* Stats List */}
+                          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl divide-y divide-gray-200 dark:divide-gray-600 overflow-hidden">
+                            {/* Pipelines */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <Briefcase size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.salesPipelines')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.pipelines || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+
+                            {/* Stages */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <GitBranch size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.pipelineStages')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.stages || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+
+                            {/* Users */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <Users size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.crmUsers')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.users || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+
+                            {/* Deal Fields */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <FileText size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.dealFields')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.dealFields || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+
+                            {/* Contact Fields */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <User size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.contactFields')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.contactFields || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+
+                            {/* Channels */}
+                            <button className="w-full flex items-center justify-between p-4 hover:bg-gray-100 dark:hover:bg-gray-600/50 transition-colors group">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 bg-white dark:bg-gray-600 rounded-lg flex items-center justify-center">
+                                  <Phone size={18} className="text-gray-500 dark:text-gray-400" />
+                                </div>
+                                <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.integrations.communicationChannels')}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">{kommoSyncStats?.channels || 0}</span>
+                                <ChevronRight size={16} className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors" />
+                              </div>
+                            </button>
+                          </div>
+
+                          {/* Last Sync Info */}
+                          {kommoSyncStats?.lastSync && (
+                            <div className="mt-4 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                              <Clock size={14} />
+                              <span>{t('agentEditor.integrations.lastSync')} {new Date(kommoSyncStats.lastSync).toLocaleString()}</span>
+                            </div>
+                          )}
+
+                          {/* Sync Button */}
+                          <button
+                            onClick={async () => {
+                              if (!agent) return;
+                              setIsSaving(true);
+                              try {
+                                await integrationsService.syncKommo(agent.id, '');
+                                const stats = await integrationsService.getKommoSyncStats(agent.id);
+                                setKommoSyncStats(stats);
+                                showToast('success', t('agentEditor.integrations.syncCompleted'));
+                              } catch (error: any) {
+                                console.error('Failed to sync:', error);
+                                showToast('error', `${t('agentEditor.integrations.syncErrorMessage')} ${error.message}`);
+                              } finally {
+                                setIsSaving(false);
+                              }
+                            }}
+                            disabled={isSaving}
+                            className="mt-4 inline-flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] disabled:bg-[#0078D4]/50 text-white rounded-lg px-5 py-2.5 transition-colors font-medium text-sm"
+                          >
+                            <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
+                            {isSaving ? t('agentEditor.integrations.syncing') : t('agentEditor.integrations.sync')}
+                          </button>
                         </div>
                       </div>
-                      {kommoSyncStats?.lastSync && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
-                          {t('agentEditor.integrations.lastSync')} {new Date(kommoSyncStats.lastSync).toLocaleString()}
-                        </div>
-                      )}
                     </div>
 
-                    <button
-                      onClick={async () => {
-                        if (!agent) return;
-                        setIsSaving(true);
-                        try {
-                          await integrationsService.syncKommo(agent.id, '');
-                          const stats = await integrationsService.getKommoSyncStats(agent.id);
-                          setKommoSyncStats(stats);
-                          alert(`${t('agentEditor.integrations.syncCompleted')}\n${new Date().toLocaleString()}`);
-                        } catch (error: any) {
-                          console.error('Failed to sync:', error);
-                          alert(`${t('agentEditor.integrations.syncErrorMessage')} ${error.message}`);
-                        } finally {
-                          setIsSaving(false);
-                        }
-                      }}
-                      disabled={isSaving}
-                      className="inline-flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] disabled:bg-[#0078D4]/50 text-white rounded-md px-6 py-2.5 transition-colors font-medium text-sm shadow-sm"
-                    >
-                      <RefreshCw size={16} className={isSaving ? 'animate-spin' : ''} />
-                      {isSaving ? t('agentEditor.integrations.syncing') : t('agentEditor.integrations.sync')}
-                    </button>
+                    {/* General Settings Card */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-xl flex items-center justify-center">
+                          <Settings2 size={20} className="text-gray-500 dark:text-gray-400" />
+                        </div>
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t('agentEditor.integrations.generalSettings')}</h3>
+                      </div>
+
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.integrations.integrationActiveToggle')}</span>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('agentEditor.integrations.integrationActiveDesc')}</p>
+                          </div>
+                          <Toggle checked={kommoActive} onChange={handleKommoActiveChange} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
-
-                {/* General settings */}
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
-                  <h3 className="text-base font-medium text-gray-900 dark:text-white mb-4">{t('agentEditor.integrations.generalSettings')}</h3>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-sm text-gray-900 dark:text-white">{t('agentEditor.integrations.integrationActiveToggle')}</span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('agentEditor.integrations.integrationActiveDesc')}</p>
-                    </div>
-                    <Toggle checked={kommoActive} onChange={handleKommoActiveChange} />
-                  </div>
-                </div>
 
                 <div className="flex items-center gap-4 pt-2">
                   <button
@@ -2186,26 +1852,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               </button>
                             )}
                             <button
-                              onClick={async () => {
-                                if (confirm(t('agentEditor.integrations.deleteEmployee'))) {
-                                  try {
-                                    await googleCalendarService.deleteEmployee(employee.id);
-                                    const newEmployees = calendarEmployees.filter(e => e.id !== employee.id);
-                                    setCalendarEmployees(newEmployees);
-
-                                    // Если удалён последний connected сотрудник - автовыключаем интеграцию
-                                    const hasConnected = newEmployees.some(e => e.status === 'connected');
-                                    if (!hasConnected && googleCalendarActive) {
-                                      setGoogleCalendarActive(false);
-                                      setGoogleCalendarConnected(false);
-                                      integrationsService.upsertIntegration(agent!.id, 'google_calendar', false, false)
-                                        .catch(err => console.error('Failed to disable Google Calendar:', err));
-                                    }
-                                  } catch (error) {
-                                    console.error('Failed to delete employee:', error);
-                                  }
-                                }
-                              }}
+                              onClick={() => setEmployeeToDelete(employee)}
                               className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 p-1"
                             >
                               <Trash2 size={16} />
@@ -2242,7 +1889,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(inviteUrl);
-                          alert(t('agentEditor.integrations.linkCopied'));
+                          showToast('success', t('agentEditor.integrations.linkCopied'));
                         }}
                         className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
                       >
@@ -2338,7 +1985,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                 const employees = await googleCalendarService.getEmployees(agent.id);
                                 setCalendarEmployees(employees);
                               } catch (error: any) {
-                                alert(error.response?.data?.message || t('agentEditor.integrations.inviteCreationError'));
+                                showToast('error', error.response?.data?.message || t('agentEditor.integrations.inviteCreationError'));
                               } finally {
                                 setIsCreatingInvite(false);
                               }
@@ -2363,7 +2010,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                               <button
                                 onClick={() => {
                                   navigator.clipboard.writeText(inviteUrl);
-                                  alert(t('agentEditor.integrations.linkCopied'));
+                                  showToast('success', t('agentEditor.integrations.linkCopied'));
                                 }}
                                 className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs font-medium"
                               >
@@ -2467,35 +2114,32 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.emptyHint')}</p>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-750">
-                    <tr>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th>
-                      <th className="p-4 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.triggers.condition')}</th>
-                      <th className="p-4 text-right"></th>
-                    </tr>
-                  </thead>
+                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" checked={triggers.length > 0 && selectedTriggers.size === triggers.length} onChange={(e) => { if (e.target.checked) { setSelectedTriggers(new Set(triggers.map(t => t.id))); } else { setSelectedTriggers(new Set()); } }} className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.chains.actions')}</th><th className="px-4 py-3 text-right"></th></tr></thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {triggers.map(trigger => (
-                      <tr key={trigger.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                        <td className="p-4 text-sm text-gray-900 dark:text-white font-medium">
-                          <button onClick={() => handleEditTrigger(trigger)} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">
-                            {trigger.name}
-                          </button>
-                        </td>
-                        <td className="p-4"><Toggle checked={trigger.isActive} onChange={() => toggleTriggerStatus(trigger.id)} /></td>
-                        <td className="p-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs" title={trigger.condition}>{trigger.condition}</td>
-                        <td className="p-4 text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-4">
-                            <button onClick={() => handleEditTrigger(trigger)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> {t('common.edit')}</button>
-                            <button onClick={() => handleDeleteTrigger(trigger.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> {t('common.delete')}</button>
+                      <tr key={trigger.id} onClick={() => handleEditTrigger(trigger)} className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer ${selectedTriggers.has(trigger.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                        <td className="p-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedTriggers.has(trigger.id)} onChange={(e) => { const newSelected = new Set(selectedTriggers); if (e.target.checked) { newSelected.add(trigger.id); } else { newSelected.delete(trigger.id); } setSelectedTriggers(newSelected); }} className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></td>
+                        <td className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{trigger.name}</td>
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}><Toggle checked={trigger.isActive} onChange={() => toggleTriggerStatus(trigger.id)} /></td>
+                        <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{trigger.actions?.length || 0}</td>
+                        <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
+                            <button onClick={() => handleEditTrigger(trigger)} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title={t('common.edit')}>
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => setDeleteTriggerIndex(trigger.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors" title={t('common.delete')}>
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              )}
+              {/* Pagination */}
+              {triggers.length > 0 && (
+                <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between sm:px-6"><div className="text-sm text-gray-700 dark:text-gray-300">{t('agentEditor.chains.showingFromTo', { count: triggers.length, total: triggers.length })}</div></div>
               )}
             </div>
             {/* Trigger Modal */}
@@ -3175,7 +2819,8 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                     </div>
                   </div>
                   <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
-                    <button onClick={handleSaveTrigger} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    <button onClick={handleSaveTrigger} disabled={isSavingTrigger} className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
+                      {isSavingTrigger && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                       {editingTriggerId ? t('common.save') : t('common.create')}
                     </button>
                     <button onClick={() => {
@@ -3188,10 +2833,10 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       setTriggerRunLimit(0);
                       setNewTagInput({});
                       setSelectedFiles({});
-                    }} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    }} disabled={isSavingTrigger} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       {t('agentEditor.triggers.createAndAnother')}
                     </button>
-                    <button onClick={() => setIsTriggerModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    <button onClick={() => setIsTriggerModalOpen(false)} disabled={isSavingTrigger} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       {t('common.cancel')}
                     </button>
                   </div>
@@ -3224,18 +2869,22 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   <p className="text-sm text-gray-500 dark:text-gray-400">{t('agentEditor.chains.emptyHint')}</p>
                 </div>
               ) : (
-                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.chains.steps')}</th><th className="px-4 py-3 text-right"></th></tr></thead>
+                <table className="w-full"><thead className="bg-gray-50 dark:bg-gray-750"><tr><th className="w-12 p-4"><input type="checkbox" checked={chains.length > 0 && selectedChains.size === chains.length} onChange={(e) => { if (e.target.checked) { setSelectedChains(new Set(chains.map(c => c.id))); } else { setSelectedChains(new Set()); } }} className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.name')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('common.active')}</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white">{t('agentEditor.chains.steps')}</th><th className="px-4 py-3 text-right"></th></tr></thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {chains.map(chain => (
-                      <tr key={chain.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                        <td className="p-4"><input type="checkbox" className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></td>
-                        <td className="px-4 py-4 text-sm font-medium"><button onClick={() => handleEditChain(chain)} className="text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left">{chain.name}</button></td>
-                        <td className="px-4 py-4"><Toggle checked={chain.isActive} onChange={() => toggleChainStatus(chain.id)} /></td>
+                      <tr key={chain.id} onClick={() => handleEditChain(chain)} className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors cursor-pointer ${selectedChains.has(chain.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                        <td className="p-4" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedChains.has(chain.id)} onChange={(e) => { const newSelected = new Set(selectedChains); if (e.target.checked) { newSelected.add(chain.id); } else { newSelected.delete(chain.id); } setSelectedChains(newSelected); }} className="appearance-none w-4 h-4 rounded border border-gray-300 bg-white checked:bg-[#0078D4] checked:border-[#0078D4] checked:bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%20fill%3D%22white%22%3E%3Cpath%20d%3D%22M12.207%204.793a1%201%200%20010%201.414l-5%205a1%201%200%2001-1.414%200l-2-2a1%201%200%20011.414-1.414L6.5%209.086l4.293-4.293a1%201%200%20011.414%200z%22%2F%3E%3C%2Fsvg%3E')] checked:bg-center checked:bg-no-repeat transition-all cursor-pointer dark:border-gray-600 dark:bg-gray-700 dark:checked:bg-[#0078D4]" /></td>
+                        <td className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-white">{chain.name}</td>
+                        <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}><Toggle checked={chain.isActive} onChange={() => toggleChainStatus(chain.id)} /></td>
                         <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">{chain.steps.length}</td>
-                        <td className="px-4 py-4 text-right text-sm font-medium">
-                          <div className="flex items-center justify-end gap-4">
-                            <button onClick={() => handleEditChain(chain)} className="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center gap-1"><Edit size={16} /> {t('common.edit')}</button>
-                            <button onClick={() => handleDeleteChain(chain.id)} className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 flex items-center gap-1"><Trash2 size={16} /> {t('common.delete')}</button>
+                        <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-end gap-3 text-gray-500 dark:text-gray-400">
+                            <button onClick={() => handleEditChain(chain)} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors" title={t('common.edit')}>
+                              <Edit size={16} />
+                            </button>
+                            <button onClick={() => setDeleteChainId(chain.id)} className="hover:text-red-600 dark:hover:text-red-400 transition-colors" title={t('common.delete')}>
+                              <Trash2 size={16} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -3286,9 +2935,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
-                            <Settings size={18} />
-                          </div>
+                          <Settings size={18} className="text-gray-400 dark:text-gray-500" />
                           <div className="text-left">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.conditions')}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.conditionsHint')}</div>
@@ -3350,9 +2997,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
-                            <List size={18} />
-                          </div>
+                          <List size={18} className="text-gray-400 dark:text-gray-500" />
                           <div className="text-left">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.steps')}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.stepsHint')}</div>
@@ -3768,9 +3413,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
-                            <Clock size={18} />
-                          </div>
+                          <Clock size={18} className="text-gray-400 dark:text-gray-500" />
                           <div className="text-left">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.workingHoursTitle')}</div>
                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('agentEditor.chainForm.workingHoursHint')}</div>
@@ -3822,9 +3465,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         className="w-full flex items-center justify-between p-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400">
-                            <Settings2 size={18} />
-                          </div>
+                          <Settings2 size={18} className="text-gray-400 dark:text-gray-500" />
                           <div className="text-left">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{t('agentEditor.chainForm.additionalSettings')}</div>
                           </div>
@@ -3855,10 +3496,11 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                   </div>
 
                   <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-b-xl flex-shrink-0">
-                    <button onClick={handleSaveChain} className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    <button onClick={handleSaveChain} disabled={isSavingChain} className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
+                      {isSavingChain && <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
                       {editingChainId ? t('common.save') : t('common.create')}
                     </button>
-                    <button onClick={() => setIsChainModalOpen(false)} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">
+                    <button onClick={() => setIsChainModalOpen(false)} disabled={isSavingChain} className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                       {t('common.cancel')}
                     </button>
                   </div>
@@ -3869,6 +3511,42 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
         )}
       </div>
       {/* End Tabs Container */}
+
+      {/* Delete Chain Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!deleteChainId}
+        title={t('agentEditor.chains.deleteTitle')}
+        message={t('agentEditor.chains.confirmDelete')}
+        onConfirm={() => deleteChainId && handleDeleteChain(deleteChainId)}
+        onCancel={() => setDeleteChainId(null)}
+      />
+
+      {/* Delete Trigger Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!deleteTriggerIndex}
+        title={t('agentEditor.triggers.deleteTitle')}
+        message={t('agentEditor.triggers.confirmDelete')}
+        onConfirm={() => deleteTriggerIndex && handleDeleteTrigger(deleteTriggerIndex)}
+        onCancel={() => setDeleteTriggerIndex(null)}
+      />
+
+      {/* Kommo Disconnect Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showKommoDisconnectModal}
+        title={t('agentEditor.integrations.disconnectKommoTitle', 'Отключить Kommo')}
+        message={t('agentEditor.integrations.disconnectKommoMessage', 'Вы уверены, что хотите отключить интеграцию с Kommo?')}
+        onConfirm={handleKommoDisconnect}
+        onCancel={() => setShowKommoDisconnectModal(false)}
+      />
+
+      {/* Delete Employee Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={!!employeeToDelete}
+        title={t('agentEditor.integrations.deleteEmployeeTitle', 'Удалить сотрудника')}
+        message={t('agentEditor.integrations.deleteEmployeeMessage', `Вы уверены, что хотите удалить сотрудника ${employeeToDelete?.crmUserName}?`)}
+        onConfirm={handleDeleteEmployee}
+        onCancel={() => setEmployeeToDelete(null)}
+      />
     </div>
   );
 };

@@ -21,9 +21,11 @@
     "name": "Название",
     "createdAt": "Дата создания",
     "perPage": "на страницу",
+    "total": "Всего",
     "showingFromTo": "Показано с {{from}} по {{to}} из {{total}}",
     "justNow": "Только что",
-    "user": "Пользователь"
+    "user": "Пользователь",
+    "list": "Список"
   },
   "sidebar": {
     "dashboard": "Инфопанель",
@@ -106,7 +108,7 @@
     "model": "Модель",
     "allModels": "Все модели",
     "loadingAgents": "Загрузка агентов...",
-    "noAgentsFound": "Не найдено Агенты ИИ",
+    "noAgentsFound": "Агенты ИИ не найдены",
     "noAgentsForQuery": "Не найдено агентов по запросу",
     "tryDifferentQuery": "Попробуйте изменить поисковый запрос",
     "isActive": "Активно"
@@ -279,10 +281,10 @@
     "unlimitedAgents": "Неограниченное количество агентов",
     "kbArticles": "{{count}} статей базы знаний",
     "unlimitedKbArticles": "Неограниченное количество статей базы знаний",
-    "responsesPerMonth": "{{count}} Ответов / месяц",
+    "responsesPerMonth": "{{value}} Ответов / месяц",
     "responsesTotal": "{{count}} Ответов всего",
     "daysOfUse": "{{count}} дней использования",
-    "instructionsLimit": "Начальные инструкции агента: До {{count}} символов",
+    "instructionsLimit": "Начальные инструкции агента: До {{value}} символов",
     "accessToModel": "Доступ к {{model}}",
     "sendMedia": "Отправка изображений, аудио, видео и документов",
     "incomingVoice": "Входящие голосовые сообщения",
@@ -317,7 +319,11 @@
     "renewSubscription": "Продлить подписку",
     "subscriptionEndsAt": "Подписка действует до {{date}}",
     "periodInfo": "Период подписки: 30 дней",
-    "gracePeriodInfo": "После окончания подписки даётся ещё 3 дня (10%) льготного периода для оплаты"
+    "gracePeriodInfo": "После окончания подписки даётся ещё 3 дня (10%) льготного периода для оплаты",
+    "unlimited": "Безлимит",
+    "responses": "ответов",
+    "contactUs": "Связаться с нами",
+    "customPlanDescription": "Индивидуальные условия"
   },
   "knowledgeBase": {
     "categories": "Категории",
@@ -351,6 +357,7 @@
     "title": "Заголовок",
     "subcategories": "Подкатегории",
     "noSubcategories": "Нет подкатегорий",
+    "searchCategories": "Поиск категорий...",
     "articlesInCategory": "Статьи в «{{name}}»",
     "noArticlesFound": "Статьи не найдены",
     "articlesWillAppearHere": "Статьи, добавленные в эту категорию, появятся здесь.",
@@ -521,6 +528,8 @@
     "agentCreatedMessage": "Агент \"{{name}}\" успешно создан",
     "articleCreated": "Статья создана",
     "articleCreatedMessage": "Статья \"{{name}}\" успешно создана",
+    "articleCreateFailed": "Не удалось создать статью",
+    "filesUploadFailed": "Не удалось загрузить файлы",
     "agentToggled": "Агент {{status}}",
     "agentToggledMessage": "Агент \"{{name}}\" теперь {{status}}",
     "enabled": "включен",
@@ -721,6 +730,7 @@
       "dealFields": "Поля сделок",
       "contactFields": "Поля контактов",
       "communicationChannels": "Каналы связи",
+      "totalItems": "объектов синхронизировано",
       "lastSync": "Последняя синхронизация:",
       "syncCompleted": "Синхронизация завершена",
       "syncErrorMessage": "Ошибка синхронизации:",
@@ -786,6 +796,7 @@
       "addAction": "Добавить действие",
       "selectAction": "Выберите действие",
       "confirmDelete": "Вы уверены, что хотите удалить этот триггер?",
+      "deleteTitle": "Удалить триггер",
       "deleteError": "Не удалось удалить триггер",
       "saveError": "Не удалось сохранить триггер",
       "statusChanged": "Статус триггера изменён",
@@ -873,6 +884,7 @@
     "chains": {
       "title": "Цепочки",
       "subtitle": "Автоматизируйте отправку последующих сообщений и выполнение действий по расписанию.",
+      "deleteTitle": "Удалить цепочку",
       "confirmDelete": "Вы уверены, что хотите удалить эту цепочку?",
       "deleteError": "Ошибка удаления цепочки",
       "saveError": "Ошибка сохранения цепочки",

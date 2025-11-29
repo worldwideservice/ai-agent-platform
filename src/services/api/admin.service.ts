@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-export interface DashboardStats {
+export interface AdminDashboardStats {
   users: {
     total: number;
     active: number;
@@ -127,7 +127,7 @@ export interface SystemInfo {
 }
 
 // Dashboard
-export async function getDashboardStats(): Promise<DashboardStats> {
+export async function getDashboardStats(): Promise<AdminDashboardStats> {
   const response = await apiClient.get('/admin/dashboard');
   return response.data;
 }

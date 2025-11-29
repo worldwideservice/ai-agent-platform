@@ -6,7 +6,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
-import { hashPassword, comparePasswords } from '../utils/auth';
+import { comparePasswords } from '../utils/auth';
 import path from 'path';
 import fs from 'fs';
 
@@ -373,6 +373,6 @@ export const TIMEZONES = [
  * GET /api/profile/timezones
  * Получить список доступных часовых поясов
  */
-export async function getTimezones(req: AuthRequest, res: Response): Promise<void> {
+export async function getTimezones(_req: AuthRequest, res: Response): Promise<void> {
   res.json({ timezones: TIMEZONES });
 }

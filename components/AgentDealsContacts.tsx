@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Eye,
@@ -36,6 +36,20 @@ interface AgentDealsContactsProps {
 export interface AgentDealsContactsRef {
     getData: () => any;
 }
+
+// Toggle component - memoized to prevent unnecessary re-renders
+const Toggle = memo(({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
+    <button
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+        style={{ transition: 'background-color 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+    >
+        <span
+            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-md ring-0 ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+            style={{ transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+        />
+    </button>
+));
 
 export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsContactsProps>(({ agent, onCancel, onSave, crmConnected, onSyncCRM }, ref) => {
     const { t } = useTranslation();
@@ -175,15 +189,6 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     };
 
     // --- Components ---
-    const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (val: boolean) => void }) => (
-        <button
-            onClick={() => onChange(!checked)}
-            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-        >
-            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${checked ? 'translate-x-4 scale-110' : 'translate-x-0 scale-100'}`} />
-        </button>
-    );
-
     const SectionHeader = ({ icon: Icon, title, isOpen, onToggle }: { icon: any, title: string, isOpen: boolean, onToggle: (v: boolean) => void }) => (
         <div
             className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
@@ -281,7 +286,7 @@ export const AgentDealsContacts = forwardRef<AgentDealsContactsRef, AgentDealsCo
     };
 
     return (
-        <div className="space-y-6 mt-6">
+        <div className="space-y-6">
 
             {/* Data Access Settings */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors">

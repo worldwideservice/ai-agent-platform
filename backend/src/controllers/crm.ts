@@ -1,13 +1,11 @@
 import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { prisma } from '../config/database';
-import { Pool } from 'pg';
+// Pool is now managed in database.ts
+// import { Pool } from 'pg';
 import { fetchPipelines } from '../services/kommo.service';
 
-// PostgreSQL pool for Kommo service
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+// Note: Database connections are managed centrally in config/database.ts
 
 // Mock data - в будущем заменим на реальные данные из Kommo API
 const MOCK_PIPELINES = [
@@ -112,7 +110,7 @@ export async function syncCRM(req: AuthRequest, res: Response) {
     // Если Kommo интеграция подключена, получаем реальные воронки
     if (kommoIntegration) {
       try {
-        const pipelinesResponse = await fetchPipelines(pool, kommoIntegration.id);
+        const pipelinesResponse = await fetchPipelines(kommoIntegration.id);
 
         // Трансформируем Kommo воронки в наш формат
         pipelines = pipelinesResponse._embedded.pipelines.map((kp) => ({

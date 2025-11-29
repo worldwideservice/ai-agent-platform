@@ -1,7 +1,8 @@
 import { Response } from 'express';
 import { AuthRequest, CreateAgentDto, UpdateAgentDto } from '../types';
 import { prisma } from '../config/database';
-import { systemNotifications } from '../services/system-notifications.service';
+// Note: systemNotifications was replaced by frontend i18n notifications
+// import { systemNotifications } from '../services/system-notifications.service';
 import { canCreateAgent, checkInstructionsLimit } from '../services/plan-limits.service';
 
 // Helper функция для парсинга JSON полей агента
@@ -253,7 +254,7 @@ export async function deleteAgent(req: AuthRequest, res: Response) {
       return;
     }
 
-    const agentName = existingAgent.name;
+    // Agent name was: existingAgent.name (used for notification, now handled on frontend)
 
     await prisma.agent.delete({
       where: { id },

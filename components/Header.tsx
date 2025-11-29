@@ -395,17 +395,17 @@ export const Header: React.FC = () => {
   };
 
   // Получить переведённый заголовок уведомления
-  const getNotificationTitle = (notif: Notification) => {
+  const getNotificationTitle = (notif: Notification): string => {
     const key = notif.titleKey || (looksLikeTranslationKey(notif.title) ? notif.title : null);
     if (key) {
       try {
         const params = notif.params ? JSON.parse(notif.params) : {};
         const processedParams = processNotificationParams(params);
-        const translated = t(key, processedParams);
+        const translated = t(key, processedParams) as string;
         // Если перевод найден (не равен ключу), возвращаем его
         if (translated !== key) return translated;
       } catch {
-        const translated = t(key);
+        const translated = t(key) as string;
         if (translated !== key) return translated;
       }
     }
@@ -413,17 +413,17 @@ export const Header: React.FC = () => {
   };
 
   // Получить переведённое сообщение уведомления
-  const getNotificationMessage = (notif: Notification) => {
+  const getNotificationMessage = (notif: Notification): string => {
     const key = notif.messageKey || (looksLikeTranslationKey(notif.message) ? notif.message : null);
     if (key) {
       try {
         const params = notif.params ? JSON.parse(notif.params) : {};
         const processedParams = processNotificationParams(params);
-        const translated = t(key, processedParams);
+        const translated = t(key, processedParams) as string;
         // Если перевод найден (не равен ключу), возвращаем его
         if (translated !== key) return translated;
       } catch {
-        const translated = t(key);
+        const translated = t(key) as string;
         if (translated !== key) return translated;
       }
     }

@@ -329,7 +329,7 @@ export async function syncCRMData(req: AuthRequest, res: Response) {
 
     console.log('📊 Fetching CRM data from Kommo...');
 
-    const [pipelinesData, leadsFieldsData, contactsFieldsData, taskTypes, usersData, salesbotsData] =
+    const [pipelinesData, leadsFieldsData, contactsFieldsData, taskTypesData, usersData, salesbotsData] =
       await Promise.all([
         fetchPipelines(integrationId),
         fetchLeadsCustomFields(integrationId),
@@ -342,6 +342,7 @@ export async function syncCRMData(req: AuthRequest, res: Response) {
     const pipelines = pipelinesData._embedded.pipelines;
     const leadsFields = leadsFieldsData._embedded.custom_fields;
     const contactsFields = contactsFieldsData._embedded.custom_fields;
+    const taskTypes = taskTypesData._embedded.task_types;
     const users = usersData._embedded.users;
     const salesbots = salesbotsData._embedded.bots || [];
 

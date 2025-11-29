@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Folder, Edit, Trash2, Filter, LayoutGrid, ChevronDown, Copy, ArrowLeft, X, Search, Plus } from 'lucide-react';
+import { Folder, Edit, Trash2, Filter, LayoutGrid, Copy, ArrowLeft, X, Search, Plus, Check, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 interface KbCategoriesProps {
   onCreate: () => void;
   categories: { id: string; name: string; parentId: string | null }[];
-  articles?: { id: number; title: string; categories: string[]; isActive: boolean }[];
+  articles?: { id: number; title: string; categories: string[]; isActive: boolean; createdAt: string }[];
   currentCategoryId?: string | null;
   onEditCategory?: (id: string) => void;
   onDeleteCategory?: (id: string) => void;
@@ -13,6 +13,7 @@ interface KbCategoriesProps {
   onOpenCategory?: (id: string | null) => void;
   onCreateArticle?: () => void;
   onEditArticle?: (id: number) => void;
+  onToggleArticleStatus?: (id: number) => void;
 }
 
 export const KbCategories: React.FC<KbCategoriesProps> = ({
@@ -25,21 +26,31 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
   onCopyCategory,
   onOpenCategory,
   onCreateArticle,
-  onEditArticle
+  onEditArticle,
+  onToggleArticleStatus
 }) => {
   const { t } = useTranslation();
 
-  // Helper function to translate category names
-  const getCategoryName = (name: string): string => {
+  // Helper function to translate category names or look up by ID
+  const getCategoryName = (nameOrId: string): string => {
+    // First, try to find a category by ID
+    const category = categories.find(c => c.id === nameOrId);
+    const name = category ? category.name : nameOrId;
+
+    // Then translate the name
     const translatedName = t(`knowledgeBase.defaultCategories.${name}`, { defaultValue: '' });
     return translatedName || name;
   };
 
-  // Фильтруем категории по текущему parentId
-  const displayedCategories = categories.filter(cat => cat.parentId === currentCategoryId);
-
   const [selectedCategories, setSelectedCategories] = React.useState<string[]>([]);
   const [searchQuery, setSearchQuery] = React.useState('');
+
+  // Фильтруем категории по текущему parentId и поисковому запросу
+  const displayedCategories = categories.filter(cat => {
+    const matchesParent = cat.parentId === currentCategoryId;
+    const matchesSearch = !searchQuery || getCategoryName(cat.name).toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesParent && matchesSearch;
+  });
   const [showColumnsPanel, setShowColumnsPanel] = React.useState(false);
   const [showFilterPanel, setShowFilterPanel] = React.useState(false);
   const [visibleColumns, setVisibleColumns] = React.useState({
@@ -101,34 +112,40 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
     return categories.filter(cat => cat.parentId === categoryId).length;
   };
 
-  // Функция подсчета статей в категории
-  const getArticlesCount = (categoryName: string): number => {
-    return articles.filter(article => article.categories.includes(categoryName)).length;
+  // Функция подсчета статей в категории (по ID категории)
+  const getArticlesCount = (categoryId: string): number => {
+    return articles.filter(article => article.categories.includes(categoryId)).length;
   };
 
   // Построить путь breadcrumbs
   const buildBreadcrumbs = (): { id: string | null; name: string }[] => {
-    if (!currentCategoryId) return [{ id: null, name: t('knowledgeBase.categories') }];
+    const basePath: { id: string | null; name: string }[] = [
+      { id: null, name: t('knowledgeBase.categories') },
+      { id: null, name: t('common.list') }
+    ];
 
-    const path: { id: string | null; name: string }[] = [{ id: null, name: t('knowledgeBase.categories') }];
+    if (!currentCategoryId) return basePath;
+
+    const path = [...basePath];
     let currentId: string | null = currentCategoryId;
+    const categoryPath: { id: string; name: string }[] = [];
 
     while (currentId) {
       const category = categories.find(c => c.id === currentId);
       if (!category) break;
-      path.push({ id: category.id, name: getCategoryName(category.name) });
+      categoryPath.push({ id: category.id, name: getCategoryName(category.name) });
       currentId = category.parentId;
     }
 
-    return path.reverse();
+    return [...path, ...categoryPath.reverse()];
   };
 
   const breadcrumbs = buildBreadcrumbs();
   const currentCategory = currentCategoryId ? categories.find(c => c.id === currentCategoryId) : null;
 
-  // Фильтруем статьи для текущей категории
+  // Фильтруем статьи для текущей категории (по ID)
   const categoryArticles = currentCategory
-    ? articles.filter(article => article.categories.includes(currentCategory.name))
+    ? articles.filter(article => article.categories.includes(currentCategory.id))
     : [];
 
   const filteredArticles = categoryArticles.filter(article =>
@@ -143,7 +160,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
           <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
             {breadcrumbs.map((crumb, index) => (
               <React.Fragment key={crumb.id || 'root'}>
-                {index > 0 && <span>›</span>}
+                {index > 0 && <span>/</span>}
                 <button
                   onClick={() => {
                     if (typeof onOpenCategory === 'function') {
@@ -187,51 +204,115 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
       </div>
 
       {/* Subcategories Section */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors relative">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm transition-colors relative">
         {/* Filters / Toolbar */}
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+          {/* Search */}
+          <div className="relative w-64">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('knowledgeBase.searchCategories')}
+              className="w-full border border-gray-200 dark:border-gray-600 rounded-lg pl-10 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] outline-none transition-all"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
           <button
             ref={filterButtonRef}
-            onClick={() => setShowFilterPanel(!showFilterPanel)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative"
+            onClick={() => {
+              setShowFilterPanel(!showFilterPanel);
+              setShowColumnsPanel(false);
+            }}
+            className={`relative flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+              showFilterPanel
+                ? 'bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/30'
+                : filters.parentCategory !== 'all'
+                  ? 'bg-[#0078D4]/5 text-[#0078D4] border border-[#0078D4]/20 hover:bg-[#0078D4]/10'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+            }`}
             title={t('common.filters')}
           >
             <Filter size={16} />
             {filters.parentCategory !== 'all' && (
-              <span className="absolute -top-1 -right-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1 rounded-full">1</span>
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-[16px] bg-[#0078D4] text-white text-[9px] font-bold rounded-full">
+                1
+              </span>
             )}
           </button>
           <button
             ref={columnsButtonRef}
-            onClick={() => setShowColumnsPanel(!showColumnsPanel)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors"
+            onClick={() => {
+              setShowColumnsPanel(!showColumnsPanel);
+              setShowFilterPanel(false);
+            }}
+            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+              showColumnsPanel
+                ? 'bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/30'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+            }`}
             title={t('common.columns')}
           >
             <LayoutGrid size={16} />
           </button>
         </div>
 
-        {/* Filter Panel - Боковая панель фильтров */}
-        {showFilterPanel && (
-          <div ref={filterPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-gray-900 dark:text-white">{t('common.filters')}</h3>
-              <button
-                onClick={() => setFilters({ parentCategory: 'all' })}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                {t('common.reset')}
-              </button>
+        {/* Filter Panel - Modern sliding panel */}
+        <div
+          ref={filterPanelRef}
+          className={`absolute top-12 right-4 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 transition-all duration-200 ease-out ${
+            showFilterPanel ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
+          }`}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-600 rounded-t-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter size={16} className="text-[#0078D4]" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">{t('common.filters')}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {filters.parentCategory !== 'all' && (
+                  <button
+                    onClick={() => {
+                      setFilters({ parentCategory: 'all' });
+                    }}
+                    className="text-xs text-[#0078D4] hover:text-[#006cbd] font-medium px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                  >
+                    {t('common.reset')}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowFilterPanel(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
             <div className="space-y-4">
+              {/* Parent Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   {t('knowledgeBase.parentCategory')}
                 </label>
                 <select
                   value={filters.parentCategory}
                   onChange={(e) => setFilters(prev => ({ ...prev, parentCategory: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] outline-none cursor-pointer transition-all"
                 >
                   <option value="all">{t('common.all')}</option>
                   {categories.filter(cat => cat.parentId === null).map(cat => (
@@ -240,50 +321,106 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                 </select>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Columns Panel - Боковая панель столбцов */}
-        {showColumnsPanel && (
-          <div ref={columnsPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
-            <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('common.columns')}</h3>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.title}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.title')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.subcategories}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, subcategories: !prev.subcategories }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.subcategories')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.articles}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, articles: !prev.articles }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.articles')}</span>
-              </label>
+            {/* Active filters indicator */}
+            {filters.parentCategory !== 'all' && (
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="inline-flex items-center px-2 py-1 rounded-full bg-[#0078D4]/10 text-[#0078D4] text-xs font-medium">
+                    <Check size={12} className="mr-1" />
+                    1 {t('common.filters').toLowerCase()}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Columns Panel - Modern sliding panel with toggle switches */}
+        <div
+          ref={columnsPanelRef}
+          className={`absolute top-12 right-4 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 transition-all duration-200 ease-out ${
+            showColumnsPanel ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
+          }`}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-600 rounded-t-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LayoutGrid size={16} className="text-[#0078D4]" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">{t('common.columns')}</h3>
+              </div>
+              <button
+                onClick={() => setShowColumnsPanel(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
-        )}
+
+          {/* Content */}
+          <div className="p-2">
+            <div className="space-y-0.5">
+              {/* Title column toggle */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('knowledgeBase.title')}
+                </span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.title ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.title ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Subcategories column toggle */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, subcategories: !prev.subcategories }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('knowledgeBase.subcategories')}
+                </span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.subcategories ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.subcategories ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Articles column toggle */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, articles: !prev.articles }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('knowledgeBase.articles')}
+                </span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.articles ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.articles ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Empty State for Subcategories */}
         {displayedCategories.length === 0 ? (
-          <div className="px-4 py-16 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
-              <X size={24} className="text-gray-400 dark:text-gray-500" />
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
+            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
+              <X size={32} strokeWidth={1.5} />
             </div>
             <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">{t('knowledgeBase.noSubcategories')}</h3>
           </div>
@@ -351,7 +488,7 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                     )}
                     {visibleColumns.articles && (
                       <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                        {getArticlesCount(category.name)}
+                        {getArticlesCount(category.id)}
                       </td>
                     )}
                     <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -389,37 +526,38 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                 ))}
               </tbody>
             </table>
+
+            {/* Footer */}
+            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+              <span>{t('common.showingFromTo', { from: 1, to: displayedCategories.length, total: displayedCategories.length })}</span>
+              <div className="flex items-center gap-2">
+                <span>{t('common.perPage')}</span>
+                <select className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                  <option>10</option>
+                  <option>25</option>
+                  <option>50</option>
+                </select>
+              </div>
+            </div>
           </>
         )}
       </div>
 
       {/* Articles Section - Only show when inside a category */}
       {currentCategory && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            {t('knowledgeBase.articlesInCategory', { name: getCategoryName(currentCategory.name) })}
-          </h2>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
+          {/* Section Header */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('knowledgeBase.articlesInCategory', { name: getCategoryName(currentCategory.name) })}
+            </h2>
+          </div>
 
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden transition-colors">
-            {/* Search */}
-            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder={t('common.search')}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Articles List or Empty State */}
-            {filteredArticles.length === 0 ? (
-              <div className="px-4 py-16 text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">
-                  <X size={24} className="text-gray-400 dark:text-gray-500" />
+          {/* Articles List or Empty State */}
+          {filteredArticles.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
+                  <X size={32} strokeWidth={1.5} />
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">{t('knowledgeBase.noArticlesFound')}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
@@ -435,17 +573,26 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                   </button>
                 )}
               </div>
-            ) : (
+          ) : (
+            <>
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                      {t('knowledgeBase.title')}
+                      {t('knowledgeBase.id')} <ChevronDown size={14} className="inline ml-1" />
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
-                      {t('common.status')}
+                      {t('knowledgeBase.title')} <ChevronDown size={14} className="inline ml-1" />
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider"></th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      {t('knowledgeBase.isActive')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      {t('knowledgeBase.categories')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-900 dark:text-white uppercase tracking-wider">
+                      {t('common.createdAt')} <ChevronDown size={14} className="inline ml-1" />
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -459,48 +606,59 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
                         }
                       }}
                     >
+                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">
+                        {article.id}
+                      </td>
                       <td className="px-4 py-4">
                         <span className="text-sm text-gray-900 dark:text-white">{article.title}</span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          article.isActive
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400'
-                        }`}>
-                          {article.isActive ? t('knowledgeBase.isActive') : t('knowledgeBase.isInactive')}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (typeof onEditArticle === 'function') onEditArticle(article.id);
+                            if (typeof onToggleArticleStatus === 'function') onToggleArticleStatus(article.id);
                           }}
-                          className="text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${article.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
                         >
-                          <Edit size={16} />
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-300 ease-in-out ${article.isActive ? 'translate-x-4' : 'translate-x-0.5'}`}
+                          />
                         </button>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {article.categories.map((cat) => (
+                            <span
+                              key={cat}
+                              className="inline-flex items-center px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-300"
+                            >
+                              {getCategoryName(cat)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-sm text-gray-900 dark:text-white">
+                        {article.createdAt}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            )}
 
-            {/* Footer */}
-            <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span></span>
-              <div className="flex items-center gap-2">
-                <span>{t('common.perPage')}</span>
-                <select className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
-                  <option>10</option>
-                  <option>25</option>
-                  <option>50</option>
-                </select>
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+                <span>{t('common.showingFromTo', { from: 1, to: filteredArticles.length, total: filteredArticles.length })}</span>
+                <div className="flex items-center gap-2">
+                  <span>{t('common.perPage')}</span>
+                  <select className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    <option>10</option>
+                    <option>25</option>
+                    <option>50</option>
+                  </select>
+                </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       )}
     </div>

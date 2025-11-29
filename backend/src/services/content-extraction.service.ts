@@ -1,4 +1,5 @@
-import pdf from 'pdf-parse';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdf = require('pdf-parse');
 import mammoth from 'mammoth';
 import { parse } from 'csv-parse/sync';
 import * as cheerio from 'cheerio';

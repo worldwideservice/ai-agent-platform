@@ -1,9 +1,11 @@
 import apiClient from './apiClient';
+import { WorkingDay } from './agent.service';
 
 export interface ChainAction {
   id: string;
   type: string;
   instruction: string;
+  params?: Record<string, any>;
 }
 
 export interface ChainStep {
@@ -13,12 +15,8 @@ export interface ChainStep {
   actions: ChainAction[];
 }
 
-export interface WorkingDay {
-  day: string;
-  enabled: boolean;
-  start: string;
-  end: string;
-}
+// Re-export WorkingDay for convenience
+export type { WorkingDay };
 
 export interface Chain {
   id: string;
@@ -35,13 +33,26 @@ export interface Chain {
   updatedAt: string;
 }
 
+// Types for create/update requests
+export interface ChainActionRequest {
+  actionType: string;
+  instruction: string;
+  params?: Record<string, any>;
+}
+
+export interface ChainStepRequest {
+  delayValue: number;
+  delayUnit: string;
+  actions: ChainActionRequest[];
+}
+
 export interface CreateChainRequest {
   name: string;
   isActive: boolean;
   conditionType: 'all' | 'specific';
   conditionStages: string[];
   conditionExclude?: string;
-  steps: Omit<ChainStep, 'id'>[];
+  steps: ChainStepRequest[];
   schedule: WorkingDay[];
   runLimit?: number;
 }
@@ -53,8 +64,8 @@ class ChainsService {
    * Получить все цепочки агента
    */
   async getChains(agentId: string): Promise<Chain[]> {
-    const response = await apiClient.get<{ chains: Chain[] }>(`/agents/${agentId}/chains`);
-    return response.data.chains;
+    const response = await apiClient.get<Chain[]>(`/agents/${agentId}/chains`);
+    return response.data;
   }
 
   /**

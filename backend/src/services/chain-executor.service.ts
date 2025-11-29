@@ -3,7 +3,7 @@
  * Сервис для выполнения цепочек автоматизации
  */
 
-import { prisma } from '../config/database';
+// Note: Using realPrisma directly as it supports all models including chains
 import realPrisma from '../lib/prisma';
 import {
   sendChatMessage,
@@ -491,7 +491,7 @@ export async function executeChainForLead(
     const chainMessageModel = advancedSettings?.chainMessageModel || 'openai/gpt-4o-mini';
 
     // Получаем цепочку со всеми данными
-    const chain = await prisma.chain.findUnique({
+    const chain = await realPrisma.chain.findUnique({
       where: { id: chainId },
       include: {
         steps: {
@@ -639,7 +639,7 @@ export async function checkAndExecuteChains(
 
   try {
     // Получаем все активные цепочки агента
-    const chains = await prisma.chain.findMany({
+    const chains = await realPrisma.chain.findMany({
       where: {
         agentId,
         isActive: true,
@@ -731,7 +731,7 @@ export async function processScheduledChainSteps(): Promise<void> {
         const chainMessageModel = advancedSettings?.chainMessageModel || 'openai/gpt-4o-mini';
 
         // Получаем шаг из базы
-        const step = await prisma.chainStep.findUnique({
+        const step = await realPrisma.chainStep.findUnique({
           where: { id: scheduledStep.stepId },
           include: {
             actions: {
@@ -750,7 +750,7 @@ export async function processScheduledChainSteps(): Promise<void> {
         }
 
         // Проверяем расписание цепочки
-        const chain = await prisma.chain.findUnique({
+        const chain = await realPrisma.chain.findUnique({
           where: { id: scheduledStep.chainRun.chainId },
           include: { schedules: true },
         });

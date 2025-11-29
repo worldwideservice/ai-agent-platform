@@ -170,9 +170,9 @@ export async function getTestAgentStatus(req: AuthRequest, res: Response) {
       integrationId: integration.id,
       ...pauseStatus,
       settings: {
-        stopOnReply: userSettings?.stop_on_reply ?? false,
-        resumeTime: userSettings?.resume_time ?? 30,
-        resumeUnit: userSettings?.resume_unit ?? 'дней',
+        stopOnReply: userSettings?.stopOnReply ?? false,
+        resumeTime: userSettings?.resumeTime ?? 30,
+        resumeUnit: userSettings?.resumeUnit ?? 'дней',
       },
     });
   } catch (error: any) {

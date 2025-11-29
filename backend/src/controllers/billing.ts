@@ -62,7 +62,7 @@ export const getLimits = async (req: AuthRequest, res: Response) => {
  * GET /api/billing/plans
  * Получить список доступных планов с их характеристиками
  */
-export const getPlans = async (req: AuthRequest, res: Response) => {
+export const getPlans = async (_req: AuthRequest, res: Response) => {
   try {
     const plans = Object.entries(PLAN_CONFIGS).map(([key, config]) => ({
       id: key,
@@ -103,9 +103,9 @@ export const updatePlan = async (req: AuthRequest, res: Response) => {
     const { plan, responsesLimit } = req.body;
 
     // Валидация плана
-    if (!plan || !['trial', 'launch', 'scale', 'max'].includes(plan)) {
+    if (!plan || !['trial', 'launch', 'scale', 'max', 'unlimited'].includes(plan)) {
       return res.status(400).json({
-        message: 'Invalid plan. Available plans: trial, launch, scale, max'
+        message: 'Invalid plan. Available plans: trial, launch, scale, max, unlimited'
       });
     }
 

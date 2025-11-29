@@ -72,9 +72,14 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
 
   if (isLoading) {
     return (
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 mt-4">{t('settings.title')}</h1>
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('settings.subtitle', 'Настройки работы агентов')}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6">
           <div className="text-center text-gray-500 dark:text-gray-400">{t('settings.loadingSettings')}</div>
         </div>
       </div>
@@ -82,12 +87,18 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 mt-4">{t('settings.title')}</h1>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t('settings.subtitle', 'Настройки работы агентов')}</p>
+        </div>
+      </div>
 
-       {/* Settings Section */}
-       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 transition-colors">
-         <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">{t('settings.agentManagement')}</h2>
+      {/* Settings Section */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-6 transition-colors">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-6">{t('settings.agentManagement')}</h2>
 
          {/* Setting Item 1 */}
          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 mb-6 transition-colors">
@@ -95,9 +106,9 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
             <div className="flex items-center gap-4">
                <button
                  onClick={() => setStopOnReply(!stopOnReply)}
-                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${stopOnReply ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+                 className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${stopOnReply ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
                >
-                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${stopOnReply ? 'translate-x-5 scale-110' : 'translate-x-0 scale-100'}`} />
+                  <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-300 ease-in-out ${stopOnReply ? 'translate-x-4' : 'translate-x-0.5'}`} />
                </button>
                <span className="text-sm text-gray-700 dark:text-gray-300">{t('settings.stopOnReply')}</span>
             </div>
@@ -136,18 +147,18 @@ export const Settings: React.FC<SettingsProps> = ({ showToast }) => {
               </div>
             </div>
          </div>
-       </div>
+      </div>
 
-       <div className="mt-6">
-         <button
-           onClick={handleSave}
-           disabled={isSaving}
-           className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-         >
-            {isSaving ? t('common.saving') : t('settings.saveChanges')}
-         </button>
-       </div>
-
+      {/* Save Button */}
+      <div>
+        <button
+          onClick={handleSave}
+          disabled={isSaving}
+          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isSaving ? t('common.saving') : t('settings.saveChanges')}
+        </button>
+      </div>
     </div>
   );
 };

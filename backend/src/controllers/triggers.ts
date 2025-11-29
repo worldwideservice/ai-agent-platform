@@ -139,6 +139,59 @@ export const getTriggers = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * GET /api/agents/:agentId/triggers/:triggerId
+ * Получить триггер по ID
+ */
+export const getTriggerById = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { agentId, triggerId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Проверяем что агент принадлежит пользователю
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+    });
+
+    if (!agent || agent.userId !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const trigger = await prisma.trigger.findUnique({
+      where: { id: triggerId },
+      include: {
+        actions: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
+
+    if (!trigger || trigger.agentId !== agentId) {
+      return res.status(404).json({ message: 'Trigger not found' });
+    }
+
+    // Parse params JSON for response
+    const triggerWithParsedParams = {
+      ...trigger,
+      actions: trigger.actions.map((a: any) => ({
+        ...a,
+        params: a.params ? JSON.parse(a.params) : {},
+      })),
+    };
+
+    return res.json(triggerWithParsedParams);
+  } catch (error: any) {
+    console.error('Error fetching trigger:', error);
+    return res.status(500).json({
+      message: error.message || 'Internal server error',
+    });
+  }
+};
+
+/**
  * PUT /api/agents/:agentId/triggers/:triggerId
  * Обновить триггер
  */

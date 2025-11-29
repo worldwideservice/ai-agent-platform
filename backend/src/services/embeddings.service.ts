@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+import { Pool } from "pg";
 
 /**
  * Embeddings Service
@@ -12,7 +12,14 @@ export interface Embedding {
   content: string;
   embedding: number[];
   metadata: Record<string, any>;
-  sourceType: 'kb_article' | 'contact' | 'deal' | 'chat_message' | 'memory_node';
+  sourceType:
+    | "kb_article"
+    | "contact"
+    | "deal"
+    | "chat_message"
+    | "memory_node"
+    | "agent_document"
+    | "kb_article_file";
   sourceId: string;
   createdAt: Date;
 }
@@ -32,7 +39,10 @@ interface EmbeddingProvider {
   url: string;
   model: string;
   dimension: number;
-  requestBuilder: (text: string, apiKey: string) => {
+  requestBuilder: (
+    text: string,
+    apiKey: string,
+  ) => {
     url: string;
     options: RequestInit;
   };
@@ -41,22 +51,22 @@ interface EmbeddingProvider {
 
 const PROVIDERS: Record<string, EmbeddingProvider> = {
   jina: {
-    name: 'Jina AI',
-    url: 'https://api.jina.ai/v1/embeddings',
-    model: 'jina-embeddings-v3',
+    name: "Jina AI",
+    url: "https://api.jina.ai/v1/embeddings",
+    model: "jina-embeddings-v3",
     dimension: 1024,
     requestBuilder: (text: string, apiKey: string) => ({
-      url: 'https://api.jina.ai/v1/embeddings',
+      url: "https://api.jina.ai/v1/embeddings",
       options: {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: 'jina-embeddings-v3',
+          model: "jina-embeddings-v3",
           input: [text],
-          task: 'retrieval.passage',
+          task: "retrieval.passage",
         }),
       },
     }),
@@ -64,22 +74,22 @@ const PROVIDERS: Record<string, EmbeddingProvider> = {
   },
 
   voyage: {
-    name: 'Voyage AI',
-    url: 'https://api.voyageai.com/v1/embeddings',
-    model: 'voyage-3',
+    name: "Voyage AI",
+    url: "https://api.voyageai.com/v1/embeddings",
+    model: "voyage-3",
     dimension: 1024,
     requestBuilder: (text: string, apiKey: string) => ({
-      url: 'https://api.voyageai.com/v1/embeddings',
+      url: "https://api.voyageai.com/v1/embeddings",
       options: {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: 'voyage-3',
+          model: "voyage-3",
           input: [text],
-          input_type: 'document',
+          input_type: "document",
         }),
       },
     }),
@@ -87,23 +97,23 @@ const PROVIDERS: Record<string, EmbeddingProvider> = {
   },
 
   cohere: {
-    name: 'Cohere',
-    url: 'https://api.cohere.ai/v1/embed',
-    model: 'embed-english-v3.0',
+    name: "Cohere",
+    url: "https://api.cohere.ai/v1/embed",
+    model: "embed-english-v3.0",
     dimension: 1024,
     requestBuilder: (text: string, apiKey: string) => ({
-      url: 'https://api.cohere.ai/v1/embed',
+      url: "https://api.cohere.ai/v1/embed",
       options: {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: 'embed-english-v3.0',
+          model: "embed-english-v3.0",
           texts: [text],
-          input_type: 'search_document',
-          embedding_types: ['float'],
+          input_type: "search_document",
+          embedding_types: ["float"],
         }),
       },
     }),
@@ -111,20 +121,20 @@ const PROVIDERS: Record<string, EmbeddingProvider> = {
   },
 
   openai: {
-    name: 'OpenAI',
-    url: 'https://api.openai.com/v1/embeddings',
-    model: 'text-embedding-3-small',
+    name: "OpenAI",
+    url: "https://api.openai.com/v1/embeddings",
+    model: "text-embedding-3-small",
     dimension: 1536,
     requestBuilder: (text: string, apiKey: string) => ({
-      url: 'https://api.openai.com/v1/embeddings',
+      url: "https://api.openai.com/v1/embeddings",
       options: {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: 'text-embedding-3-small',
+          model: "text-embedding-3-small",
           input: text,
           dimensions: 1536,
         }),
@@ -139,12 +149,12 @@ const PROVIDERS: Record<string, EmbeddingProvider> = {
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   // Определяем провайдера из переменных окружения
-  const providerName = (process.env.EMBEDDING_PROVIDER || 'jina').toLowerCase();
+  const providerName = (process.env.EMBEDDING_PROVIDER || "jina").toLowerCase();
   const provider = PROVIDERS[providerName];
 
   if (!provider) {
     console.error(`❌ Unknown embedding provider: ${providerName}`);
-    console.warn('⚠️  Using mock embeddings as fallback');
+    console.warn("⚠️  Using mock embeddings as fallback");
     return generateMockEmbedding(1024);
   }
 
@@ -152,20 +162,26 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   const apiKey = process.env[`${providerName.toUpperCase()}_API_KEY`];
 
   if (!apiKey) {
-    console.warn(`⚠️  ${provider.name} API key not set (${providerName.toUpperCase()}_API_KEY)`);
-    console.warn('⚠️  Using mock embeddings as fallback');
+    console.warn(
+      `⚠️  ${provider.name} API key not set (${providerName.toUpperCase()}_API_KEY)`,
+    );
+    console.warn("⚠️  Using mock embeddings as fallback");
     return generateMockEmbedding(provider.dimension);
   }
 
   try {
-    console.log(`🔮 Generating embedding using ${provider.name} (${provider.model})`);
+    console.log(
+      `🔮 Generating embedding using ${provider.name} (${provider.model})`,
+    );
 
     const { url, options } = provider.requestBuilder(text, apiKey);
     const response = await fetch(url, options);
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`${provider.name} API error: ${response.status} - ${errorText}`);
+      throw new Error(
+        `${provider.name} API error: ${response.status} - ${errorText}`,
+      );
     }
 
     const data = await response.json();
@@ -173,10 +189,12 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
     console.log(`✅ Generated embedding: ${embedding.length} dimensions`);
     return embedding;
-
   } catch (error: any) {
-    console.error(`❌ Error generating embedding with ${provider.name}:`, error.message);
-    console.warn('⚠️  Falling back to mock embeddings');
+    console.error(
+      `❌ Error generating embedding with ${provider.name}:`,
+      error.message,
+    );
+    console.warn("⚠️  Falling back to mock embeddings");
     return generateMockEmbedding(provider.dimension);
   }
 }
@@ -185,7 +203,9 @@ export async function generateEmbedding(text: string): Promise<number[]> {
  * Генерация mock embedding для разработки/тестирования
  */
 function generateMockEmbedding(dimension: number): number[] {
-  return Array(dimension).fill(0).map(() => Math.random());
+  return Array(dimension)
+    .fill(0)
+    .map(() => Math.random());
 }
 
 /**
@@ -197,15 +217,22 @@ export async function saveEmbedding(
     userId: string;
     content: string;
     embedding: number[];
-    sourceType: Embedding['sourceType'];
+    sourceType: Embedding["sourceType"];
     sourceId: string;
     metadata?: Record<string, any>;
-  }
+  },
 ): Promise<string> {
-  const { userId, content, embedding, sourceType, sourceId, metadata = {} } = params;
+  const {
+    userId,
+    content,
+    embedding,
+    sourceType,
+    sourceId,
+    metadata = {},
+  } = params;
 
   // Конвертируем массив в PostgreSQL vector формат
-  const vectorString = `[${embedding.join(',')}]`;
+  const vectorString = `[${embedding.join(",")}]`;
 
   const result = await pool.query(
     `INSERT INTO embeddings (
@@ -215,7 +242,14 @@ export async function saveEmbedding(
       gen_random_uuid()::text, $1, $2, $3::vector, $4,
       $5, $6, NOW()
     ) RETURNING id`,
-    [userId, content, vectorString, JSON.stringify(metadata), sourceType, sourceId]
+    [
+      userId,
+      content,
+      vectorString,
+      JSON.stringify(metadata),
+      sourceType,
+      sourceId,
+    ],
   );
 
   return result.rows[0].id;
@@ -231,8 +265,8 @@ export async function searchSimilarEmbeddings(
     queryEmbedding: number[];
     limit?: number;
     threshold?: number;
-    sourceTypes?: Embedding['sourceType'][];
-  }
+    sourceTypes?: Embedding["sourceType"][];
+  },
 ): Promise<EmbeddingSearchResult[]> {
   const {
     userId,
@@ -243,7 +277,7 @@ export async function searchSimilarEmbeddings(
   } = params;
 
   // Конвертируем query embedding в vector формат
-  const vectorString = `[${queryEmbedding.join(',')}]`;
+  const vectorString = `[${queryEmbedding.join(",")}]`;
 
   let query = `
     SELECT
@@ -293,10 +327,10 @@ export async function createAndSaveEmbedding(
   params: {
     userId: string;
     content: string;
-    sourceType: Embedding['sourceType'];
+    sourceType: Embedding["sourceType"];
     sourceId: string;
     metadata?: Record<string, any>;
-  }
+  },
 ): Promise<string> {
   const { content } = params;
 
@@ -320,19 +354,19 @@ export async function updateEmbedding(
   params: {
     embeddingId: string;
     content: string;
-  }
+  },
 ): Promise<void> {
   const { embeddingId, content } = params;
 
   // Генерируем новый embedding
   const embedding = await generateEmbedding(content);
-  const vectorString = `[${embedding.join(',')}]`;
+  const vectorString = `[${embedding.join(",")}]`;
 
   await pool.query(
     `UPDATE embeddings
      SET content = $1, embedding = $2::vector, created_at = NOW()
      WHERE id = $3`,
-    [content, vectorString, embeddingId]
+    [content, vectorString, embeddingId],
   );
 }
 
@@ -341,9 +375,9 @@ export async function updateEmbedding(
  */
 export async function deleteEmbedding(
   pool: Pool,
-  embeddingId: string
+  embeddingId: string,
 ): Promise<void> {
-  await pool.query('DELETE FROM embeddings WHERE id = $1', [embeddingId]);
+  await pool.query("DELETE FROM embeddings WHERE id = $1", [embeddingId]);
 }
 
 /**
@@ -352,15 +386,15 @@ export async function deleteEmbedding(
 export async function deleteEmbeddingsBySource(
   pool: Pool,
   params: {
-    sourceType: Embedding['sourceType'];
+    sourceType: Embedding["sourceType"];
     sourceId: string;
-  }
+  },
 ): Promise<void> {
   const { sourceType, sourceId } = params;
 
   await pool.query(
-    'DELETE FROM embeddings WHERE source_type = $1 AND source_id = $2',
-    [sourceType, sourceId]
+    "DELETE FROM embeddings WHERE source_type = $1 AND source_id = $2",
+    [sourceType, sourceId],
   );
 }
 
@@ -374,8 +408,8 @@ export async function semanticSearch(
     query: string;
     limit?: number;
     threshold?: number;
-    sourceTypes?: Embedding['sourceType'][];
-  }
+    sourceTypes?: Embedding["sourceType"][];
+  },
 ): Promise<EmbeddingSearchResult[]> {
   const { query, ...searchParams } = params;
 
@@ -398,13 +432,13 @@ export function getEmbeddingProviderInfo(): {
   dimension: number;
   configured: boolean;
 } {
-  const providerName = (process.env.EMBEDDING_PROVIDER || 'jina').toLowerCase();
+  const providerName = (process.env.EMBEDDING_PROVIDER || "jina").toLowerCase();
   const provider = PROVIDERS[providerName];
 
   if (!provider) {
     return {
-      provider: 'unknown',
-      model: 'none',
+      provider: "unknown",
+      model: "none",
       dimension: 0,
       configured: false,
     };

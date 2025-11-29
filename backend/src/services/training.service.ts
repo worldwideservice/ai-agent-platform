@@ -4,7 +4,7 @@
  */
 
 import { prisma } from '../config/database';
-import { BUILT_IN_TRAINING_SOURCES, getBuiltInSourceById, BuiltInTrainingSource } from '../data/builtInTrainingSources';
+import { BUILT_IN_TRAINING_SOURCES, getBuiltInSourceById } from '../data/builtInTrainingSources';
 
 // Unified types for both built-in and custom
 export interface TrainingSource {
@@ -283,7 +283,7 @@ export async function updateSource(
 /**
  * Удалить пользовательский источник
  */
-export async function deleteSource(id: string, userId: string): Promise<void> {
+export async function deleteSource(id: string, _userId: string): Promise<void> {
   // Нельзя удалять встроенные
   if (id.startsWith('builtin-')) {
     throw new Error('Cannot delete built-in sources');
@@ -384,7 +384,7 @@ export async function createRole(
  */
 export async function updateRole(
   id: string,
-  userId: string,
+  _userId: string,
   data: {
     name?: string;
     description?: string;
@@ -424,7 +424,7 @@ export async function updateRole(
 /**
  * Удалить пользовательскую роль
  */
-export async function deleteRole(id: string, userId: string): Promise<void> {
+export async function deleteRole(id: string, _userId: string): Promise<void> {
   // Нельзя удалять встроенные
   if (id.startsWith('builtin-')) {
     throw new Error('Cannot delete built-in roles');

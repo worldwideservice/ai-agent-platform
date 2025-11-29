@@ -1,9 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Bot, FileText, MessageSquare, Server, Activity, Clock, Zap } from 'lucide-react';
-import adminService, { DashboardStats } from '../src/services/api/admin.service';
+import { Users, Bot, FileText, MessageSquare, Server, Activity, Clock, Zap, TrendingUp, TrendingDown } from 'lucide-react';
+import adminService, { AdminDashboardStats } from '../src/services/api/admin.service';
+
+// Stat Card Component with modern styling
+interface StatCardProps {
+  icon: React.ReactNode;
+  title: string;
+  value: number | string;
+  subtitle?: string;
+  subtitleColor?: string;
+  trend?: { value: number; isPositive: boolean };
+}
+
+const StatCard: React.FC<StatCardProps> = ({ icon, title, value, subtitle, subtitleColor = 'text-gray-500', trend }) => (
+  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-all duration-300 hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600 cursor-default group">
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        {icon}
+        <div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+          {subtitle && (
+            <p className={`text-xs ${subtitleColor}`}>{subtitle}</p>
+          )}
+        </div>
+      </div>
+      {trend && (
+        <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+          trend.isPositive
+            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+        }`}>
+          {trend.isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+          {trend.value}%
+        </div>
+      )}
+    </div>
+  </div>
+);
 
 export const AdminDashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,57 +101,38 @@ export const AdminDashboard: React.FC = () => {
 
       {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              <Users className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Пользователи</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.users.total}</p>
-              <p className="text-xs text-green-600 dark:text-green-400">Активных: {stats.users.active}</p>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          icon={<Users className="w-6 h-6 text-gray-400 dark:text-gray-500" />}
+          title="Пользователи"
+          value={stats.users.total}
+          subtitle={`Активных: ${stats.users.active}`}
+          subtitleColor="text-green-600 dark:text-green-400"
+          trend={{ value: 12, isPositive: true }}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              <Bot className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Агенты</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.agents.total}</p>
-              <p className="text-xs text-green-600 dark:text-green-400">Активных: {stats.agents.active}</p>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          icon={<Bot className="w-6 h-6 text-gray-400 dark:text-gray-500" />}
+          title="Агенты"
+          value={stats.agents.total}
+          subtitle={`Активных: ${stats.agents.active}`}
+          subtitleColor="text-green-600 dark:text-green-400"
+          trend={{ value: 8, isPositive: true }}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              <FileText className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">База знаний</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.knowledgeBase.articles}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Категорий: {stats.knowledgeBase.categories}</p>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          icon={<FileText className="w-6 h-6 text-gray-400 dark:text-gray-500" />}
+          title="База знаний"
+          value={stats.knowledgeBase.articles}
+          subtitle={`Категорий: ${stats.knowledgeBase.categories}`}
+        />
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              <MessageSquare className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Разговоры</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{stats.conversations.total}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Сообщений: {stats.conversations.messages}</p>
-            </div>
-          </div>
-        </div>
+        <StatCard
+          icon={<MessageSquare className="w-6 h-6 text-gray-400 dark:text-gray-500" />}
+          title="Разговоры"
+          value={stats.conversations.total}
+          subtitle={`Сообщений: ${stats.conversations.messages}`}
+          trend={{ value: 24, isPositive: true }}
+        />
       </div>
 
       {/* Users by Plan & System Status */}

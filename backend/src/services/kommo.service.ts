@@ -677,7 +677,7 @@ export async function fetchSources(
     });
 
     if (accountResponse.ok) {
-      const accountData = await accountResponse.json();
+      const accountData = await accountResponse.json() as { amojo_id?: string };
       console.log(`📊 Account data:`, JSON.stringify(accountData, null, 2));
 
       // If account has amojo_id, try to get chat channels
@@ -685,7 +685,7 @@ export async function fetchSources(
         console.log(`🔗 Found amojo_id: ${accountData.amojo_id}`);
 
         // Try amojo API for chat sources
-        const amojoUrl = `https://amojo.kommo.com/v2/origin/custom/${accountData.amojo_id}/connect`;
+        console.log(`📡 Amojo endpoint: https://amojo.kommo.com/v2/origin/custom/${accountData.amojo_id}/connect`);
         console.log(`📡 Checking amojo channels...`);
       }
     }
@@ -728,7 +728,7 @@ export async function fetchSources(
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as any;
       const sources: KommoSource[] = [];
       const seenIds = new Set<number>();
 
@@ -774,7 +774,7 @@ export async function fetchSources(
     });
 
     if (response.ok) {
-      const data = await response.json();
+      const data = await response.json() as any;
       const chats = data._embedded?.chats || [];
       console.log(`💬 Found ${chats.length} chats`);
 
@@ -848,9 +848,7 @@ export async function fetchSalesbots(
       apiDomain,
       token,
       '/api/v4/bots',
-      'GET',
-      undefined,
-      { page: 1, limit: 250 }
+      { method: 'GET', query: { page: 1, limit: 250 } }
     );
 
     console.log('🤖 Salesbots raw response:', JSON.stringify(result, null, 2));
@@ -1348,9 +1346,9 @@ export async function changeContactResponsible(
  * so you may need to validate by IP or other means
  */
 export function verifyWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string
+  _payload: string,
+  _signature: string,
+  _secret: string
 ): boolean {
   // TODO: Implement if Kommo provides webhook signatures
   // For now, return true (no verification)

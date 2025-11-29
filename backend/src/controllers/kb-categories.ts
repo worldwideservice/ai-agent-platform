@@ -329,7 +329,7 @@ async function checkIfDescendant(categoryId: string, potentialDescendantId: stri
   if (!category) return false;
 
   // Проверяем прямых потомков
-  if (category.children.some(child => child.id === categoryId)) {
+  if (category.children.some((child: { id: string }) => child.id === categoryId)) {
     return true;
   }
 

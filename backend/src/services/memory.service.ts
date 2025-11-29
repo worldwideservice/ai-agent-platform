@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { createAndSaveEmbedding, semanticSearch, EmbeddingSearchResult } from './embeddings.service';
+import { createAndSaveEmbedding, semanticSearch } from './embeddings.service';
 import { chatCompletion } from './openrouter.service';
 
 /**
@@ -110,7 +110,7 @@ export async function createMemoryEdge(
   }
 ): Promise<string> {
   const {
-    agentId,
+    agentId: _agentId, // Reserved for future filtering by agent
     sourceNodeId,
     targetNodeId,
     edgeType,
@@ -137,7 +137,7 @@ export async function createMemoryEdge(
 export async function getMemoryNode(
   pool: Pool,
   nodeId: string,
-  updateAccess: boolean = true
+  _updateAccess: boolean = true // Reserved for future last_accessed_at update
 ): Promise<MemoryNode | null> {
   const result = await pool.query(
     `SELECT * FROM memory_nodes WHERE id = $1`,
@@ -211,7 +211,7 @@ export async function searchMemoryNodes(
     threshold?: number;
   }
 ): Promise<MemoryNode[]> {
-  const { agentId, userId, leadId, query, limit = 10, nodeTypes, threshold = 0.7 } = params;
+  const { agentId: _agentId, userId, leadId, query, limit = 10, nodeTypes, threshold = 0.7 } = params;
 
   // Используем семантический поиск
   const searchResults = await semanticSearch(pool, {

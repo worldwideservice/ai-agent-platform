@@ -35,6 +35,9 @@ export const TrainingSources: React.FC = () => {
   // View modal
   const [viewingSource, setViewingSource] = useState<TrainingSource | null>(null);
 
+  // Delete confirmation modal
+  const [deleteConfirmSource, setDeleteConfirmSource] = useState<TrainingSource | null>(null);
+
   useEffect(() => {
     loadSources();
   }, []);
@@ -69,24 +72,29 @@ export const TrainingSources: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteSource = async (source: TrainingSource) => {
+  const handleDeleteSource = (source: TrainingSource) => {
     if (source.isBuiltIn) return;
-    if (!confirm(t('training.deleteSourceConfirm'))) return;
+    setDeleteConfirmSource(source);
+  };
+
+  const confirmDeleteSource = async () => {
+    if (!deleteConfirmSource) return;
 
     try {
-      await trainingService.deleteSource(source.id);
+      await trainingService.deleteSource(deleteConfirmSource.id);
       await loadSources();
-      // Создаём уведомление
       try {
         await notificationsService.createNotification({
           type: 'warning',
           titleKey: 'training.sourceDeleted',
           messageKey: 'training.sourceDeletedMessage',
-          params: { name: source.name },
+          params: { name: deleteConfirmSource.name },
         });
       } catch (e) { /* ignore */ }
     } catch (error) {
       console.error('Error deleting source:', error);
+    } finally {
+      setDeleteConfirmSource(null);
     }
   };
 
@@ -236,7 +244,7 @@ export const TrainingSources: React.FC = () => {
             {builtInSources.map(source => (
               <div
                 key={source.id}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow"
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow flex flex-col h-full"
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
@@ -256,21 +264,21 @@ export const TrainingSources: React.FC = () => {
                 </div>
 
                 {getSourceDescription(source) && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 flex-1">
                     {getSourceDescription(source)}
                   </p>
                 )}
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-auto pt-2">
                   <span className="text-xs text-gray-400">
                     {source.content.length.toLocaleString()} {t('training.characters')}
                   </span>
                   <button
                     onClick={() => setViewingSource(source)}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title={t('training.view')}
                   >
-                    <Eye size={14} />
-                    {t('training.view')}
+                    <Eye size={16} />
                   </button>
                 </div>
               </div>
@@ -297,7 +305,7 @@ export const TrainingSources: React.FC = () => {
             {customSources.map(source => (
               <div
                 key={source.id}
-                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow"
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 hover:shadow-md transition-shadow flex flex-col h-full"
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1 min-w-0">
@@ -323,21 +331,21 @@ export const TrainingSources: React.FC = () => {
                 </div>
 
                 {source.description && (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 flex-1">
                     {source.description}
                   </p>
                 )}
 
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mt-auto pt-2">
                   <span className="text-xs text-gray-400">
                     {source.content.length.toLocaleString()} {t('training.characters')}
                   </span>
                   <button
                     onClick={() => setViewingSource(source)}
-                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                    className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    title={t('training.view')}
                   >
-                    <Eye size={14} />
-                    {t('training.view')}
+                    <Eye size={16} />
                   </button>
                 </div>
               </div>
@@ -481,6 +489,37 @@ export const TrainingSources: React.FC = () => {
               <pre className="whitespace-pre-wrap text-sm bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto font-mono">
                 {viewingSource.content}
               </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmSource && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 transform transition-all animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30">
+              <Trash2 size={24} className="text-red-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-center text-gray-900 dark:text-white mb-2">
+              {t('training.deleteSource', 'Удалить источник')}
+            </h3>
+            <p className="text-sm text-center text-gray-500 dark:text-gray-400 mb-6">
+              {t('training.deleteSourceConfirm', 'Вы уверены, что хотите удалить источник')} "{deleteConfirmSource.name}"?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmSource(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={confirmDeleteSource}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+              >
+                {t('common.delete')}
+              </button>
             </div>
           </div>
         </div>

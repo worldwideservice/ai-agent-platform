@@ -13,7 +13,8 @@
 
 import Redis from 'ioredis';
 
-const REDIS_MAX_RETRIES = 3;
+// Note: Retries are handled by BullMQ job options, not at Redis connection level
+// const REDIS_MAX_RETRIES = 3;
 
 // Parse Redis URL or use Upstash config
 function getRedisConfig() {

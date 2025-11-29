@@ -90,9 +90,7 @@ export const AdminSystem: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                  <Server className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                </div>
+                <Server className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Платформа</p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white">{systemInfo.server.platform}</p>
@@ -103,9 +101,7 @@ export const AdminSystem: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                  <Clock className="w-6 h-6 text-green-600 dark:text-green-400" />
-                </div>
+                <Clock className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Uptime</p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatUptime(systemInfo.server.uptime)}</p>
@@ -116,9 +112,7 @@ export const AdminSystem: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                  <HardDrive className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-                </div>
+                <HardDrive className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Память (Heap)</p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -131,9 +125,7 @@ export const AdminSystem: React.FC = () => {
 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                  <Cpu className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-                </div>
+                <Cpu className="w-6 h-6 text-gray-400 dark:text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500 dark:text-gray-400">Окружение</p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white">{systemInfo.env.nodeEnv}</p>
@@ -148,7 +140,7 @@ export const AdminSystem: React.FC = () => {
             {/* Queue Status */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <Zap className="w-5 h-5 text-yellow-500" />
+                <Zap className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Redis Queue (BullMQ)</h2>
                 {systemInfo.queue.enabled ? (
                   <span className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs font-medium flex items-center gap-1">
@@ -185,7 +177,7 @@ export const AdminSystem: React.FC = () => {
             {/* OpenRouter Stats */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center gap-3 mb-4">
-                <Activity className="w-5 h-5 text-blue-500" />
+                <Activity className="w-5 h-5 text-gray-400 dark:text-gray-500" />
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">OpenRouter API</h2>
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">

@@ -533,6 +533,6 @@ export async function createEmployeeEvent(
     htmlLink: eventData.htmlLink || '',
     meetLink: eventData.conferenceData?.entryPoints?.find(
       (ep) => ep.entryPointType === 'video'
-    )?.uri,
+    )?.uri ?? undefined,
   };
 }

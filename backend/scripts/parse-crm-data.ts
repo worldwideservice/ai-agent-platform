@@ -2,6 +2,19 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+interface CrmDataParsed {
+  pipelines?: Array<{ id: string; name: string; stages: Array<{ id: string; name: string; color?: string }> }>;
+  channels?: Array<{ id: string; name: string }>;
+  dealFields?: Array<{ id: string; label: string; type: string }>;
+  contactFields?: Array<{ id: string; label: string; type: string }>;
+  users?: Array<{ id: string; name: string; email?: string; role?: string }>;
+  taskTypes?: Array<{ id: string; name: string }>;
+  actions?: Array<{ id: string; name: string; description?: string }>;
+  syncedAt?: string;
+  lastSynced?: string;
+  status?: string;
+}
+
 async function parseCrmData() {
   try {
     const agent = await prisma.agent.findFirst({
@@ -27,17 +40,19 @@ async function parseCrmData() {
     console.log('\n=== CRM DATA (правильный парсинг) ===\n');
 
     // Парсим дважды, так как данные закодированы дважды
-    let crmData = agent.crmData;
+    let crmDataRaw: unknown = agent.crmData;
 
     // Первый парсинг
-    if (typeof crmData === 'string') {
-      crmData = JSON.parse(crmData);
+    if (typeof crmDataRaw === 'string') {
+      crmDataRaw = JSON.parse(crmDataRaw);
     }
 
     // Второй парсинг (если всё ещё строка)
-    if (typeof crmData === 'string') {
-      crmData = JSON.parse(crmData);
+    if (typeof crmDataRaw === 'string') {
+      crmDataRaw = JSON.parse(crmDataRaw);
     }
+
+    const crmData = crmDataRaw as CrmDataParsed;
 
     // Воронки
     console.log('🔹 ВОРОНКИ (Pipelines):');

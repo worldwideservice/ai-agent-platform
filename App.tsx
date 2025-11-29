@@ -25,12 +25,11 @@ import { ToastContainer, Toast } from './components/Toast';
 import { useAuth } from './src/contexts/AuthContext';
 import { useToast } from './src/contexts/ToastContext';
 import { Auth } from './src/pages/Auth';
-import { agentService, billingService, notificationsService } from './src/services/api';
+import { agentService, billingService, notificationsService, kbService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
-const INITIAL_KB_CATEGORIES = [
-  { id: 'general', name: 'Общее', parentId: null },
-];
+// Категории теперь ВСЕГДА загружаются из API, не используем фейковые ID
+const INITIAL_KB_CATEGORIES: { id: string; name: string; parentId: string | null }[] = [];
 
 const App: React.FC = () => {
   // === 1. Все хуки должны быть в начале компонента ===
@@ -51,45 +50,9 @@ const App: React.FC = () => {
     return saved || null;
   });
 
-  // State для KB Categories
-  const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>(() => {
-    const saved = localStorage.getItem('kbCategories');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Validate that all items have the correct structure and valid names
-        if (Array.isArray(parsed)) {
-          const validCategories = parsed.filter(cat => {
-            // Check structure
-            if (!cat || typeof cat !== 'object' ||
-                typeof cat.id !== 'string' ||
-                typeof cat.name !== 'string' ||
-                (cat.parentId !== null && typeof cat.parentId !== 'string')) {
-              return false;
-            }
-            // Filter out categories with suspicious names (only digits, very short names, etc.)
-            const name = cat.name.trim();
-            if (!name || name.length < 2 || /^\d+$/.test(name)) {
-              console.warn('Filtering out invalid category:', cat);
-              return false;
-            }
-            return true;
-          });
-
-          if (validCategories.length > 0) {
-            return validCategories;
-          }
-        }
-        // If validation fails or no valid categories, clear invalid data
-        console.warn('Invalid kbCategories data in localStorage, using defaults');
-        localStorage.removeItem('kbCategories');
-      } catch (e) {
-        console.error('Failed to parse kbCategories from localStorage:', e);
-        localStorage.removeItem('kbCategories');
-      }
-    }
-    return INITIAL_KB_CATEGORIES;
-  });
+  // State для KB Categories - ВСЕГДА загружаем из API, не используем localStorage
+  // Это предотвращает использование старых фейковых ID
+  const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([]);
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; parentId: string | null } | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(() => {
     const saved = localStorage.getItem('editingCategoryId');
@@ -100,7 +63,7 @@ const App: React.FC = () => {
     return saved ? (saved === 'null' ? null : saved) : null;
   });
 
-  // State для KB Articles
+  // State для KB Articles - ВСЕГДА загружаем из API
   const [kbArticles, setKbArticles] = useState<{
     id: number;
     title: string;
@@ -109,10 +72,7 @@ const App: React.FC = () => {
     relatedArticles: string[];
     content: string;
     createdAt: string;
-  }[]>(() => {
-    const saved = localStorage.getItem('kbArticles');
-    return saved ? JSON.parse(saved) : [];
-  });
+  }[]>([]);
   const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
   const [editingArticleId, setEditingArticleId] = useState<number | null>(() => {
     const saved = localStorage.getItem('editingArticleId');
@@ -148,13 +108,60 @@ const App: React.FC = () => {
     }
   };
 
+  // Загрузка категорий из API
+  const loadCategories = async () => {
+    try {
+      const categoriesData = await kbService.getAllCategories();
+      // ВСЕГДА заменяем данные из API, даже если пустой массив
+      // Это предотвращает использование старых фейковых ID из localStorage
+      setKbCategories(categoriesData.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        parentId: cat.parentId || null,
+      })));
+      console.log('✅ Loaded categories from API:', categoriesData.length);
+    } catch (error: any) {
+      console.error('Failed to load categories:', error);
+      // При ошибке очищаем категории, чтобы не использовать фейковые ID
+      setKbCategories([]);
+    }
+  };
+
+  // Загрузка статей из API (синхронизируется с backend)
+  const loadArticles = async () => {
+    try {
+      const articlesData = await kbService.getAllArticles();
+      // ВСЕГДА заменяем данные из API
+      setKbArticles(articlesData.map(article => ({
+        id: article.id,
+        title: article.title,
+        isActive: article.isActive,
+        categories: article.articleCategories?.map((ac: { category: { id: string } }) => ac.category.id) || [],
+        relatedArticles: article.relatedArticles || [],
+        content: article.content,
+        createdAt: new Date(article.createdAt).toLocaleString('ru-RU', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).replace(',', '')
+      })));
+      console.log('✅ Loaded articles from API:', articlesData.length);
+    } catch (error: any) {
+      console.error('Failed to load articles:', error);
+      setKbArticles([]);
+    }
+  };
+
   // Проверка и показ уведомлений о пробном периоде
   const checkTrialNotification = async () => {
     try {
       const subscription = await billingService.getSubscription();
 
       // Проверяем только если пользователь на пробном периоде
-      if (subscription.currentPlan !== 'trial') {
+      if (subscription.plan !== 'trial') {
         return;
       }
 
@@ -206,10 +213,12 @@ const App: React.FC = () => {
   };
 
   // === 3. Effects ===
-  // Загрузка агентов из API при авторизации
+  // Загрузка данных из API при авторизации
   useEffect(() => {
     if (isAuthenticated) {
       loadAgents();
+      loadCategories(); // Загружаем категории из API
+      loadArticles(); // Загружаем статьи из API
       checkTrialNotification(); // Проверяем пробный период при входе
     }
   }, [isAuthenticated]);
@@ -300,15 +309,10 @@ const App: React.FC = () => {
     localStorage.setItem('currentCategoryId', currentCategoryId === null ? 'null' : currentCategoryId);
   }, [currentCategoryId]);
 
-  // Save kbCategories to localStorage
-  useEffect(() => {
-    localStorage.setItem('kbCategories', JSON.stringify(kbCategories));
-  }, [kbCategories]);
+  // НЕ сохраняем kbCategories в localStorage - они ВСЕГДА загружаются из API
+  // Это предотвращает проблему с фейковыми ID категорий
 
-  // Save kbArticles to localStorage
-  useEffect(() => {
-    localStorage.setItem('kbArticles', JSON.stringify(kbArticles));
-  }, [kbArticles]);
+  // НЕ сохраняем kbArticles в localStorage - они ВСЕГДА загружаются из API
 
   // === 4. Обработчики событий ===
   const handleAddAgent = async (agentData: Omit<Agent, 'id' | 'createdAt'>) => {
@@ -341,51 +345,92 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddArticle = async (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }) => {
-    const newArticle = {
-      id: Math.floor(1000 + Math.random() * 9000), // Generate 4-digit ID
-      ...article,
-      createdAt: new Date().toLocaleString('ru-RU', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }).replace(',', '')
-    };
-    setKbArticles(prev => [...prev, newArticle]);
-    showToast('success', t('notifications.articleCreated'));
-    // Создаём уведомление
+  const handleAddArticle = async (article: { title: string; isActive: boolean; categories: string[]; relatedArticles: string[]; content: string }, files?: File[]) => {
     try {
-      await notificationsService.createNotification({
-        type: 'success',
-        titleKey: 'notifications.articleCreated',
-        messageKey: 'notifications.articleCreatedMessage',
-        params: { name: article.title },
+      // Создаём статью через backend API
+      const createdArticle = await kbService.createArticle({
+        title: article.title,
+        content: article.content,
+        isActive: article.isActive,
+        categoryIds: article.categories,
       });
-    } catch (e) { /* ignore */ }
+
+      // Загружаем файлы, если они есть
+      if (files && files.length > 0) {
+        try {
+          await kbService.uploadArticleFiles(createdArticle.id, files);
+        } catch (fileError) {
+          console.error('Failed to upload files:', fileError);
+          showToast('warning', t('notifications.filesUploadFailed'));
+        }
+      }
+
+      // Добавляем статью в локальный state для отображения
+      const newArticle = {
+        id: createdArticle.id,
+        title: article.title,
+        isActive: article.isActive,
+        categories: article.categories,
+        relatedArticles: article.relatedArticles,
+        content: article.content,
+        createdAt: new Date().toLocaleString('ru-RU', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).replace(',', '')
+      };
+      setKbArticles(prev => [...prev, newArticle]);
+      showToast('success', t('notifications.articleCreated'));
+
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          titleKey: 'notifications.articleCreated',
+          messageKey: 'notifications.articleCreatedMessage',
+          params: { name: article.title },
+        });
+      } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      console.error('Failed to create article:', error);
+      showToast('error', t('notifications.articleCreateFailed'));
+    }
   };
 
   const handleToggleAgentStatus = async (id: string) => {
     const agent = agents.find(a => a.id === id);
-    const wasActive = agent?.isActive;
+    if (!agent) return;
+
+    const wasActive = agent.isActive;
+    const newStatus = !wasActive;
+
+    // Optimistic update - обновляем UI сразу для плавной анимации
+    setAgents(prevAgents =>
+      prevAgents.map(a => a.id === id ? { ...a, isActive: newStatus } : a)
+    );
+
     try {
       await agentService.toggleAgentStatus(id);
-      await loadAgents(); // Перезагрузить список
-      const newStatus = wasActive ? t('notifications.disabled') : t('notifications.enabled');
+      const statusText = wasActive ? t('notifications.disabled') : t('notifications.enabled');
       const statusKey = wasActive ? 'disabled' : 'enabled';
-      showToast('success', t('notifications.agentToggledMessage', { name: agent?.name, status: newStatus }));
+      showToast('success', t('notifications.agentToggledMessage', { name: agent.name, status: statusText }));
       // Создаём уведомление с ключом статуса для перевода на стороне Header
       try {
         await notificationsService.createNotification({
           type: 'info',
           titleKey: 'notifications.agentToggled',
           messageKey: 'notifications.agentToggledMessage',
-          params: { name: agent?.name || '', status: statusKey, statusKey },
+          params: { name: agent.name || '', status: statusKey, statusKey },
         });
       } catch (e) { /* ignore */ }
     } catch (error: any) {
+      // Revert on error - откатываем если API вернул ошибку
+      setAgents(prevAgents =>
+        prevAgents.map(a => a.id === id ? { ...a, isActive: wasActive } : a)
+      );
       console.error('Failed to toggle agent status:', error);
       showToast('error', t('notifications.unknownError'));
     }
@@ -448,6 +493,13 @@ const App: React.FC = () => {
 
   const handleSaveAgent = async (updatedAgent: Agent) => {
     try {
+      console.log('=== handleSaveAgent START ===');
+      console.log('Agent data to save:', {
+        id: updatedAgent.id,
+        name: updatedAgent.name,
+        model: updatedAgent.model,
+      });
+
       await agentService.updateAgent(updatedAgent.id, {
         name: updatedAgent.name,
         model: updatedAgent.model,
@@ -458,11 +510,17 @@ const App: React.FC = () => {
         kbSettings: updatedAgent.kbSettings,
         crmData: updatedAgent.crmData,
       });
+
+      console.log('Agent saved successfully, reloading agents...');
       await loadAgents(); // Перезагрузить список
-      showToast('success', t('notifications.agentSavedMessage', { name: updatedAgent.name }));
+      console.log('=== handleSaveAgent SUCCESS ===');
     } catch (error: any) {
-      console.error('Failed to save agent:', error);
-      showToast('error', error.response?.data?.message || t('notifications.unknownError'));
+      console.error('=== handleSaveAgent ERROR ===');
+      console.error('Error object:', error);
+      console.error('Error response:', error.response);
+      console.error('Error message:', error.message);
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || t('notifications.unknownError');
+      showToast('error', errorMessage);
     }
   };
 
@@ -471,39 +529,58 @@ const App: React.FC = () => {
     if (!category) return;
 
     showConfirmation(`${t('confirmation.delete')} ${category.name}`, async () => {
-      setKbCategories(prev => prev.filter(cat => cat.id !== id));
-      hideConfirmation();
-      showToast('success', t('notifications.deleted'));
-      // Создаём уведомление
       try {
-        await notificationsService.createNotification({
-          type: 'warning',
-          titleKey: 'notifications.categoryDeleted',
-          messageKey: 'notifications.categoryDeletedMessage',
-          params: { name: category.name },
-        });
-      } catch (e) { /* ignore */ }
+        // Удаляем из базы данных через API
+        await kbService.deleteCategory(id);
+        setKbCategories(prev => prev.filter(cat => cat.id !== id));
+        hideConfirmation();
+        showToast('success', t('notifications.deleted'));
+        // Создаём уведомление
+        try {
+          await notificationsService.createNotification({
+            type: 'warning',
+            titleKey: 'notifications.categoryDeleted',
+            messageKey: 'notifications.categoryDeletedMessage',
+            params: { name: category.name },
+          });
+        } catch (e) { /* ignore */ }
+      } catch (error: any) {
+        console.error('Failed to delete category:', error);
+        hideConfirmation();
+        showToast('error', t('notifications.categoryDeleteFailed'));
+      }
     });
   };
 
   const handleCopyCategory = async (category: { id: string; name: string; parentId: string | null }) => {
-    const copiedCategory = {
-      ...category,
-      id: Math.random().toString(36).substr(2, 9),
-      name: `${category.name} (${t('notifications.copy')})`,
-    };
-
-    setKbCategories(prev => [...prev, copiedCategory]);
-    showToast('success', t('notifications.categoryCopiedMessage', { name: category.name }));
-    // Создаём уведомление
     try {
-      await notificationsService.createNotification({
-        type: 'success',
-        titleKey: 'notifications.categoryCopied',
-        messageKey: 'notifications.categoryCopiedMessage',
-        params: { name: category.name },
+      // Создаём копию категории в базе данных через API
+      const createdCategory = await kbService.createCategory({
+        name: `${category.name} (${t('notifications.copy')})`,
+        parentId: category.parentId,
       });
-    } catch (e) { /* ignore */ }
+
+      const copiedCategory = {
+        id: createdCategory.id,
+        name: createdCategory.name,
+        parentId: createdCategory.parentId || null,
+      };
+
+      setKbCategories(prev => [...prev, copiedCategory]);
+      showToast('success', t('notifications.categoryCopiedMessage', { name: category.name }));
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          titleKey: 'notifications.categoryCopied',
+          messageKey: 'notifications.categoryCopiedMessage',
+          params: { name: category.name },
+        });
+      } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      console.error('Failed to copy category:', error);
+      showToast('error', t('notifications.categoryCopyFailed'));
+    }
   };
 
   const handleDeleteArticle = (id: number) => {
@@ -511,60 +588,93 @@ const App: React.FC = () => {
     if (!article) return;
 
     showConfirmation(`${t('confirmation.delete')} ${article.title}`, async () => {
-      setKbArticles(prev => prev.filter(art => art.id !== id));
-      hideConfirmation();
-      showToast('success', t('notifications.deleted'));
-      // Создаём уведомление
       try {
-        await notificationsService.createNotification({
-          type: 'warning',
-          titleKey: 'notifications.articleDeleted',
-          messageKey: 'notifications.articleDeletedMessage',
-          params: { name: article.title },
-        });
-      } catch (e) { /* ignore */ }
+        // Удаляем статью через API
+        await kbService.deleteArticle(id);
+
+        setKbArticles(prev => prev.filter(art => art.id !== id));
+        hideConfirmation();
+        showToast('success', t('notifications.deleted'));
+        // Создаём уведомление
+        try {
+          await notificationsService.createNotification({
+            type: 'warning',
+            titleKey: 'notifications.articleDeleted',
+            messageKey: 'notifications.articleDeletedMessage',
+            params: { name: article.title },
+          });
+        } catch (e) { /* ignore */ }
+      } catch (error: any) {
+        console.error('Failed to delete article:', error);
+        hideConfirmation();
+        showToast('error', t('notifications.articleDeleteFailed'));
+      }
     });
   };
 
   const handleCopyArticle = async (article: typeof kbArticles[0]) => {
-    const copiedArticle = {
-      ...article,
-      id: Math.floor(1000 + Math.random() * 9000),
-      title: `${article.title} (${t('notifications.copy')})`,
-      isActive: false,
-      createdAt: new Date().toLocaleString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      }).replace(',', '')
-    };
-
-    setKbArticles(prev => [...prev, copiedArticle]);
-    showToast('success', t('notifications.articleCopiedMessage', { name: article.title }));
-    // Создаём уведомление
     try {
-      await notificationsService.createNotification({
-        type: 'success',
-        titleKey: 'notifications.articleCopied',
-        messageKey: 'notifications.articleCopiedMessage',
-        params: { name: article.title },
+      // Создаём копию статьи через API
+      const createdArticle = await kbService.createArticle({
+        title: `${article.title} (${t('notifications.copy')})`,
+        content: article.content,
+        isActive: false,
+        categoryIds: article.categories,
       });
-    } catch (e) { /* ignore */ }
+
+      const copiedArticle = {
+        id: createdArticle.id,
+        title: createdArticle.title,
+        content: createdArticle.content,
+        isActive: createdArticle.isActive,
+        categories: article.categories,
+        relatedArticles: article.relatedArticles,
+        createdAt: new Date().toLocaleString('ru-RU', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        }).replace(',', '')
+      };
+
+      setKbArticles(prev => [...prev, copiedArticle]);
+      showToast('success', t('notifications.articleCopiedMessage', { name: article.title }));
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          titleKey: 'notifications.articleCopied',
+          messageKey: 'notifications.articleCopiedMessage',
+          params: { name: article.title },
+        });
+      } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      console.error('Failed to copy article:', error);
+      showToast('error', t('notifications.articleCopyFailed'));
+    }
   };
 
   const handleToggleArticleStatus = async (id: number) => {
     const article = kbArticles.find(a => a.id === id);
-    const wasActive = article?.isActive;
+    if (!article) return;
+
+    const wasActive = article.isActive;
+    const newStatus = !wasActive;
+
+    // Optimistic update
     setKbArticles(prevArticles =>
       prevArticles.map(a =>
-        a.id === id ? { ...a, isActive: !a.isActive } : a
+        a.id === id ? { ...a, isActive: newStatus } : a
       )
     );
-    // Создаём уведомление
-    if (article) {
+
+    try {
+      // Переключаем статус через API
+      await kbService.toggleArticleStatus(id);
+
+      // Создаём уведомление
       const statusKey = wasActive ? 'disabled' : 'enabled';
       try {
         await notificationsService.createNotification({
@@ -574,6 +684,15 @@ const App: React.FC = () => {
           params: { name: article.title, statusKey },
         });
       } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      // Revert on error
+      setKbArticles(prevArticles =>
+        prevArticles.map(a =>
+          a.id === id ? { ...a, isActive: wasActive } : a
+        )
+      );
+      console.error('Failed to toggle article status:', error);
+      showToast('error', t('notifications.unknownError'));
     }
   };
 
@@ -595,13 +714,24 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSaveCategory = (updatedCategory: { id: string; name: string; parentId: string | null }) => {
-    setKbCategories(prev => prev.map(cat =>
-      cat.id === updatedCategory.id ? updatedCategory : cat
-    ));
-    showToast('success', t('notifications.changesSaved'));
-    setEditingCategory(null);
-    setCurrentPage('kb-categories');
+  const handleSaveCategory = async (updatedCategory: { id: string; name: string; parentId: string | null }) => {
+    try {
+      // Обновляем категорию в базе данных через API
+      await kbService.updateCategory(updatedCategory.id, {
+        name: updatedCategory.name,
+        parentId: updatedCategory.parentId,
+      });
+
+      setKbCategories(prev => prev.map(cat =>
+        cat.id === updatedCategory.id ? updatedCategory : cat
+      ));
+      showToast('success', t('notifications.changesSaved'));
+      setEditingCategory(null);
+      setCurrentPage('kb-categories');
+    } catch (error: any) {
+      console.error('Failed to update category:', error);
+      showToast('error', t('notifications.categoryUpdateFailed'));
+    }
   };
 
   const handleOpenCategory = (categoryId: string | null) => {
@@ -609,32 +739,59 @@ const App: React.FC = () => {
   };
 
   const handleAddCategory = async (category: { name: string; parentId: string | null }) => {
-    const newCategory = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...category,
-    };
-    setKbCategories(prev => [...prev, newCategory]);
-    showToast('success', t('notifications.categoryCreated'));
-    // Создаём уведомление
     try {
-      await notificationsService.createNotification({
-        type: 'success',
-        titleKey: 'notifications.categoryCreated',
-        messageKey: 'notifications.categoryCreatedMessage',
-        params: { name: category.name },
+      // Сохраняем категорию в базу данных через API
+      const createdCategory = await kbService.createCategory({
+        name: category.name,
+        parentId: category.parentId,
       });
-    } catch (e) { /* ignore */ }
+
+      // Добавляем в локальный state с реальным ID из базы
+      const newCategory = {
+        id: createdCategory.id,
+        name: createdCategory.name,
+        parentId: createdCategory.parentId || null,
+      };
+      setKbCategories(prev => [...prev, newCategory]);
+      showToast('success', t('notifications.categoryCreated'));
+
+      // Создаём уведомление
+      try {
+        await notificationsService.createNotification({
+          type: 'success',
+          titleKey: 'notifications.categoryCreated',
+          messageKey: 'notifications.categoryCreatedMessage',
+          params: { name: category.name },
+        });
+      } catch (e) { /* ignore */ }
+    } catch (error: any) {
+      console.error('Failed to create category:', error);
+      showToast('error', t('notifications.categoryCreateFailed'));
+    }
     setCurrentCategoryId(null); // Reset to root categories view
     setCurrentPage('kb-categories');
   };
 
-  const handleSaveArticle = (updatedArticle: typeof kbArticles[0]) => {
-    setKbArticles(prev => prev.map(art =>
-      art.id === updatedArticle.id ? updatedArticle : art
-    ));
-    showToast('success', 'Изменения сохранены');
-    setEditingArticle(null);
-    setCurrentPage('kb-articles');
+  const handleSaveArticle = async (updatedArticle: typeof kbArticles[0]) => {
+    try {
+      // Обновляем статью через API
+      await kbService.updateArticle(updatedArticle.id, {
+        title: updatedArticle.title,
+        content: updatedArticle.content,
+        isActive: updatedArticle.isActive,
+        categoryIds: updatedArticle.categories,
+      });
+
+      setKbArticles(prev => prev.map(art =>
+        art.id === updatedArticle.id ? updatedArticle : art
+      ));
+      showToast('success', t('notifications.changesSaved'));
+      setEditingArticle(null);
+      setCurrentPage('kb-articles');
+    } catch (error: any) {
+      console.error('Failed to update article:', error);
+      showToast('error', t('notifications.articleUpdateFailed'));
+    }
   };
 
   const handleNavigate = (page: Page) => {
@@ -688,7 +845,7 @@ const App: React.FC = () => {
       case 'settings': return <Settings showToast={showToast} />;
       case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
       case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
-      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
+      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} categories={kbCategories} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
       case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} categories={kbCategories} />;
       case 'training-roles': return <TrainingRoles />;
       case 'training-sources': return <TrainingSources />;
@@ -709,9 +866,9 @@ const App: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        background: '#fff',
       }}>
-        <div style={{ color: 'white', fontSize: '18px' }}>Загрузка...</div>
+        <div style={{ color: '#64748b', fontSize: '18px' }}>Загрузка...</div>
       </div>
     );
   }

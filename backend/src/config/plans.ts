@@ -3,7 +3,7 @@
  * Конфигурация тарифных планов с лимитами
  */
 
-export type PlanType = 'trial' | 'launch' | 'scale' | 'max';
+export type PlanType = 'trial' | 'launch' | 'scale' | 'max' | 'unlimited';
 
 export interface PlanLimits {
   // Основные лимиты
@@ -33,9 +33,9 @@ export const PLAN_CONFIGS: Record<PlanType, PlanConfig> = {
     name: 'trial',
     displayName: 'Trial',
     agentsLimit: 3,
-    kbArticlesLimit: 100,
+    kbArticlesLimit: 10,
     responsesLimit: 500,
-    instructionsLimit: 30000,
+    instructionsLimit: 10000,
     canSendMedia: false,
     canReceiveVoice: false,
     canReceiveImages: false,
@@ -47,9 +47,9 @@ export const PLAN_CONFIGS: Record<PlanType, PlanConfig> = {
     name: 'launch',
     displayName: 'Launch',
     agentsLimit: 5,
-    kbArticlesLimit: 500,
+    kbArticlesLimit: 20,
     responsesLimit: 1000, // Базовое значение, может меняться при покупке
-    instructionsLimit: 60000,
+    instructionsLimit: 20000,
     canSendMedia: true,
     canReceiveVoice: false,
     canReceiveImages: false,
@@ -61,7 +61,7 @@ export const PLAN_CONFIGS: Record<PlanType, PlanConfig> = {
     name: 'scale',
     displayName: 'Scale',
     agentsLimit: 10,
-    kbArticlesLimit: 100000,
+    kbArticlesLimit: 100,
     responsesLimit: 15000, // Базовое значение
     instructionsLimit: 60000,
     canSendMedia: true,
@@ -84,6 +84,20 @@ export const PLAN_CONFIGS: Record<PlanType, PlanConfig> = {
     canUpdateCrmFields: true,
     trialDays: 0,
     isMonthlyReset: true,
+  },
+  unlimited: {
+    name: 'unlimited',
+    displayName: 'Unlimited',
+    agentsLimit: -1, // Безлимит
+    kbArticlesLimit: -1, // Безлимит
+    responsesLimit: -1, // Безлимит
+    instructionsLimit: -1, // Безлимит
+    canSendMedia: true,
+    canReceiveVoice: true,
+    canReceiveImages: true,
+    canUpdateCrmFields: true,
+    trialDays: 0,
+    isMonthlyReset: false, // Нет ресета - безлимит
   },
 };
 

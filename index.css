@@ -31,6 +31,46 @@
   background: #6B7280;
 }
 
+/* Custom scrollbar for sidebar - thin and subtle */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #CBD5E1;
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #E2E8F0 transparent;
+}
+
+/* Dark mode - using data attribute since .dark class is on parent */
+[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+
+[data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+[data-theme="dark"] .custom-scrollbar,
+.dark .custom-scrollbar {
+  scrollbar-color: #374151 transparent;
+}
+
 /* Custom checkbox with visible checkmark */
 input[type="checkbox"].appearance-none {
   position: relative;
@@ -48,4 +88,62 @@ input[type="checkbox"].appearance-none:checked::after {
   border: solid white;
   border-width: 0 2px 2px 0;
   display: block;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Pulse animation for status indicators */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+/* Dashboard animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.5s ease-out forwards;
+}
+
+/* Staggered animation delays for dashboard cards */
+.animate-delay-100 { animation-delay: 100ms; }
+.animate-delay-200 { animation-delay: 200ms; }
+.animate-delay-300 { animation-delay: 300ms; }
+.animate-delay-400 { animation-delay: 400ms; }
+.animate-delay-500 { animation-delay: 500ms; }
+
+/* Initial state for staggered animations */
+.animate-stagger {
+  opacity: 0;
 }

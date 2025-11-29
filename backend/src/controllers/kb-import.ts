@@ -17,10 +17,10 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${uuidv4()}`;
     cb(null, `${uniqueSuffix}-${file.originalname}`);
   },
@@ -32,7 +32,7 @@ const upload = multer({
     fileSize: 50 * 1024 * 1024, // 50MB per file
     files: 10, // Maximum 10 files
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.html', '.htm', '.json'];
     const ext = path.extname(file.originalname).toLowerCase();
 
@@ -347,9 +347,6 @@ export const getImportStatus = async (req: AuthRequest, res: Response) => {
 
     const job = await prisma.kbImportJob.findUnique({
       where: { id: jobId },
-      include: {
-        files: true,
-      },
     });
 
     if (!job || job.userId !== userId) {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createChain,
   getChains,
+  getChainById,
   updateChain,
   deleteChain,
 } from '../controllers/chains';
@@ -17,6 +18,9 @@ router.post('/:agentId/chains', createChain);
 
 // GET /api/agents/:agentId/chains - Получить все цепочки
 router.get('/:agentId/chains', getChains);
+
+// GET /api/agents/:agentId/chains/:chainId - Получить цепочку по ID
+router.get('/:agentId/chains/:chainId', getChainById);
 
 // PUT /api/agents/:agentId/chains/:chainId - Обновить цепочку
 router.put('/:agentId/chains/:chainId', updateChain);

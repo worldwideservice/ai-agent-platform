@@ -86,6 +86,7 @@ export interface AgentUpdateRequest extends Partial<AgentCreateRequest> {}
 export interface AgentResponse {
   id: string;
   name: string;
+  description?: string;
   isActive: boolean;
   model: string;
   systemInstructions: string | null;
@@ -114,6 +115,7 @@ export interface KbCategoryUpdateRequest {
 export interface KbCategoryResponse {
   id: string;
   name: string;
+  description?: string;
   parentId: string | null;
   createdAt: string;
   updatedAt: string;

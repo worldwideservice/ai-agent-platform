@@ -204,7 +204,7 @@ export async function* streamChatCompletion(
       throw new Error('No response body for streaming');
     }
 
-    const reader = response.body.getReader();
+    const reader = (response.body as any).getReader();
     const decoder = new TextDecoder();
 
     while (true) {

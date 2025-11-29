@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 /**
  * Общая статистика для дашборда
  */
-export async function getDashboardStats(req: AuthRequest, res: Response) {
+export async function getDashboardStats(_req: AuthRequest, res: Response) {
   try {
     const [
       totalUsers,
@@ -170,7 +170,7 @@ export async function getUsers(req: AuthRequest, res: Response) {
 /**
  * Получить детальную информацию о пользователе
  */
-export async function getUserById(req: AuthRequest, res: Response) {
+export async function getUserById(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { userId } = req.params;
 
@@ -199,7 +199,8 @@ export async function getUserById(req: AuthRequest, res: Response) {
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     // Получаем связанные данные
@@ -290,7 +291,7 @@ export async function updateUser(req: AuthRequest, res: Response) {
 /**
  * Быстрые действия с пользователем
  */
-export async function userQuickAction(req: AuthRequest, res: Response) {
+export async function userQuickAction(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { userId } = req.params;
     const { action, value } = req.body;
@@ -355,7 +356,8 @@ export async function userQuickAction(req: AuthRequest, res: Response) {
         break;
 
       default:
-        return res.status(400).json({ error: 'Unknown action' });
+        res.status(400).json({ error: 'Unknown action' });
+        return;
     }
 
     const user = await prisma.user.update({
@@ -386,14 +388,15 @@ export async function userQuickAction(req: AuthRequest, res: Response) {
 /**
  * Удалить пользователя и все связанные данные
  */
-export async function deleteUser(req: AuthRequest, res: Response) {
+export async function deleteUser(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { userId } = req.params;
-    const currentUserId = req.user?.id;
+    const currentUserId = req.userId;
 
     // Нельзя удалить самого себя
     if (userId === currentUserId) {
-      return res.status(400).json({ error: 'Cannot delete yourself' });
+      res.status(400).json({ error: 'Cannot delete yourself' });
+      return;
     }
 
     // Проверяем существование пользователя
@@ -406,7 +409,8 @@ export async function deleteUser(req: AuthRequest, res: Response) {
     });
 
     if (!userToDelete) {
-      return res.status(404).json({ error: 'User not found' });
+      res.status(404).json({ error: 'User not found' });
+      return;
     }
 
     // Подсчитываем статистику
@@ -646,7 +650,7 @@ export async function toggleAgentStatus(req: AuthRequest, res: Response) {
 /**
  * Получить все интеграции (Kommo, Google и т.д.)
  */
-export async function getAllIntegrations(req: AuthRequest, res: Response) {
+export async function getAllIntegrations(_req: AuthRequest, res: Response) {
   try {
     const [kommoTokens, googleTokens, integrations] = await Promise.all([
       prisma.kommoToken.findMany({
@@ -708,7 +712,7 @@ export async function getAllIntegrations(req: AuthRequest, res: Response) {
 /**
  * Статистика по базе знаний
  */
-export async function getKnowledgeBaseStats(req: AuthRequest, res: Response) {
+export async function getKnowledgeBaseStats(_req: AuthRequest, res: Response) {
   try {
     const [
       totalArticles,
@@ -761,7 +765,7 @@ export async function getKnowledgeBaseStats(req: AuthRequest, res: Response) {
 /**
  * Системная информация и мониторинг
  */
-export async function getSystemInfo(req: AuthRequest, res: Response) {
+export async function getSystemInfo(_req: AuthRequest, res: Response) {
   try {
     const queueStats = await getQueueStats();
     const openRouterStats = getOpenRouterStats();
@@ -795,7 +799,6 @@ export async function getSystemInfo(req: AuthRequest, res: Response) {
         external: Math.round(process.memoryUsage().external / 1024 / 1024),
       },
       queue: {
-        enabled: isQueueAvailable(),
         ...queueStats,
       },
       openRouter: openRouterStats,
@@ -820,9 +823,9 @@ export async function getSystemInfo(req: AuthRequest, res: Response) {
 /**
  * Логи активности (последние действия)
  */
-export async function getActivityLogs(req: AuthRequest, res: Response) {
+export async function getActivityLogs(_req: AuthRequest, res: Response) {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
+    // const limit = parseInt(req.query.limit as string) || 50;
 
     // Последние регистрации
     const recentRegistrations = await prisma.user.findMany({
@@ -924,7 +927,7 @@ export async function getAllConversations(req: AuthRequest, res: Response) {
 /**
  * Все источники обучения и роли
  */
-export async function getTrainingData(req: AuthRequest, res: Response) {
+export async function getTrainingData(_req: AuthRequest, res: Response) {
   try {
     const [sources, roles] = await Promise.all([
       prisma.trainingSource.findMany({

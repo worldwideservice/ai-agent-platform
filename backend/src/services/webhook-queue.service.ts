@@ -13,7 +13,7 @@
  * - Rate limiting built-in
  */
 
-import { Queue, Worker, Job, QueueEvents } from 'bullmq';
+import { Queue, Worker, Job, QueueEvents, ConnectionOptions } from 'bullmq';
 import { isRedisAvailable, getRedisConfigForBullMQ } from '../config/redis';
 
 // Queue names
@@ -38,11 +38,11 @@ export interface AIResponseJobData {
   context?: any;
 }
 
-// Queue instances
-let webhookQueue: Queue<WebhookJobData> | null = null;
-let aiResponseQueue: Queue<AIResponseJobData> | null = null;
-let webhookWorker: Worker<WebhookJobData> | null = null;
-let aiResponseWorker: Worker<AIResponseJobData> | null = null;
+// Queue instances - using 'any' for Queue type to avoid complex generic issues with BullMQ
+let webhookQueue: Queue | null = null;
+let aiResponseQueue: Queue | null = null;
+let webhookWorker: Worker | null = null;
+let aiResponseWorker: Worker | null = null;
 let queueEvents: QueueEvents | null = null;
 
 // Stats
@@ -64,10 +64,14 @@ export async function initWebhookQueue(): Promise<boolean> {
 
   try {
     const redisConfig = getRedisConfigForBullMQ();
+    if (!redisConfig) {
+      console.log('⚠️ Queue disabled - Redis config not available');
+      return false;
+    }
 
     // Create webhook queue
-    webhookQueue = new Queue<WebhookJobData>(WEBHOOK_QUEUE_NAME, {
-      connection: redisConfig,
+    webhookQueue = new Queue(WEBHOOK_QUEUE_NAME, {
+      connection: redisConfig as ConnectionOptions,
       defaultJobOptions: {
         attempts: 3,
         backoff: {
@@ -86,8 +90,8 @@ export async function initWebhookQueue(): Promise<boolean> {
     });
 
     // Create AI response queue with rate limiting
-    aiResponseQueue = new Queue<AIResponseJobData>(AI_RESPONSE_QUEUE_NAME, {
-      connection: redisConfig,
+    aiResponseQueue = new Queue(AI_RESPONSE_QUEUE_NAME, {
+      connection: redisConfig as ConnectionOptions,
       defaultJobOptions: {
         attempts: 2,
         backoff: {
@@ -107,10 +111,10 @@ export async function initWebhookQueue(): Promise<boolean> {
 
     // Queue events for monitoring
     queueEvents = new QueueEvents(WEBHOOK_QUEUE_NAME, {
-      connection: redisConfig,
+      connection: redisConfig as ConnectionOptions,
     });
 
-    queueEvents.on('completed', ({ jobId }) => {
+    queueEvents.on('completed', () => {
       stats.processed++;
     });
 
@@ -194,15 +198,18 @@ export async function startWebhookWorker(
 
   try {
     const redisConfig = getRedisConfigForBullMQ();
+    if (!redisConfig) {
+      return false;
+    }
 
-    webhookWorker = new Worker<WebhookJobData>(
+    webhookWorker = new Worker(
       WEBHOOK_QUEUE_NAME,
       async (job) => {
         const startTime = Date.now();
         console.log(`🔄 Processing webhook job ${job.id}...`);
 
         try {
-          await processor(job);
+          await processor(job as Job<WebhookJobData>);
 
           const duration = Date.now() - startTime;
           stats.processingTime.push(duration);
@@ -219,7 +226,7 @@ export async function startWebhookWorker(
         }
       },
       {
-        connection: redisConfig,
+        connection: redisConfig as ConnectionOptions,
         concurrency: 5, // Process 5 webhooks in parallel
         limiter: {
           max: 10, // Max 10 jobs per duration
@@ -252,12 +259,15 @@ export async function startAIResponseWorker(
 
   try {
     const redisConfig = getRedisConfigForBullMQ();
+    if (!redisConfig) {
+      return false;
+    }
 
-    aiResponseWorker = new Worker<AIResponseJobData>(
+    aiResponseWorker = new Worker(
       AI_RESPONSE_QUEUE_NAME,
-      processor,
+      (job) => processor(job as Job<AIResponseJobData>),
       {
-        connection: redisConfig,
+        connection: redisConfig as ConnectionOptions,
         concurrency: 3, // 3 parallel AI requests
         limiter: {
           max: 5, // Max 5 AI requests per second
@@ -283,7 +293,7 @@ export async function getQueueStats() {
   }
 
   try {
-    const [waiting, active, completed, failed] = await Promise.all([
+    const [waiting, active, completed, failedCount] = await Promise.all([
       webhookQueue.getWaitingCount(),
       webhookQueue.getActiveCount(),
       webhookQueue.getCompletedCount(),
@@ -299,6 +309,7 @@ export async function getQueueStats() {
       queued: stats.queued,
       processed: stats.processed,
       failed: stats.failed,
+      failedInQueue: failedCount,
       waiting,
       active,
       completed,

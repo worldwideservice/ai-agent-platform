@@ -13,19 +13,24 @@ interface KbArticlesProps {
     content: string;
     createdAt: string;
   }[];
+  categories?: { id: string; name: string; parentId: string | null }[];
   onEditArticle?: (id: number) => void;
   onDeleteArticle?: (id: number) => void;
   onCopyArticle?: (article: KbArticlesProps['articles'][0]) => void;
   onToggleArticleStatus?: (id: number) => void;
 }
 
-export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEditArticle, onDeleteArticle, onCopyArticle, onToggleArticleStatus }) => {
+export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, categories = [], onEditArticle, onDeleteArticle, onCopyArticle, onToggleArticleStatus }) => {
   const { t } = useTranslation();
 
-  // Helper function to translate category names
-  const getCategoryName = (name: string): string => {
-    const translatedName = t(`knowledgeBase.defaultCategories.${name}`, { defaultValue: '' });
-    return translatedName || name;
+  // Helper function to get category name by ID
+  const getCategoryName = (categoryId: string): string => {
+    const category = categories.find(c => c.id === categoryId);
+    if (category) {
+      const translatedName = t(`knowledgeBase.defaultCategories.${category.name}`, { defaultValue: '' });
+      return translatedName || category.name;
+    }
+    return categoryId;
   };
 
   const [activeFilters, setActiveFilters] = useState<string[]>([]);
@@ -127,174 +132,258 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm overflow-hidden flex flex-col transition-colors relative">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm flex flex-col transition-colors relative">
 
         {/* Toolbar */}
-        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          {/* Active Filters */}
-          <div className="flex items-center gap-2 min-h-[26px]">
-            {activeFilters.length > 0 && <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.activeFilters')}</span>}
-            {activeFilters.map(filter => (
-              <span key={filter} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-100 dark:border-blue-900/50">
-                {filter}
-                <button onClick={() => removeFilter(filter)} className="cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none">
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-            {activeFilters.length > 0 && (
+        <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+          {/* Search */}
+          <div className="relative w-64">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('common.search')}
+              className="w-full border border-gray-200 dark:border-gray-600 rounded-lg pl-10 pr-8 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] outline-none transition-all"
+            />
+            {searchQuery && (
               <button
-                onClick={() => setActiveFilters([])}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-2 focus:outline-none"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
               >
-                <X size={16} />
+                <X size={14} />
               </button>
             )}
           </div>
 
-          <div className="flex gap-2">
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
-              <input
-                type="text"
-                placeholder={t('common.search')}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-48 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400"
-              />
-            </div>
-            <button
-              ref={filterButtonRef}
-              onClick={() => setShowFilterMenu(!showFilterMenu)}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors relative"
-              title={t('common.filters')}
-            >
-              <Filter size={16} />
-              {(filters.status !== 'all' || filters.category !== 'all') && (
-                <span className="absolute -top-1 -right-1 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-[10px] font-bold px-1 rounded-full">
-                  {(filters.status !== 'all' ? 1 : 0) + (filters.category !== 'all' ? 1 : 0)}
-                </span>
-              )}
-            </button>
-            <button
-              ref={columnsButtonRef}
-              onClick={() => setShowColumnsPanel(!showColumnsPanel)}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1.5 border border-gray-200 dark:border-gray-600 rounded transition-colors"
-              title={t('common.columns')}
-            >
-              <LayoutGrid size={16} />
-            </button>
-          </div>
+          <button
+            ref={filterButtonRef}
+            onClick={() => {
+              setShowFilterMenu(!showFilterMenu);
+              setShowColumnsPanel(false);
+            }}
+            className={`relative flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+              showFilterMenu
+                ? 'bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/30'
+                : (filters.status !== 'all' || filters.category !== 'all')
+                  ? 'bg-[#0078D4]/5 text-[#0078D4] border border-[#0078D4]/20 hover:bg-[#0078D4]/10'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+            }`}
+            title={t('common.filters')}
+          >
+            <Filter size={16} />
+            {(filters.status !== 'all' || filters.category !== 'all') && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-[16px] bg-[#0078D4] text-white text-[9px] font-bold rounded-full">
+                {(filters.status !== 'all' ? 1 : 0) + (filters.category !== 'all' ? 1 : 0)}
+              </span>
+            )}
+          </button>
+          <button
+            ref={columnsButtonRef}
+            onClick={() => {
+              setShowColumnsPanel(!showColumnsPanel);
+              setShowFilterMenu(false);
+            }}
+            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
+              showColumnsPanel
+                ? 'bg-[#0078D4]/10 text-[#0078D4] border border-[#0078D4]/30'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+            }`}
+            title={t('common.columns')}
+          >
+            <LayoutGrid size={16} />
+          </button>
         </div>
 
-        {/* Filter Panel - Боковая панель фильтров */}
-        {showFilterMenu && (
-          <div ref={filterPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-gray-900 dark:text-white">{t('common.filters')}</h3>
-              <button
-                onClick={() => setFilters({ status: 'all', category: 'all' })}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                {t('common.reset')}
-              </button>
+        {/* Filter Panel - Modern sliding panel */}
+        <div
+          ref={filterPanelRef}
+          className={`absolute top-12 right-4 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 transition-all duration-200 ease-out ${
+            showFilterMenu ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
+          }`}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-600 rounded-t-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Filter size={16} className="text-[#0078D4]" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">{t('common.filters')}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {(filters.status !== 'all' || filters.category !== 'all') && (
+                  <button
+                    onClick={() => setFilters({ status: 'all', category: 'all' })}
+                    className="text-xs text-[#0078D4] hover:text-[#006cbd] font-medium px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                  >
+                    {t('common.reset')}
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowFilterMenu(false)}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-4">
             <div className="space-y-4">
+              {/* Status */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   {t('common.status')}
                 </label>
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="all">{t('common.all')}</option>
                   <option value="active">{t('common.active')}</option>
                   <option value="inactive">{t('common.inactive')}</option>
                 </select>
               </div>
+              {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
                   {t('knowledgeBase.category')}
                 </label>
                 <select
                   value={filters.category}
                   onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#0078D4] focus:border-[#0078D4] outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="all">{t('knowledgeBase.allCategories')}</option>
-                  <option value="Общее">{t('knowledgeBase.defaultCategories.Общее', 'Общее')}</option>
-                  <option value="Поддержка">{t('knowledgeBase.defaultCategories.Поддержка', 'Поддержка')}</option>
-                  <option value="FAQ">{t('knowledgeBase.defaultCategories.FAQ', 'FAQ')}</option>
+                  <option value="Общее">{getCategoryName('Общее')}</option>
+                  <option value="Поддержка">{getCategoryName('Поддержка')}</option>
+                  <option value="FAQ">{getCategoryName('FAQ')}</option>
                 </select>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Columns Panel - Боковая панель столбцов */}
-        {showColumnsPanel && (
-          <div ref={columnsPanelRef} className="absolute top-12 right-4 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 p-4">
-            <h3 className="font-medium text-gray-900 dark:text-white mb-3">{t('common.columns')}</h3>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.id}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, id: !prev.id }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.id')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.title}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.title')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.active}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, active: !prev.active }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.isActive')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.categories}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, categories: !prev.categories }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.categories')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.relatedArticles}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, relatedArticles: !prev.relatedArticles }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.relatedArticles')}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={visibleColumns.createdAt}
-                  onChange={() => setVisibleColumns(prev => ({ ...prev, createdAt: !prev.createdAt }))}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('common.createdAt')}</span>
-              </label>
+        {/* Columns Panel - Modern sliding panel with toggle switches */}
+        <div
+          ref={columnsPanelRef}
+          className={`absolute top-12 right-4 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-20 transition-all duration-200 ease-out ${
+            showColumnsPanel ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'
+          }`}
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-600 rounded-t-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <LayoutGrid size={16} className="text-[#0078D4]" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">{t('common.columns')}</h3>
+              </div>
+              <button
+                onClick={() => setShowColumnsPanel(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+              >
+                <X size={16} />
+              </button>
             </div>
           </div>
-        )}
+
+          {/* Content */}
+          <div className="p-2">
+            <div className="space-y-0.5">
+              {/* ID column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, id: !prev.id }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.id')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.id ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.id ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Title column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, title: !prev.title }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.title')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.title ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.title ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Active column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, active: !prev.active }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.isActive')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.active ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.active ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Categories column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, categories: !prev.categories }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.categories')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.categories ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.categories ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Related Articles column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, relatedArticles: !prev.relatedArticles }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('knowledgeBase.relatedArticles')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.relatedArticles ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.relatedArticles ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+
+              {/* Created At column */}
+              <button
+                onClick={() => setVisibleColumns(prev => ({ ...prev, createdAt: !prev.createdAt }))}
+                className="w-full flex items-center justify-between px-2 py-2 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <span className="text-sm text-gray-700 dark:text-gray-300">{t('common.createdAt')}</span>
+                <div className={`relative w-8 h-4 rounded-full transition-colors duration-300 ease-in-out ${
+                  visibleColumns.createdAt ? 'bg-[#0078D4]' : 'bg-gray-300 dark:bg-gray-600'
+                }`}>
+                  <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow-sm transition-transform duration-300 ease-in-out ${
+                    visibleColumns.createdAt ? 'translate-x-4' : 'translate-x-0.5'
+                  }`} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Content: Table or Empty State */}
         {filteredArticles.length > 0 ? (
@@ -370,10 +459,10 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
                             e.stopPropagation();
                             if (typeof onToggleArticleStatus === 'function') onToggleArticleStatus(article.id);
                           }}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-all duration-300 ease-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${article.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
+                          className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-offset-2 dark:focus:ring-offset-gray-800 ${article.isActive ? 'bg-[#0078D4]' : 'bg-gray-200 dark:bg-gray-600'}`}
                         >
                           <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition-all duration-300 ease-out ${article.isActive ? 'translate-x-5 scale-110' : 'translate-x-0 scale-100'}`}
+                            className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-0 transition-transform duration-300 ease-in-out ${article.isActive ? 'translate-x-4' : 'translate-x-0.5'}`}
                           />
                         </button>
                       </td>
@@ -427,7 +516,7 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, onEd
 
             {/* Pagination Footer */}
             <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-              <span>{t('common.showingFromTo', { from: 1, to: filteredArticles.length, total: articles.length })}</span>
+              <span>{t('common.total')}: {filteredArticles.length}</span>
               <div className="flex items-center gap-2">
                 <span>{t('common.perPage')}</span>
                 <select className="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">

@@ -57,6 +57,8 @@ export interface TriggerActionParams {
   // send_kb_article
   articleId?: number;  // ID статьи KB для отправки
   channel?: 'chat' | 'email';  // Канал отправки
+  // send_files
+  fileUrls?: string[];  // URLs файлов для отправки
 }
 
 export interface TriggerAction {

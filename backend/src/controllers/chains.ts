@@ -102,6 +102,59 @@ export const createChain = async (req: AuthRequest, res: Response) => {
 };
 
 /**
+ * GET /api/agents/:agentId/chains/:chainId
+ * Получить цепочку по ID
+ */
+export const getChainById = async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId;
+    const { agentId, chainId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Проверяем что агент принадлежит пользователю
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+    });
+
+    if (!agent || agent.userId !== userId) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const chain = await prisma.chain.findUnique({
+      where: { id: chainId },
+      include: {
+        conditions: true,
+        steps: {
+          include: {
+            actions: {
+              orderBy: { actionOrder: 'asc' },
+            },
+          },
+          orderBy: { stepOrder: 'asc' },
+        },
+        schedules: {
+          orderBy: { dayOfWeek: 'asc' },
+        },
+      },
+    });
+
+    if (!chain || chain.agentId !== agentId) {
+      return res.status(404).json({ message: 'Chain not found' });
+    }
+
+    return res.json(chain);
+  } catch (error: any) {
+    console.error('Error fetching chain:', error);
+    return res.status(500).json({
+      message: error.message || 'Internal server error',
+    });
+  }
+};
+
+/**
  * GET /api/agents/:agentId/chains
  * Получить все цепочки агента
  */
@@ -325,7 +378,7 @@ function getDayOfWeekNumber(dayName: string): number {
 // Helper функция для создания расписания по умолчанию (Пн-Вс 08:00-22:00)
 function getDefaultSchedule() {
   const days = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
-  return days.map((day, index) => ({
+  return days.map((_dayName, index) => ({
     dayOfWeek: index,
     enabled: true,
     startTime: '08:00',

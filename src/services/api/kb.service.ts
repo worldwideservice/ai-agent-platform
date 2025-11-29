@@ -139,6 +139,85 @@ class KbService {
     );
     return response.data;
   }
+
+  // ==================== Article Files ====================
+
+  /**
+   * Получить все файлы статьи
+   */
+  async getArticleFiles(articleId: number): Promise<KbArticleFileResponse[]> {
+    const response = await apiClient.get<KbArticleFileResponse[]>(
+      `/kb/articles/${articleId}/files`
+    );
+    return response.data;
+  }
+
+  /**
+   * Загрузить файл для статьи
+   */
+  async uploadArticleFile(articleId: number, file: File): Promise<KbArticleFileResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await apiClient.post<KbArticleFileResponse>(
+      `/kb/articles/${articleId}/files`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  }
+
+  /**
+   * Загрузить несколько файлов для статьи
+   */
+  async uploadArticleFiles(articleId: number, files: File[]): Promise<KbArticleFileResponse[]> {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    const response = await apiClient.post<KbArticleFileResponse[]>(
+      `/kb/articles/${articleId}/files/multiple`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  }
+
+  /**
+   * Удалить файл статьи
+   */
+  async deleteArticleFile(articleId: number, fileId: string): Promise<{ message: string }> {
+    const response = await apiClient.delete<{ message: string }>(
+      `/kb/articles/${articleId}/files/${fileId}`
+    );
+    return response.data;
+  }
+
+  /**
+   * Получить URL для скачивания файла
+   */
+  getArticleFileDownloadUrl(articleId: number, fileId: string): string {
+    return `/api/kb/articles/${articleId}/files/${fileId}/download`;
+  }
+}
+
+export interface KbArticleFileResponse {
+  id: string;
+  fileName: string;
+  fileType: string;
+  mimeType: string;
+  fileSize: number;
+  thumbnailUrl: string | null;
+  createdAt: string;
 }
 
 export const kbService = new KbService();

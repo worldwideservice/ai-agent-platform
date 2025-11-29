@@ -133,10 +133,11 @@ export async function getUserLimits(userId: string): Promise<UserLimits> {
         usage.articlesCount >= user.kbArticlesLimit ? `Достигнут лимит статей базы знаний (${user.kbArticlesLimit})` : undefined,
     },
     responses: {
-      allowed: !trialExpired && user.responsesUsed < user.responsesLimit,
+      allowed: !trialExpired && (isUnlimited(user.responsesLimit) || user.responsesUsed < user.responsesLimit),
       current: user.responsesUsed,
       limit: user.responsesLimit,
-      message: trialExpired ? 'Пробный период истёк' :
+      message: isUnlimited(user.responsesLimit) ? undefined :
+        trialExpired ? 'Пробный период истёк' :
         user.responsesUsed >= user.responsesLimit ? `Достигнут лимит ответов (${user.responsesLimit})` : undefined,
     },
     instructions: user.instructionsLimit,
@@ -286,12 +287,34 @@ export async function changePlan(
 }
 
 /**
+ * Синхронизировать лимиты пользователя с конфигурацией плана
+ * (нужно для unlimited плана, если лимиты не были обновлены)
+ */
+async function syncPlanLimits(userId: string, currentPlan: string) {
+  const planConfig = getPlanConfig(currentPlan);
+
+  // Проверяем, нужна ли синхронизация (для unlimited плана)
+  if (currentPlan === 'unlimited') {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        agentsLimit: planConfig.agentsLimit,
+        kbArticlesLimit: planConfig.kbArticlesLimit,
+        responsesLimit: planConfig.responsesLimit,
+        instructionsLimit: planConfig.instructionsLimit,
+        subscriptionStatus: 'active',
+      },
+    });
+  }
+}
+
+/**
  * Получить информацию о подписке для отображения
  */
 export async function getSubscriptionInfo(userId: string) {
   await checkAndResetMonthlyLimits(userId);
 
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       currentPlan: true,
@@ -309,6 +332,25 @@ export async function getSubscriptionInfo(userId: string) {
     throw new Error('User not found');
   }
 
+  // Синхронизируем лимиты для unlimited плана если они не соответствуют
+  if (user.currentPlan === 'unlimited' && user.responsesLimit !== -1) {
+    await syncPlanLimits(userId, user.currentPlan);
+    // Перечитываем пользователя после обновления
+    user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        currentPlan: true,
+        trialEndsAt: true,
+        responsesUsed: true,
+        responsesLimit: true,
+        responsesResetAt: true,
+        agentsLimit: true,
+        kbArticlesLimit: true,
+        instructionsLimit: true,
+      },
+    }) as typeof user;
+  }
+
   const trialExpired = isTrialExpired(user);
   const planConfig = getPlanConfig(user.currentPlan);
 
@@ -319,17 +361,23 @@ export async function getSubscriptionInfo(userId: string) {
     daysRemaining = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }
 
+  // Для unlimited плана isActive всегда true (если не trial expired)
+  const isActive = !trialExpired && (isUnlimited(user.responsesLimit) || user.responsesUsed < user.responsesLimit);
+
+  // Для unlimited плана usagePercentage = 0
+  const usagePercentage = isUnlimited(user.responsesLimit) ? 0 : Math.round((user.responsesUsed / user.responsesLimit) * 100);
+
   return {
     plan: user.currentPlan,
     planDisplayName: planConfig.displayName,
-    isActive: !trialExpired && user.responsesUsed < user.responsesLimit,
+    isActive,
     isTrialExpired: trialExpired,
     trialEndsAt: user.trialEndsAt,
     daysRemaining,
     responsesUsed: user.responsesUsed,
     responsesLimit: user.responsesLimit,
     responsesResetAt: user.responsesResetAt,
-    usagePercentage: Math.round((user.responsesUsed / user.responsesLimit) * 100),
+    usagePercentage,
     limits: {
       agents: user.agentsLimit,
       kbArticles: user.kbArticlesLimit,

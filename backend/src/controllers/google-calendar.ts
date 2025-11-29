@@ -6,7 +6,7 @@ import {
   getEmployeeAuthUrl,
   exchangeEmployeeCode,
   getEmployeeCalendarClient,
-  refreshEmployeeTokens,
+  // refreshEmployeeTokens is called internally when tokens expire
 } from '../services/google-calendar.service';
 
 /**

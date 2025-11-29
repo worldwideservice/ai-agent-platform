@@ -51,7 +51,7 @@ function transformCustomFieldsToCrmFields(kommoFields: any[]): any[] {
  * Build CRM actions based on Kommo data
  */
 function buildCrmActions(users: any[], taskTypes: any[], pipelines: any[]): any[] {
-  const actions = [
+  const actions: any[] = [
     { id: 'send_message', name: 'Отправить сообщение', type: 'basic' },
     { id: 'generate_message', name: 'Сгенерировать ответ ИИ', type: 'basic' },
     { id: 'add_note', name: 'Добавить примечание', type: 'basic' },
@@ -460,11 +460,11 @@ export const syncKommo = async (req: AuthRequest, res: Response) => {
       if (channels.length === 0) {
         console.log('⚠️ No sources from API, using default channels');
         channels.push(
-          { id: 'whatsapp', name: 'WhatsApp', type: 'whatsapp' },
-          { id: 'telegram', name: 'Telegram', type: 'telegram' },
-          { id: 'instagram', name: 'Instagram', type: 'instagram' },
-          { id: 'facebook', name: 'Facebook Messenger', type: 'facebook' },
-          { id: 'email', name: 'Email', type: 'email' },
+          { id: 'whatsapp', name: 'WhatsApp', externalId: undefined, pipelineId: undefined, type: 'whatsapp', services: [] },
+          { id: 'telegram', name: 'Telegram', externalId: undefined, pipelineId: undefined, type: 'telegram', services: [] },
+          { id: 'instagram', name: 'Instagram', externalId: undefined, pipelineId: undefined, type: 'instagram', services: [] },
+          { id: 'facebook', name: 'Facebook Messenger', externalId: undefined, pipelineId: undefined, type: 'facebook', services: [] },
+          { id: 'email', name: 'Email', externalId: undefined, pipelineId: undefined, type: 'email', services: [] },
         );
       }
 
@@ -556,8 +556,8 @@ export const syncKommo = async (req: AuthRequest, res: Response) => {
     console.error('Error syncing Kommo:', error);
 
     // Уведомляем пользователя об ошибке интеграции
-    if (userId) {
-      await systemNotifications.integrationError(userId, 'Kommo CRM', error.message || 'Неизвестная ошибка');
+    if (req.userId) {
+      await systemNotifications.integrationError(req.userId, 'Kommo CRM', error.message || 'Неизвестная ошибка');
     }
 
     return res.status(500).json({

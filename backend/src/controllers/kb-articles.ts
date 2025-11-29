@@ -142,6 +142,8 @@ export async function createArticle(req: AuthRequest, res: Response): Promise<vo
     const { title, content, isActive, categoryIds, relatedArticles } = req.body;
     const userId = req.userId!;
 
+    console.log('📝 Create Article Request:', { title, isActive, categoryIds, userId });
+
     // Валидация
     if (!title || title.trim() === '') {
       res.status(400).json({
@@ -161,6 +163,8 @@ export async function createArticle(req: AuthRequest, res: Response): Promise<vo
 
     // Проверяем что категории существуют и принадлежат пользователю
     if (categoryIds && categoryIds.length > 0) {
+      console.log('🔍 Checking categories:', { categoryIds, userId });
+
       const categories = await prisma.kbCategory.findMany({
         where: {
           id: { in: categoryIds },
@@ -168,7 +172,15 @@ export async function createArticle(req: AuthRequest, res: Response): Promise<vo
         },
       });
 
+      console.log('🔍 Found categories:', categories.map(c => ({ id: c.id, name: c.name })));
+
       if (categories.length !== categoryIds.length) {
+        console.log('❌ Category validation failed:', {
+          requested: categoryIds,
+          found: categories.map(c => c.id),
+          requestedCount: categoryIds.length,
+          foundCount: categories.length,
+        });
         res.status(400).json({
           error: 'Validation failed',
           message: 'One or more categories not found or do not belong to you'

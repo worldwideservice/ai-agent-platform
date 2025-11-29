@@ -9,18 +9,18 @@ const router = Router();
 
 // Настройка multer для загрузки аватаров
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     const uploadDir = path.join(__dirname, '../../uploads/avatars');
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const filename = `${uuidv4()}${ext}`;
     cb(null, filename);
   },
 });
 
-const fileFilter = (req: any, file: any, cb: any) => {
+const fileFilter = (_req: any, file: any, cb: any) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
