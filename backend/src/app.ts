@@ -2,6 +2,13 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import morgan from "morgan";
 
+// Utilities
+import logger, { httpLoggerStream, logRequest } from "./utils/logger";
+
+// Middleware
+import { globalLimiter, authLimiter, apiLimiter, chatLimiter, webhookLimiter } from "./middleware/rateLimiter";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+
 // Routes
 import authRoutes from "./routes/auth";
 import agentRoutes from "./routes/agents";
@@ -45,16 +52,23 @@ import { processScheduledChainSteps } from "./services/chain-executor.service";
 
 const app: Express = express();
 
+// Trust proxy for correct IP detection behind reverse proxy
+app.set("trust proxy", 1);
+
 // Периодическая проверка отложенных шагов цепочек (каждую минуту)
 const CHAIN_SCHEDULER_INTERVAL = 60 * 1000; // 1 минута
 setInterval(() => {
   processScheduledChainSteps().catch((err) =>
-    console.error("Chain scheduler error:", err),
+    logger.error("Chain scheduler error", { error: err.message }),
   );
 }, CHAIN_SCHEDULER_INTERVAL);
-console.log("⏰ Chain scheduler started (interval: 1 minute)");
+logger.info("Chain scheduler started", { interval: "1 minute" });
 
-// Middleware
+// ============================================================================
+// Security Middleware
+// ============================================================================
+
+// CORS configuration
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || [
@@ -63,23 +77,67 @@ app.use(
       "http://localhost:3002",
     ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   }),
 );
 
-app.use(morgan("dev")); // Логирование запросов
-app.use(express.json()); // Парсинг JSON
-app.use(express.urlencoded({ extended: true })); // Парсинг URL-encoded
+// Security headers
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.removeHeader("X-Powered-By");
+  next();
+});
 
-// Health check
+// Global rate limiter
+app.use(globalLimiter);
+
+// ============================================================================
+// Request Parsing & Logging
+// ============================================================================
+
+// HTTP request logging
+if (process.env.NODE_ENV === "production") {
+  app.use(morgan("combined", { stream: httpLoggerStream }));
+} else {
+  app.use(morgan("dev"));
+}
+
+// Body parsing
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Request timing for logging
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+
+  res.on("finish", () => {
+    const duration = Date.now() - startTime;
+    // Only log API requests, skip health checks
+    if (!req.path.startsWith("/health")) {
+      logRequest(req, res, duration);
+    }
+  });
+
+  next();
+});
+
+// ============================================================================
+// Health Check Endpoints
+// ============================================================================
+
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    version: process.env.npm_package_version || "1.0.0",
   });
 });
 
-// Detailed stats endpoint for monitoring (queue, OpenRouter, etc.)
 app.get("/health/stats", async (_req: Request, res: Response) => {
   try {
     const queueStats = await getQueueStats();
@@ -89,17 +147,18 @@ app.get("/health/stats", async (_req: Request, res: Response) => {
       status: "ok",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      environment: process.env.NODE_ENV || "development",
       memory: {
         heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
         heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
         rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        external: Math.round(process.memoryUsage().external / 1024 / 1024),
       },
-      queue: {
-        ...queueStats,
-      },
+      queue: queueStats,
       openRouter: openRouterStats,
     });
   } catch (error: any) {
+    logger.error("Health stats error", { error: error.message });
     res.status(500).json({
       status: "error",
       message: error.message,
@@ -107,59 +166,80 @@ app.get("/health/stats", async (_req: Request, res: Response) => {
   }
 });
 
-// API Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/models", modelsRoutes);
-app.use("/api/kommo", kommoRoutes);
-app.use("/api/google", googleRoutes);
-app.use("/api/google-calendar", googleCalendarRoutes);
-app.use("/api/agents", agentRoutes);
-app.use("/api/agents", triggersRoutes);
-app.use("/api/agents", chainsRoutes);
-app.use("/api/agents", integrationsRoutes);
-app.use("/api/agents", agentSettingsRoutes);
-app.use("/api/agents", memoryRoutes);
-app.use("/api/agents", agentDocumentsRoutes);
-app.use("/api/kb/categories", kbCategoryRoutes);
-app.use("/api/kb/articles", kbArticleRoutes);
-app.use("/api/kb/import", kbImportRoutes);
-app.use("/api/contacts", contactRoutes);
-app.use("/api/deals", dealRoutes);
-app.use("/api/crm", crmRoutes);
-app.use("/api/settings", settingsRoutes);
-app.use("/api/analytics", analyticsRoutes);
-app.use("/api/billing", billingRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/training", trainingRoutes);
-app.use("/api/notifications", notificationsRoutes);
-app.use("/api/conversations", conversationsRoutes);
-app.use("/api/test", testRoutes); // Test endpoints для симуляции
-app.use("/api/admin", adminRoutes); // Admin panel endpoints
-app.use("/api/test-chat", testChatRoutes); // Полноценный тестовый чат
+// ============================================================================
+// API Routes with Rate Limiting
+// ============================================================================
 
-// Public routes (без авторизации - для доступа Kommo к файлам)
+// Auth routes (stricter rate limiting)
+app.use("/api/auth", authLimiter, authRoutes);
+
+// Profile routes
+app.use("/api/profile", apiLimiter, profileRoutes);
+
+// Models routes
+app.use("/api/models", apiLimiter, modelsRoutes);
+
+// Kommo routes (webhook has its own limiter)
+app.use("/api/kommo", kommoRoutes);
+
+// Google routes
+app.use("/api/google", apiLimiter, googleRoutes);
+app.use("/api/google-calendar", apiLimiter, googleCalendarRoutes);
+
+// Agent routes
+app.use("/api/agents", apiLimiter, agentRoutes);
+app.use("/api/agents", apiLimiter, triggersRoutes);
+app.use("/api/agents", apiLimiter, chainsRoutes);
+app.use("/api/agents", apiLimiter, integrationsRoutes);
+app.use("/api/agents", apiLimiter, agentSettingsRoutes);
+app.use("/api/agents", apiLimiter, memoryRoutes);
+app.use("/api/agents", apiLimiter, agentDocumentsRoutes);
+
+// Knowledge Base routes
+app.use("/api/kb/categories", apiLimiter, kbCategoryRoutes);
+app.use("/api/kb/articles", apiLimiter, kbArticleRoutes);
+app.use("/api/kb/import", apiLimiter, kbImportRoutes);
+
+// CRM routes
+app.use("/api/contacts", apiLimiter, contactRoutes);
+app.use("/api/deals", apiLimiter, dealRoutes);
+app.use("/api/crm", apiLimiter, crmRoutes);
+
+// Other routes
+app.use("/api/settings", apiLimiter, settingsRoutes);
+app.use("/api/analytics", apiLimiter, analyticsRoutes);
+app.use("/api/billing", apiLimiter, billingRoutes);
+app.use("/api/training", apiLimiter, trainingRoutes);
+app.use("/api/notifications", apiLimiter, notificationsRoutes);
+app.use("/api/conversations", apiLimiter, conversationsRoutes);
+
+// Chat routes (chat-specific rate limiting)
+app.use("/api/chat", chatLimiter, chatRoutes);
+app.use("/api/test-chat", chatLimiter, testChatRoutes);
+
+// Test routes (only in development)
+if (process.env.NODE_ENV !== "production") {
+  app.use("/api/test", testRoutes);
+}
+
+// Admin routes
+app.use("/api/admin", apiLimiter, adminRoutes);
+
+// ============================================================================
+// Public Routes (без авторизации)
+// ============================================================================
+
+// Public document access (for Kommo file delivery)
 app.get("/api/public/documents/:documentId", getPublicDocumentFile);
 
+// ============================================================================
+// Error Handling
+// ============================================================================
+
 // 404 handler
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({
-    error: "Not Found",
-    message: "The requested resource was not found",
-  });
-});
+app.use(notFoundHandler);
 
-// Error handler
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("❌ Error:", err);
-
-  res.status(500).json({
-    error: "Internal Server Error",
-    message:
-      process.env.NODE_ENV === "development"
-        ? err.message
-        : "Something went wrong",
-  });
-});
+// Global error handler
+app.use(errorHandler);
 
 export default app;

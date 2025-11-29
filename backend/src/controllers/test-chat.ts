@@ -13,6 +13,7 @@
  */
 
 import { Response } from "express";
+import * as path from "path";
 import { AuthRequest } from "../types";
 import { prisma, pool } from "../config/database";
 import realPrisma from "../lib/prisma";
@@ -34,6 +35,8 @@ import {
   TriggerCondition,
 } from "../services/ai-trigger.service";
 import { processAgentResponse } from "../services/document-delivery.service";
+import emailService from "../services/email.service";
+import logger from "../utils/logger";
 
 // Интерфейс для документа агента
 interface AgentDocumentSummary {
@@ -708,10 +711,68 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
       }).catch((err) => console.error("Memory extraction error:", err));
     }
 
-    // TODO: Если есть emailDocuments - отправить по email (для Kommo интеграции)
-    if (emailDocuments.length > 0) {
-      console.log(`📧 Email documents requested: ${emailDocuments.map((d) => d.fileName).join(", ")}`);
-      // Здесь будет логика отправки по email через Kommo
+    // Отправка документов по email (если указан email получателя в testLeadData)
+    if (emailDocuments.length > 0 && testLeadData?.email) {
+      const uploadDir = path.join(__dirname, "../../uploads/agent-documents");
+
+      // Получаем полную информацию о документах
+      const documentsForEmail = await Promise.all(
+        emailDocuments.map(async (doc) => {
+          const fullDoc = await prisma.agentDocument.findUnique({
+            where: { id: doc.id },
+          });
+          if (!fullDoc) return null;
+          return {
+            fileName: fullDoc.fileName,
+            filePath: path.join(uploadDir, fullDoc.storageKey),
+            mimeType: fullDoc.mimeType,
+          };
+        })
+      );
+
+      const validDocuments = documentsForEmail.filter((d) => d !== null) as Array<{
+        fileName: string;
+        filePath: string;
+        mimeType: string;
+      }>;
+
+      if (validDocuments.length > 0) {
+        // Отправляем документы асинхронно
+        emailService
+          .sendDocuments({
+            recipientEmail: testLeadData.email,
+            recipientName: testLeadData.name || undefined,
+            documents: validDocuments,
+            agentName: agent.name,
+            message: `${agent.name} отправил вам запрошенные документы.`,
+          })
+          .then((sent) => {
+            if (sent) {
+              logger.info("Email documents sent", {
+                agentId,
+                recipientEmail: testLeadData.email,
+                documentsCount: validDocuments.length,
+              });
+            } else {
+              logger.warn("Failed to send email documents", {
+                agentId,
+                recipientEmail: testLeadData.email,
+              });
+            }
+          })
+          .catch((err) => {
+            logger.error("Email sending error", { error: err.message });
+          });
+
+        logger.info("Email documents requested", {
+          documents: emailDocuments.map((d) => d.fileName),
+          recipient: testLeadData.email,
+        });
+      }
+    } else if (emailDocuments.length > 0) {
+      logger.debug("Email documents requested but no recipient email", {
+        documents: emailDocuments.map((d) => d.fileName),
+      });
     }
 
     return res.json({

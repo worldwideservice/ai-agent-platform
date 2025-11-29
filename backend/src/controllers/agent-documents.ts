@@ -12,6 +12,8 @@ import {
   analyzeAgentDocument,
   deleteAgentDocumentEmbeddings,
 } from "../services/document-analysis.service";
+import { generateDocumentPreview } from "../services/pdf-preview.service";
+import logger from "../utils/logger";
 
 // Секрет для подписи публичных URL (используем JWT_SECRET или отдельный)
 const FILE_URL_SECRET =
@@ -148,17 +150,26 @@ async function generateThumbnail(
       return thumbnailName;
     }
 
-    // Для PDF - используем первую страницу (требует pdf-poppler или подобное)
-    // Пока возвращаем null - будем показывать иконку типа файла
-    if (fileType.toLowerCase() === "pdf") {
-      // TODO: Добавить генерацию превью для PDF через pdf-poppler
-      return null;
+    // Для PDF и других документов - используем универсальный генератор превью
+    const previewResult = await generateDocumentPreview(filePath, thumbnailDir, {
+      width: 200,
+      height: 280,
+      format: 'png',
+    });
+
+    if (previewResult) {
+      // Переименовываем файл в стандартный формат
+      const newPath = thumbnailPath;
+      if (previewResult !== newPath) {
+        await fs.promises.rename(previewResult, newPath);
+      }
+      return thumbnailName;
     }
 
     // Для остальных типов - возвращаем null (будет показана иконка)
     return null;
-  } catch (error) {
-    console.error("Error generating thumbnail:", error);
+  } catch (error: any) {
+    logger.error("Error generating thumbnail", { error: error.message, filePath });
     return null;
   }
 }

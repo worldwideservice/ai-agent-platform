@@ -23,7 +23,17 @@
       "Bash(git add:*)",
       "Bash(npx localtunnel:*)",
       "Bash(brew install:*)",
-      "Bash(cloudflared tunnel:*)"
+      "Bash(cloudflared tunnel:*)",
+      "Bash(chmod:*)",
+      "Bash([ -d node_modules ])",
+      "SlashCommand(/dev)",
+      "Bash([ -f .env.local ])",
+      "Bash(/opt/homebrew/bin/npm install --legacy-peer-deps)",
+      "Bash(/opt/homebrew/bin/npm install)",
+      "Bash(export PATH=\"/opt/homebrew/bin:/usr/bin:/bin:$PATH\")",
+      "Bash(python3:*)",
+      "Bash(git worktree:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Add production-ready infrastructure and security features\n\nDocker Infrastructure:\n- Add multi-stage Dockerfile for full application\n- Add separate Dockerfile for backend with Prisma migrations\n- Add Dockerfile.frontend with Nginx for static serving\n- Add docker-compose.yml with postgres, redis, backend, frontend services\n- Add nginx.conf for frontend proxy configuration\n- Add docker-start.sh script for easy deployment (dev/prod/full modes)\n- Add .dockerignore to optimize build context\n\nLogging & Monitoring:\n- Add Winston structured logger with file rotation\n- Add request/response logging middleware\n- Add webhook event logging\n- Add agent response logging\n\nSecurity & Rate Limiting:\n- Add express-rate-limit middleware (global, auth, api, chat limiters)\n- Add global error handler with custom error classes\n- Add input validators using express-validator\n- Add Kommo webhook verification (IP, signature, User-Agent)\n- Remove API keys from Vite client bundle\n\nServices:\n- Add Nodemailer email service for document delivery\n- Add PDF preview generation service using Sharp\n- Update agent-documents controller with preview support\n- Update test-chat with email document sending\n\nConfiguration:\n- Update .env.example with all new environment variables\n- Update package.json with new dependencies\n- Remove demo seed script (user has real admin account)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []

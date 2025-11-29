@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+backend/node_modules
+
+# Build output
+dist
+backend/dist
+build
+
+# Development files
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Test files
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+__tests__
+
+# Documentation
+*.md
+!README.md
+docs
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Local uploads (will be mounted as volume)
+uploads/*
+!uploads/.gitkeep
