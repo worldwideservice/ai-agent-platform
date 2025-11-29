@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, ChevronDown, Upload, File, Image, FileText, Music, Video, Trash2 } from 'lucide-react';
 import { kbService, KbArticleFileResponse } from '../src/services/api/kb.service';
+import { Button } from '../components/ui';
 
 interface KbArticleCreateProps {
   onCancel: () => void;
@@ -60,6 +61,7 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
   const [existingFiles, setExistingFiles] = useState<KbArticleFileResponse[]>([]); // For edit mode
   const [isDragging, setIsDragging] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isEditMode = !!article;
@@ -68,11 +70,8 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
     if (article) {
       setTitle(article.title);
       setIsActive(article.isActive);
-      // Convert category names to IDs for edit mode
-      const categoryIds = article.categories
-        .map(catName => categories.find(c => c.name === catName)?.id)
-        .filter((id): id is string => id !== undefined);
-      setSelectedCategories(categoryIds);
+      // Categories are already stored as IDs from the API
+      setSelectedCategories(article.categories);
       setRelatedArticles(article.relatedArticles);
       setContent(article.content);
       // Load existing files
@@ -194,49 +193,59 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
     handleFileSelect(e.dataTransfer.files);
   }, [handleFileSelect]);
 
-  const handleCreate = () => {
-    if (!title || !content || selectedCategories.length === 0) {
+  const handleCreate = async () => {
+    if (!title || !content || selectedCategories.length === 0 || isSaving) {
       return;
     }
-    if (isEditMode && onSave && article) {
-      onSave({
-        ...article,
-        title,
-        isActive,
-        categories: selectedCategories,
-        relatedArticles,
-        content
-      });
-    } else {
-      onAddArticle({
+    setIsSaving(true);
+    try {
+      if (isEditMode && onSave && article) {
+        await onSave({
+          ...article,
+          title,
+          isActive,
+          categories: selectedCategories,
+          relatedArticles,
+          content
+        });
+      } else {
+        await onAddArticle({
+          title,
+          isActive,
+          categories: selectedCategories,
+          relatedArticles,
+          content
+        }, pendingFiles.length > 0 ? pendingFiles : undefined);
+        onCreate();
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCreateAndNew = async () => {
+    if (!title || !content || selectedCategories.length === 0 || isSaving) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await onAddArticle({
         title,
         isActive,
         categories: selectedCategories,
         relatedArticles,
         content
       }, pendingFiles.length > 0 ? pendingFiles : undefined);
-      onCreate();
+      // Clear form
+      setTitle('');
+      setIsActive(true);
+      setSelectedCategories([]);
+      setRelatedArticles([]);
+      setContent('');
+      setPendingFiles([]);
+    } finally {
+      setIsSaving(false);
     }
-  };
-
-  const handleCreateAndNew = () => {
-    if (!title || !content || selectedCategories.length === 0) {
-      return;
-    }
-    onAddArticle({
-      title,
-      isActive,
-      categories: selectedCategories,
-      relatedArticles,
-      content
-    }, pendingFiles.length > 0 ? pendingFiles : undefined);
-    // Clear form
-    setTitle('');
-    setIsActive(true);
-    setSelectedCategories([]);
-    setRelatedArticles([]);
-    setContent('');
-    setPendingFiles([]);
   };
 
   return (
@@ -469,7 +478,7 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow min-h-[120px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-shadow min-h-[120px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white leading-relaxed"
           />
         </div>
 
@@ -579,26 +588,30 @@ export const KbArticleCreate: React.FC<KbArticleCreateProps> = ({ onCancel, onAd
 
       {/* Action Buttons */}
       <div className="flex items-center gap-4">
-        <button
+        <Button
           onClick={handleCreate}
-          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+          loading={isSaving}
+          loadingText="Сохранение..."
+          size="lg"
         >
           {isEditMode ? 'Сохранить' : 'Создать'}
-        </button>
+        </Button>
         {!isEditMode && (
-          <button
+          <Button
             onClick={handleCreateAndNew}
-            className="bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 px-6 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+            disabled={isSaving}
+            variant="secondary"
+            size="lg"
           >
             Создать и Создать еще
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           onClick={onCancel}
-          className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white px-4 py-2 text-sm font-medium transition-colors"
+          variant="ghost"
         >
           Отмена
-        </button>
+        </Button>
       </div>
     </div>
   );

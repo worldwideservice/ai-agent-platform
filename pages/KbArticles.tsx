@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Filter, LayoutGrid, X, Search, ChevronDown, Edit, Trash2, Copy } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { LoadingSpinner } from '../components/ui';
 
 interface KbArticlesProps {
   onCreate: () => void;
@@ -18,9 +19,10 @@ interface KbArticlesProps {
   onDeleteArticle?: (id: number) => void;
   onCopyArticle?: (article: KbArticlesProps['articles'][0]) => void;
   onToggleArticleStatus?: (id: number) => void;
+  loading?: boolean;
 }
 
-export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, categories = [], onEditArticle, onDeleteArticle, onCopyArticle, onToggleArticleStatus }) => {
+export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, categories = [], onEditArticle, onDeleteArticle, onCopyArticle, onToggleArticleStatus, loading = false }) => {
   const { t } = useTranslation();
 
   // Helper function to get category name by ID
@@ -385,8 +387,10 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, cate
           </div>
         </div>
 
-        {/* Content: Table or Empty State */}
-        {filteredArticles.length > 0 ? (
+        {/* Content: Loading, Table or Empty State */}
+        {loading ? (
+          <LoadingSpinner size="lg" />
+        ) : filteredArticles.length > 0 ? (
           <>
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-750 border-b border-gray-200 dark:border-gray-700">
@@ -468,8 +472,17 @@ export const KbArticles: React.FC<KbArticlesProps> = ({ onCreate, articles, cate
                       </td>
                     )}
                     {visibleColumns.categories && (
-                      <td className="px-4 py-4 text-sm">
-                        <button className="text-[#0078D4] hover:underline" onClick={(e) => e.stopPropagation()}>{article.categories.map(getCategoryName).join(', ')}</button>
+                      <td className="px-4 py-4 text-sm" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap gap-1">
+                          {article.categories.map((cat) => (
+                            <span
+                              key={cat}
+                              className="inline-flex items-center px-2 py-0.5 rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors cursor-default"
+                            >
+                              {getCategoryName(cat)}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                     )}
                     {visibleColumns.relatedArticles && (

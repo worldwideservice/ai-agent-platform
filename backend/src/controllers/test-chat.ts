@@ -13,15 +13,14 @@
  */
 
 import { Response } from "express";
-import * as path from "path";
 import { AuthRequest } from "../types";
 import { prisma, pool } from "../config/database";
 import realPrisma from "../lib/prisma";
 import { chatCompletion, ChatMessage } from "../services/openrouter.service";
 import { buildEnhancedSystemPrompt } from "../services/pipeline.service";
 import {
-  getRelevantKnowledge,
-  buildKnowledgeContext,
+  getExtendedKnowledge,
+  buildExtendedKnowledgeContext,
   parseKBSettings,
 } from "../services/knowledge-base.service";
 import { getAgentRoleKnowledge } from "../services/training.service";
@@ -35,8 +34,55 @@ import {
   TriggerCondition,
 } from "../services/ai-trigger.service";
 import { processAgentResponse } from "../services/document-delivery.service";
-import emailService from "../services/email.service";
-import logger from "../utils/logger";
+
+/**
+ * Генерирует краткое название для разговора на основе первых сообщений
+ * Использует быструю модель gpt-4o-mini для минимальной задержки
+ */
+async function generateConversationTitle(
+  userMessage: string
+): Promise<string> {
+  try {
+    const result = await chatCompletion({
+      model: "openai/gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `Ты генератор названий для диалогов. Придумай краткое название (3-6 слов) на основе ВОПРОСА клиента.
+
+Правила:
+- Название должно отражать ЧТО ИМЕННО спрашивает или хочет клиент
+- Не используй кавычки
+- Не начинай с "Вопрос о...", "Запрос о..."
+- Пиши на том же языке, что и вопрос клиента
+- Максимум 6 слов
+- Если вопрос простой (приветствие), напиши что-то общее вроде "Новый разговор"
+
+Примеры:
+Вопрос: "как получить рабочую визу в польшу" → Рабочая виза в Польшу
+Вопрос: "сколько стоит подписка?" → Стоимость подписки
+Вопрос: "не работает API интеграция" → Проблема с API интеграцией
+Вопрос: "привет" → Новый разговор`,
+        },
+        {
+          role: "user",
+          content: userMessage.substring(0, 300),
+        },
+      ],
+      temperature: 0.5,
+      max_tokens: 30,
+    });
+
+    const title = result.choices[0]?.message?.content?.trim();
+    if (title && title.length > 0 && title.length <= 100) {
+      return title;
+    }
+    return "Новый разговор";
+  } catch (error) {
+    console.error("Error generating conversation title:", error);
+    return "Новый разговор";
+  }
+}
 
 // Интерфейс для документа агента
 interface AgentDocumentSummary {
@@ -401,7 +447,7 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
 
     const sources: any = {};
 
-    // 6. База знаний (KB)
+    // 6. База знаний (KB) - статьи, документы, файлы
     let knowledgeContext: string | null = null;
     let usedKnowledgeArticles: Array<{
       id: number;
@@ -409,31 +455,64 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
       categoryName?: string;
       relevanceScore?: number;
     }> = [];
+    let usedKBDocuments: Array<{ id: string; title: string; similarity: number }> = [];
+    let usedKBFiles: Array<{ id: string; title: string; similarity: number }> = [];
 
-    if (agent.kbSettings) {
-      try {
-        const knowledgeArticles = await getRelevantKnowledge(
-          pool,
-          userId,
-          agent.kbSettings,
-          message,
-          3,
-        );
-        knowledgeContext = buildKnowledgeContext(knowledgeArticles);
+    try {
+      const extendedKnowledge = await getExtendedKnowledge(
+        pool,
+        userId,
+        agentId,
+        agent.kbSettings,
+        message,
+        5,
+      );
 
-        if (knowledgeContext) {
-          console.log(`📚 Using ${knowledgeArticles.length} KB articles`);
-          usedKnowledgeArticles = knowledgeArticles.map((article: any) => ({
-            id: article.id,
-            title: article.title,
-            categoryName: article.categoryName,
-            relevanceScore: article.similarity,
+      if (extendedKnowledge.totalResults > 0) {
+        knowledgeContext = buildExtendedKnowledgeContext(extendedKnowledge);
+
+        // Заполняем метаданные для трекинга источников
+        if (extendedKnowledge.metadata) {
+          // Статьи базы знаний
+          usedKnowledgeArticles = extendedKnowledge.metadata.articles.map((a) => ({
+            id: parseInt(a.id),
+            title: a.title,
+            categoryName: a.category,
+            relevanceScore: Math.round(a.similarity * 100),
           }));
+
+          // Документы
+          usedKBDocuments = extendedKnowledge.metadata.documents.map((d) => ({
+            id: d.id,
+            title: d.title,
+            similarity: Math.round(d.similarity * 100),
+          }));
+
+          // Файлы
+          usedKBFiles = extendedKnowledge.metadata.files.map((f) => ({
+            id: f.id,
+            title: f.title,
+            similarity: Math.round(f.similarity * 100),
+          }));
+        }
+
+        console.log(
+          `📚 Using extended knowledge: ${extendedKnowledge.articles.length} articles, ${extendedKnowledge.documents.length} documents, ${extendedKnowledge.files.length} files`,
+        );
+
+        // Добавляем в sources
+        if (usedKnowledgeArticles.length > 0) {
           sources.knowledgeBase = { articles: usedKnowledgeArticles };
         }
-      } catch (error) {
-        console.error("Error fetching knowledge base:", error);
+        if (usedKBDocuments.length > 0) {
+          sources.documents = { count: usedKBDocuments.length, items: usedKBDocuments };
+        }
+        if (usedKBFiles.length > 0) {
+          sources.files = { count: usedKBFiles.length, items: usedKBFiles };
+        }
       }
+    } catch (error) {
+      console.error("Error fetching extended knowledge:", error);
     }
 
     // 7. Роль и источники обучения
@@ -525,14 +604,15 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
       }
     }
 
-    // 9. Документы агента
+    // 9. Документы агента (для отправки клиенту через команды)
     const availableDocuments = await getAvailableAgentDocuments(
       agentId,
       agent.kbSettings,
     );
     if (availableDocuments.length > 0) {
-      console.log(`📄 Loaded ${availableDocuments.length} agent documents`);
-      sources.documents = { count: availableDocuments.length };
+      console.log(`📄 Loaded ${availableDocuments.length} agent documents for delivery`);
+      // Примечание: sources.documents уже заполнен из extended knowledge выше
+      // Здесь мы только загружаем список для delivery промпта
     }
 
     // 10. Триггеры
@@ -691,11 +771,29 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
       },
     });
 
-    // 13. Обновляем разговор
-    await prisma.testConversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() },
-    });
+    // 13. Обновляем разговор и генерируем название если это первый обмен
+    // historyMessages содержит сообщения ДО ответа ассистента
+    // Если там только 1 сообщение (user), значит это первый обмен
+    const messageCount = historyMessages.length;
+    let generatedTitle: string | undefined;
+
+    // Генерируем AI-название после первого обмена
+    // messageCount === 1 означает что был только user message, сейчас добавляем assistant
+    if (messageCount === 1) {
+      // Генерируем название на основе ВОПРОСА клиента (не ответа агента)
+      generatedTitle = await generateConversationTitle(message);
+
+      await prisma.testConversation.update({
+        where: { id: conversation.id },
+        data: { title: generatedTitle, updatedAt: new Date() },
+      });
+      console.log(`📝 Generated title for conversation: "${generatedTitle}"`);
+    } else {
+      await prisma.testConversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() },
+      });
+    }
 
     // 14. Извлекаем факты для памяти (асинхронно)
     if (memoryEnabled) {
@@ -711,68 +809,10 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
       }).catch((err) => console.error("Memory extraction error:", err));
     }
 
-    // Отправка документов по email (если указан email получателя в testLeadData)
-    if (emailDocuments.length > 0 && testLeadData?.email) {
-      const uploadDir = path.join(__dirname, "../../uploads/agent-documents");
-
-      // Получаем полную информацию о документах
-      const documentsForEmail = await Promise.all(
-        emailDocuments.map(async (doc) => {
-          const fullDoc = await prisma.agentDocument.findUnique({
-            where: { id: doc.id },
-          });
-          if (!fullDoc) return null;
-          return {
-            fileName: fullDoc.fileName,
-            filePath: path.join(uploadDir, fullDoc.storageKey),
-            mimeType: fullDoc.mimeType,
-          };
-        })
-      );
-
-      const validDocuments = documentsForEmail.filter((d) => d !== null) as Array<{
-        fileName: string;
-        filePath: string;
-        mimeType: string;
-      }>;
-
-      if (validDocuments.length > 0) {
-        // Отправляем документы асинхронно
-        emailService
-          .sendDocuments({
-            recipientEmail: testLeadData.email,
-            recipientName: testLeadData.name || undefined,
-            documents: validDocuments,
-            agentName: agent.name,
-            message: `${agent.name} отправил вам запрошенные документы.`,
-          })
-          .then((sent) => {
-            if (sent) {
-              logger.info("Email documents sent", {
-                agentId,
-                recipientEmail: testLeadData.email,
-                documentsCount: validDocuments.length,
-              });
-            } else {
-              logger.warn("Failed to send email documents", {
-                agentId,
-                recipientEmail: testLeadData.email,
-              });
-            }
-          })
-          .catch((err) => {
-            logger.error("Email sending error", { error: err.message });
-          });
-
-        logger.info("Email documents requested", {
-          documents: emailDocuments.map((d) => d.fileName),
-          recipient: testLeadData.email,
-        });
-      }
-    } else if (emailDocuments.length > 0) {
-      logger.debug("Email documents requested but no recipient email", {
-        documents: emailDocuments.map((d) => d.fileName),
-      });
+    // Тестовый чат не отправляет реальные email - только логирует для отладки
+    // Реальная отправка происходит через Kommo интеграцию в webhook-worker
+    if (emailDocuments.length > 0) {
+      console.log(`📧 Email documents requested: ${emailDocuments.map((d) => d.fileName).join(", ")}`);
     }
 
     return res.json({
@@ -785,6 +825,7 @@ export async function sendTestMessage(req: AuthRequest, res: Response) {
         matchedTriggers.length > 0
           ? matchedTriggers.map((t) => t.name)
           : undefined,
+      generatedTitle: generatedTitle,
     });
   } catch (error: any) {
     console.error("Error in test chat:", error);
@@ -877,6 +918,152 @@ export async function getAgentInfo(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Error getting agent info:", error);
+    return res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * GET /api/test-chat/prompts/:agentId
+ * Генерирует релевантные подсказки для тестирования агента
+ * на основе его настроек (KB, триггеры, документы, роль)
+ */
+export async function getAgentPrompts(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.userId;
+    const { agentId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const agent = await prisma.agent.findFirst({
+      where: { id: agentId, userId },
+    });
+
+    if (!agent) {
+      return res.status(404).json({ error: "Agent not found" });
+    }
+
+    const prompts: Array<{
+      icon: string;
+      text: string;
+      fullPrompt: string;
+      testType: string;
+    }> = [];
+
+    // 1. Проверяем базу знаний - берём случайную статью
+    const kbArticles = await prisma.kbArticle.findMany({
+      where: { userId, isActive: true },
+      select: { id: true, title: true },
+      take: 5,
+    });
+
+    if (kbArticles.length > 0) {
+      const randomArticle = kbArticles[Math.floor(Math.random() * kbArticles.length)];
+      prompts.push({
+        icon: "BookOpen",
+        text: `Расскажи о: ${randomArticle.title.substring(0, 30)}${randomArticle.title.length > 30 ? '...' : ''}`,
+        fullPrompt: `Расскажи подробнее о "${randomArticle.title}"`,
+        testType: "knowledge_base",
+      });
+    }
+
+    // 2. Проверяем документы агента
+    const documents = await realPrisma.agentDocument.findMany({
+      where: { agentId },
+      select: { id: true, fileName: true, title: true },
+      take: 3,
+    });
+
+    if (documents.length > 0) {
+      const doc = documents[0];
+      const docName = doc.title || doc.fileName;
+      prompts.push({
+        icon: "FileText",
+        text: `Что есть в документе "${docName.substring(0, 25)}${docName.length > 25 ? '...' : ''}"`,
+        fullPrompt: `Что содержится в документе "${docName}"? Расскажи основное.`,
+        testType: "documents",
+      });
+    }
+
+    // 3. Проверяем триггеры
+    const triggers = await prisma.trigger.findMany({
+      where: { agentId, isActive: true },
+      select: { id: true, name: true, conditions: true },
+      take: 3,
+    });
+
+    if (triggers.length > 0) {
+      const trigger = triggers[0];
+      // Пытаемся извлечь ключевые слова из условий
+      let triggerPrompt = `Проверка триггера "${trigger.name}"`;
+      try {
+        const conditions = trigger.conditions as any[];
+        if (conditions && conditions.length > 0) {
+          const keywordCondition = conditions.find((c: any) => c.type === 'keyword');
+          if (keywordCondition?.keywords?.length > 0) {
+            triggerPrompt = keywordCondition.keywords[0];
+          }
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+      prompts.push({
+        icon: "Zap",
+        text: `Активировать триггер "${trigger.name.substring(0, 20)}${trigger.name.length > 20 ? '...' : ''}"`,
+        fullPrompt: triggerPrompt,
+        testType: "trigger",
+      });
+    }
+
+    // 4. Проверяем роль агента
+    if (agent.trainingRoleId) {
+      const role = await prisma.trainingRole.findUnique({
+        where: { id: agent.trainingRoleId },
+        select: { name: true, description: true },
+      });
+      if (role) {
+        prompts.push({
+          icon: "GraduationCap",
+          text: `Опиши свою роль`,
+          fullPrompt: `Расскажи о себе. Кто ты и чем можешь помочь?`,
+          testType: "role",
+        });
+      }
+    }
+
+    // 5. Добавляем общие подсказки если мало специфичных
+    if (prompts.length < 4) {
+      const generalPrompts = [
+        {
+          icon: "MessageCircle",
+          text: "Привет! Чем можешь помочь?",
+          fullPrompt: "Привет! Расскажи, чем ты можешь мне помочь?",
+          testType: "general",
+        },
+        {
+          icon: "HelpCircle",
+          text: "Какие у тебя возможности?",
+          fullPrompt: "Какие у тебя есть возможности? Что ты умеешь делать?",
+          testType: "general",
+        },
+        {
+          icon: "Search",
+          text: "Найди информацию",
+          fullPrompt: "Помоги мне найти нужную информацию",
+          testType: "general",
+        },
+      ];
+
+      for (const gp of generalPrompts) {
+        if (prompts.length >= 4) break;
+        prompts.push(gp);
+      }
+    }
+
+    return res.json({ prompts: prompts.slice(0, 4) });
+  } catch (error: any) {
+    console.error("Error getting agent prompts:", error);
     return res.status(500).json({ error: error.message });
   }
 }

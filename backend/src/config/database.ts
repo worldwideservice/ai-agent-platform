@@ -215,7 +215,7 @@ export const agent = {
 
 // User model operations
 export const user = {
-  async findUnique({ where, select }: any) {
+  async findUnique({ where, select, includePassword = false }: any) {
     let query = 'SELECT * FROM users WHERE ';
     let param: any;
 
@@ -242,10 +242,17 @@ export const user = {
       return filtered;
     }
 
-    return row;
+    // For internal auth checks, we need password - use includePassword flag
+    if (includePassword) {
+      return row;
+    }
+
+    // By default, never return password
+    const { password: _password, ...safeUser } = row;
+    return safeUser;
   },
 
-  async create({ data }: any) {
+  async create({ data, select }: any) {
     const id = randomUUID();
     const now = new Date().toISOString();
 
@@ -253,8 +260,9 @@ export const user = {
       INSERT INTO users (
         id, email, password, name, role,
         current_plan, trial_ends_at, responses_used, responses_limit,
+        agents_limit, kb_articles_limit, instructions_limit,
         created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
 
@@ -268,11 +276,29 @@ export const user = {
       data.trialEndsAt || null,
       data.responsesUsed || 0,
       data.responsesLimit || 500,
+      data.agentsLimit || 3,
+      data.kbArticlesLimit || 50,
+      data.instructionsLimit || 10,
       now,
       now
     ]);
 
-    return toCamelCase(result.rows[0]);
+    const row = toCamelCase(result.rows[0]);
+
+    // Handle select parameter - filter fields
+    if (select) {
+      const filtered: any = {};
+      for (const key in select) {
+        if (select[key] && row[key] !== undefined) {
+          filtered[key] = row[key];
+        }
+      }
+      return filtered;
+    }
+
+    // By default, never return password
+    const { password: _password, ...safeUser } = row;
+    return safeUser;
   },
 
   async update({ where, data }: any) {
@@ -1103,30 +1129,6 @@ export const triggerAction = {
     ]);
     return toCamelCase(result.rows[0]);
   },
-};
-
-export const chain = {
-  async findMany() { return []; },
-  async findUnique() { return null; },
-  async create() { return null; },
-  async update() { return null; },
-  async delete() { return null; },
-};
-
-export const chainCondition = {
-  async deleteMany() { return {}; },
-};
-
-export const chainStep = {
-  async deleteMany() { return {}; },
-};
-
-export const chainStepAction = {
-  async deleteMany() { return {}; },
-};
-
-export const chainSchedule = {
-  async deleteMany() { return {}; },
 };
 
 export const integration = {
@@ -2587,11 +2589,6 @@ export const prisma = {
   chatLog,
   trigger,
   triggerAction,
-  chain,
-  chainCondition,
-  chainStep,
-  chainStepAction,
-  chainSchedule,
   integration,
   agentAdvancedSettings,
   kommoToken,

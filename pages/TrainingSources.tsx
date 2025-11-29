@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { TrainingSource } from '../types';
 import * as trainingService from '../src/services/api/training.service';
 import { notificationsService } from '../src/services/api';
+import { LoadingSpinner, Button } from '../components/ui';
 
 export const TrainingSources: React.FC = () => {
   const { t } = useTranslation();
@@ -37,6 +38,10 @@ export const TrainingSources: React.FC = () => {
 
   // Delete confirmation modal
   const [deleteConfirmSource, setDeleteConfirmSource] = useState<TrainingSource | null>(null);
+
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadSources();
@@ -78,8 +83,9 @@ export const TrainingSources: React.FC = () => {
   };
 
   const confirmDeleteSource = async () => {
-    if (!deleteConfirmSource) return;
+    if (!deleteConfirmSource || isDeleting) return;
 
+    setIsDeleting(true);
     try {
       await trainingService.deleteSource(deleteConfirmSource.id);
       await loadSources();
@@ -91,14 +97,18 @@ export const TrainingSources: React.FC = () => {
           params: { name: deleteConfirmSource.name },
         });
       } catch (e) { /* ignore */ }
+      setDeleteConfirmSource(null);
     } catch (error) {
       console.error('Error deleting source:', error);
     } finally {
-      setDeleteConfirmSource(null);
+      setIsDeleting(false);
     }
   };
 
   const handleSaveSource = async () => {
+    if (isSaving) return;
+
+    setIsSaving(true);
     try {
       if (editingSource) {
         await trainingService.updateSource(editingSource.id, formData);
@@ -127,6 +137,8 @@ export const TrainingSources: React.FC = () => {
       await loadSources();
     } catch (error) {
       console.error('Error saving source:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -182,11 +194,7 @@ export const TrainingSources: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <LoadingSpinner fullPage size="lg" />;
   }
 
   return (
@@ -422,7 +430,7 @@ export const TrainingSources: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder={t('training.briefSourceDescription')}
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm leading-relaxed"
                 />
               </div>
 
@@ -436,7 +444,7 @@ export const TrainingSources: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   placeholder={t('training.contentPlaceholder')}
                   rows={12}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm leading-relaxed"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   {formData.content.length.toLocaleString()} {t('training.characters')}
@@ -445,20 +453,22 @@ export const TrainingSources: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-end gap-3 p-4 border-t border-gray-200 dark:border-gray-700">
-              <button
+              <Button
                 onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors"
+                variant="ghost"
               >
                 {t('common.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSaveSource}
                 disabled={!formData.name || !formData.content}
-                className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={isSaving}
+                loadingText={t('common.saving', 'Сохранение...')}
+                icon={<Check size={18} />}
+                size="lg"
               >
-                <Check size={18} />
                 {editingSource ? t('common.save') : t('training.addSource')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -508,18 +518,25 @@ export const TrainingSources: React.FC = () => {
               {t('training.deleteSourceConfirm', 'Вы уверены, что хотите удалить источник')} "{deleteConfirmSource.name}"?
             </p>
             <div className="flex gap-3">
-              <button
+              <Button
                 onClick={() => setDeleteConfirmSource(null)}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                disabled={isDeleting}
+                variant="secondary"
+                fullWidth
+                className="rounded-xl"
               >
                 {t('common.cancel')}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={confirmDeleteSource}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors"
+                loading={isDeleting}
+                loadingText={t('common.deleting', 'Удаление...')}
+                variant="danger"
+                fullWidth
+                className="rounded-xl"
               >
                 {t('common.delete')}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

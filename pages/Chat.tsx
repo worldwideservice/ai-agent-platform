@@ -19,6 +19,8 @@ import {
   FileText,
   GraduationCap,
   Settings2,
+  UserCircle,
+  ShieldQuestion,
 } from "lucide-react";
 import {
   testChatService,
@@ -27,6 +29,7 @@ import {
   MessageSources,
   AgentInfo,
   AttachedDocument,
+  AgentPrompt,
 } from "../src/services/api/test-chat.service";
 import { profileService } from "../src/services/api";
 import { ChatSidebar } from "../components/chat/ChatSidebar";
@@ -64,36 +67,66 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
     string | null
   >(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Ширина сайдбара с сохранением в localStorage
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chat-sidebar-width');
+      return saved ? parseInt(saved, 10) : 288; // default 288px (w-72)
+    }
+    return 288;
+  });
+
+  // Сохраняем ширину в localStorage при изменении
+  const handleSidebarWidthChange = (width: number) => {
+    setSidebarWidth(width);
+    localStorage.setItem('chat-sidebar-width', String(width));
+  };
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [agentInfo, setAgentInfo] = useState<AgentInfo | null>(null);
   const [showAgentInfo, setShowAgentInfo] = useState(false);
+  const [agentPrompts, setAgentPrompts] = useState<AgentPrompt[]>([]);
+  const [promptsLoading, setPromptsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  // Suggestion cards data
-  const suggestionCards: SuggestionCard[] = [
+  // Маппинг иконок по имени
+  const getPromptIcon = (iconName: string) => {
+    switch (iconName) {
+      case "BookOpen": return <BookOpen size={20} />;
+      case "FileText": return <FileText size={20} />;
+      case "Zap": return <Zap size={20} />;
+      case "GraduationCap": return <GraduationCap size={20} />;
+      case "MessageCircle": return <MessageSquare size={20} />;
+      case "HelpCircle": return <HelpCircle size={20} />;
+      case "Search": return <Search size={20} />;
+      default: return <Lightbulb size={20} />;
+    }
+  };
+
+  // Fallback static suggestion cards for agent testing
+  const defaultSuggestionCards: SuggestionCard[] = [
+    {
+      icon: <UserCircle size={20} />,
+      titleKey: "chat.suggestions.introduceYourself",
+      promptKey: "chat.suggestions.introduceYourselfPrompt",
+    },
+    {
+      icon: <Brain size={20} />,
+      titleKey: "chat.suggestions.testMemory",
+      promptKey: "chat.suggestions.testMemoryPrompt",
+    },
     {
       icon: <MessageSquare size={20} />,
-      titleKey: "chat.suggestions.tellAbout",
-      promptKey: "chat.suggestions.tellAboutPrompt",
+      titleKey: "chat.suggestions.askAboutServices",
+      promptKey: "chat.suggestions.askAboutServicesPrompt",
     },
     {
-      icon: <Lightbulb size={20} />,
-      titleKey: "chat.suggestions.helpWith",
-      promptKey: "chat.suggestions.helpWithPrompt",
-    },
-    {
-      icon: <Search size={20} />,
-      titleKey: "chat.suggestions.findInfo",
-      promptKey: "chat.suggestions.findInfoPrompt",
-    },
-    {
-      icon: <HelpCircle size={20} />,
-      titleKey: "chat.suggestions.explainHow",
-      promptKey: "chat.suggestions.explainHowPrompt",
+      icon: <ShieldQuestion size={20} />,
+      titleKey: "chat.suggestions.handleObjection",
+      promptKey: "chat.suggestions.handleObjectionPrompt",
     },
   ];
 
@@ -128,11 +161,12 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
 
   const activeAgents = agents.filter((agent) => agent.isActive);
 
-  // Load conversations when agent changes
+  // Load conversations and prompts when agent changes
   useEffect(() => {
     if (selectedAgent) {
       loadConversations();
       loadAgentInfo();
+      loadAgentPrompts();
     }
   }, [selectedAgent?.id]);
 
@@ -165,6 +199,20 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
       setAgentInfo(info);
     } catch (error) {
       console.error("Error loading agent info:", error);
+    }
+  };
+
+  const loadAgentPrompts = async () => {
+    if (!selectedAgent) return;
+    setPromptsLoading(true);
+    try {
+      const prompts = await testChatService.getAgentPrompts(selectedAgent.id);
+      setAgentPrompts(prompts);
+    } catch (error) {
+      console.error("Error loading agent prompts:", error);
+      setAgentPrompts([]);
+    } finally {
+      setPromptsLoading(false);
     }
   };
 
@@ -253,6 +301,17 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
         loadConversations();
       }
 
+      // Update conversation title if AI generated one
+      if (result.generatedTitle && result.conversationId) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === result.conversationId
+              ? { ...c, title: result.generatedTitle! }
+              : c
+          )
+        );
+      }
+
       // Add assistant message to UI
       const assistantMessage: LocalMessage = {
         role: "model",
@@ -287,8 +346,8 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
   };
 
   // Handle suggestion card click
-  const handleSuggestionClick = (promptKey: string) => {
-    const prompt = t(promptKey);
+  const handleSuggestionClick = (promptKeyOrText: string, isDirect: boolean = false) => {
+    const prompt = isDirect ? promptKeyOrText : t(promptKeyOrText);
     setInput(prompt);
   };
 
@@ -530,6 +589,8 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
         onRenameConversation={handleRenameConversation}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        width={sidebarWidth}
+        onWidthChange={handleSidebarWidthChange}
       />
 
       {/* Main Chat Area */}
@@ -682,23 +743,51 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
                   {t("chat.emptyState.subtitle")}
                 </p>
 
-                {/* Suggestion cards grid */}
+                {/* Suggestion cards grid - dynamic or fallback */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {suggestionCards.map((card, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSuggestionClick(card.promptKey)}
-                      disabled={!selectedAgent}
-                      className="group flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-[#0078D4] dark:hover:border-[#0078D4] hover:shadow-sm transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 group-hover:text-[#0078D4] dark:group-hover:text-[#0078D4] transition-colors">
-                        {card.icon}
+                  {promptsLoading ? (
+                    // Loading skeleton
+                    [...Array(4)].map((_, idx) => (
+                      <div key={idx} className="animate-pulse flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+                        <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-700" />
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32" />
                       </div>
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                        {t(card.titleKey)}
-                      </span>
-                    </button>
-                  ))}
+                    ))
+                  ) : agentPrompts.length > 0 ? (
+                    // Dynamic prompts based on agent config
+                    agentPrompts.map((prompt, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSuggestionClick(prompt.fullPrompt, true)}
+                        disabled={!selectedAgent}
+                        className="group flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-[#0078D4] dark:hover:border-[#0078D4] hover:shadow-sm transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 group-hover:text-[#0078D4] dark:group-hover:text-[#0078D4] transition-colors">
+                          {getPromptIcon(prompt.icon)}
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors truncate">
+                          {prompt.text}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    // Fallback to static suggestions
+                    defaultSuggestionCards.map((card, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSuggestionClick(card.promptKey)}
+                        disabled={!selectedAgent}
+                        className="group flex items-center gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-[#0078D4] dark:hover:border-[#0078D4] hover:shadow-sm transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-gray-50 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 group-hover:text-[#0078D4] dark:group-hover:text-[#0078D4] transition-colors">
+                          {card.icon}
+                        </div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+                          {t(card.titleKey)}
+                        </span>
+                      </button>
+                    ))
+                  )}
                 </div>
 
                 {!selectedAgent && (

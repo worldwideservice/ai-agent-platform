@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Folder, Edit, Trash2, Filter, LayoutGrid, Copy, ArrowLeft, X, Search, Plus, Check, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { LoadingSpinner } from '../components/ui';
 
 interface KbCategoriesProps {
   onCreate: () => void;
@@ -14,6 +15,7 @@ interface KbCategoriesProps {
   onCreateArticle?: () => void;
   onEditArticle?: (id: number) => void;
   onToggleArticleStatus?: (id: number) => void;
+  loading?: boolean;
 }
 
 export const KbCategories: React.FC<KbCategoriesProps> = ({
@@ -27,7 +29,8 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
   onOpenCategory,
   onCreateArticle,
   onEditArticle,
-  onToggleArticleStatus
+  onToggleArticleStatus,
+  loading = false
 }) => {
   const { t } = useTranslation();
 
@@ -416,8 +419,11 @@ export const KbCategories: React.FC<KbCategoriesProps> = ({
           </div>
         </div>
 
-        {/* Empty State for Subcategories */}
-        {displayedCategories.length === 0 ? (
+        {/* Loading State */}
+        {loading ? (
+          <LoadingSpinner size="lg" />
+        ) : displayedCategories.length === 0 ? (
+          /* Empty State for Subcategories */
           <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
             <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mb-4 text-gray-400 dark:text-gray-500">
               <X size={32} strokeWidth={1.5} />

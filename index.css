@@ -147,3 +147,45 @@ input[type="checkbox"].appearance-none:checked::after {
 .animate-stagger {
   opacity: 0;
 }
+
+/* Custom textarea resize handle - more visible */
+textarea {
+  position: relative;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+textarea::-webkit-resizer {
+  background: linear-gradient(135deg, transparent 50%, #CBD5E1 50%, #CBD5E1 60%, transparent 60%, transparent 75%, #CBD5E1 75%, #CBD5E1 85%, transparent 85%);
+  border-radius: 0 0 6px 0;
+  cursor: nwse-resize;
+}
+
+.dark textarea::-webkit-resizer {
+  background: linear-gradient(135deg, transparent 50%, #4B5563 50%, #4B5563 60%, transparent 60%, transparent 75%, #4B5563 75%, #4B5563 85%, transparent 85%);
+}
+
+/* Hover effect for textarea to hint at resize capability */
+textarea.resize-y:hover,
+textarea.resize:hover {
+  border-bottom-right-radius: 6px;
+}
+
+/* Add visual indicator for resizable textareas */
+textarea.resize-y,
+textarea.resize {
+  background-image:
+    linear-gradient(135deg, transparent calc(100% - 12px), #E2E8F0 calc(100% - 12px)),
+    linear-gradient(135deg, transparent calc(100% - 8px), #CBD5E1 calc(100% - 8px)),
+    linear-gradient(135deg, transparent calc(100% - 4px), #94A3B8 calc(100% - 4px));
+  background-size: 12px 12px, 12px 12px, 12px 12px;
+  background-position: bottom right, bottom right, bottom right;
+  background-repeat: no-repeat;
+}
+
+.dark textarea.resize-y,
+.dark textarea.resize {
+  background-image:
+    linear-gradient(135deg, transparent calc(100% - 12px), #374151 calc(100% - 12px)),
+    linear-gradient(135deg, transparent calc(100% - 8px), #4B5563 calc(100% - 8px)),
+    linear-gradient(135deg, transparent calc(100% - 4px), #6B7280 calc(100% - 4px));
+}

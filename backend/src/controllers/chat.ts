@@ -22,6 +22,10 @@ import {
   canUseResponse,
   checkAndResetMonthlyLimits,
 } from "../services/plan-limits.service";
+import {
+  getClientMemoryContext,
+  getGraphRelatedContext,
+} from "../services/memory.service";
 
 /**
  * POST /api/chat/message
@@ -35,7 +39,7 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { agentId, message, history, pipelineId, stageId } = req.body;
+    const { agentId, message, history, pipelineId, stageId, leadId } = req.body;
 
     // Валидация
     if (!agentId || !message) {
@@ -93,7 +97,16 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       categoryName?: string;
       relevanceScore?: number;
     }> = [];
-    // Документы теперь возвращаются через extendedKnowledge.documents
+    let usedDocuments: Array<{
+      id: string;
+      title: string;
+      similarity: number;
+    }> = [];
+    let usedFiles: Array<{
+      id: string;
+      title: string;
+      similarity: number;
+    }> = [];
 
     try {
       // Используем расширенный поиск по всем источникам знаний
@@ -109,10 +122,34 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       if (extendedKnowledge.totalResults > 0) {
         knowledgeContext = buildExtendedKnowledgeContext(extendedKnowledge);
 
+        // Заполняем метаданные для трекинга источников
+        if (extendedKnowledge.metadata) {
+          // Статьи базы знаний
+          usedKnowledgeArticles = extendedKnowledge.metadata.articles.map((a) => ({
+            id: parseInt(a.id),
+            title: a.title,
+            categoryName: a.category,
+            relevanceScore: Math.round(a.similarity * 100), // В процентах
+          }));
+
+          // Документы агента
+          usedDocuments = extendedKnowledge.metadata.documents.map((d) => ({
+            id: d.id,
+            title: d.title,
+            similarity: Math.round(d.similarity * 100),
+          }));
+
+          // Файлы статей
+          usedFiles = extendedKnowledge.metadata.files.map((f) => ({
+            id: f.id,
+            title: f.title,
+            similarity: Math.round(f.similarity * 100),
+          }));
+        }
+
         console.log(
           `📚 Using extended knowledge: ${extendedKnowledge.articles.length} articles, ${extendedKnowledge.documents.length} documents, ${extendedKnowledge.files.length} files`,
         );
-
       }
     } catch (error: any) {
       console.error("Error fetching extended knowledge:", error);
@@ -153,12 +190,72 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Получаем контекст памяти клиента (если память включена и есть leadId)
+    let memoryFacts: string[] = [];
+    let memoryNodeIds: string[] = [];
+    let memoryContext: string | null = null;
+
+    if (advancedSettings?.memoryEnabled && leadId) {
+      try {
+        const memoryResult = await getClientMemoryContext(pool, {
+          agentId,
+          userId,
+          leadId: parseInt(leadId),
+          currentMessage: message,
+          limit: 10,
+          semanticSearchEnabled: true,
+        });
+
+        memoryFacts = memoryResult.facts;
+        memoryNodeIds = memoryResult.nodeIds;
+        memoryContext = memoryResult.context;
+
+        if (memoryFacts.length > 0) {
+          console.log(`🧠 Using memory context: ${memoryFacts.length} facts`);
+        }
+      } catch (error) {
+        console.error("Error fetching memory context:", error);
+      }
+    }
+
+    // Получаем связи из графа знаний (если граф включен и есть узлы памяти)
+    let graphRelations: string[] = [];
+    let graphContext: string | null = null;
+
+    if (advancedSettings?.graphEnabled && memoryNodeIds.length > 0) {
+      try {
+        const graphResult = await getGraphRelatedContext(pool, {
+          agentId,
+          nodeIds: memoryNodeIds,
+          limit: 5,
+        });
+
+        graphRelations = graphResult.relations;
+        graphContext = graphResult.context;
+
+        if (graphRelations.length > 0) {
+          console.log(`🔗 Using graph context: ${graphRelations.length} relations`);
+        }
+      } catch (error) {
+        console.error("Error fetching graph context:", error);
+      }
+    }
+
+    // Формируем полный контекст знаний (KB + память + граф)
+    let fullKnowledgeContext = knowledgeContext || '';
+    if (memoryContext) {
+      fullKnowledgeContext += '\n\n' + memoryContext;
+    }
+    if (graphContext) {
+      fullKnowledgeContext += '\n\n' + graphContext;
+    }
+
     // Формируем расширенный системный промпт с контекстом текущего этапа и базой знаний
     const systemPrompt = buildEnhancedSystemPrompt(
       roleKnowledge,
       agent.systemInstructions,
       stageInstructions,
-      knowledgeContext,
+      fullKnowledgeContext || null,
     );
 
     // Логируем для дебага
@@ -341,12 +438,11 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
                 order: a.order,
               }));
 
-              // Выполняем действия триггера (без реального CRM для внутреннего чата)
+              // Внутренний чат не выполняет реальные CRM действия - только логирует для отладки
               console.log(
                 `🚀 Would execute ${actionsWithParams.length} actions for trigger: ${trigger.name}`,
               );
-              // TODO: для интеграции с реальным CRM передать integration и leadId
-              // await executeTriggerActions(integration, actionsWithParams, { leadId, contactId });
+              // Для реального CRM используется webhook-worker который вызывает executeTriggerActions
             }
           }
         }
@@ -361,6 +457,34 @@ export const sendChatMessage = async (req: AuthRequest, res: Response) => {
     if (usedKnowledgeArticles.length > 0) {
       sources.knowledgeBase = {
         articles: usedKnowledgeArticles,
+      };
+    }
+    // Документы агента
+    if (usedDocuments.length > 0) {
+      sources.documents = {
+        count: usedDocuments.length,
+        items: usedDocuments,
+      };
+    }
+    // Файлы статей
+    if (usedFiles.length > 0) {
+      sources.files = {
+        count: usedFiles.length,
+        items: usedFiles,
+      };
+    }
+    // Память (факты о клиенте)
+    if (memoryFacts.length > 0) {
+      sources.memory = {
+        factsCount: memoryFacts.length,
+        facts: memoryFacts,
+      };
+    }
+    // Граф знаний (связи между сущностями)
+    if (graphRelations.length > 0) {
+      sources.graph = {
+        relationsCount: graphRelations.length,
+        relations: graphRelations,
       };
     }
     if (usedRole) {

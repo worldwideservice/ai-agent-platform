@@ -29,13 +29,12 @@ model User {
   instructionsLimit    Int       @default(30000) @map("instructions_limit")
   kbArticlesLimit      Int       @default(100) @map("kb_articles_limit")
   responsesResetAt     DateTime? @map("responses_reset_at") @db.Timestamptz(6)
-  // Subscription fields
-  subscriptionStatus   String    @default("trial") @map("subscription_status") // trial, active, grace_period, expired
-  subscriptionStartsAt DateTime? @map("subscription_starts_at") @db.Timestamptz(6)
-  subscriptionEndsAt   DateTime? @map("subscription_ends_at") @db.Timestamptz(6)
+  billingCycle         String    @default("monthly") @map("billing_cycle")
   gracePeriodEndsAt    DateTime? @map("grace_period_ends_at") @db.Timestamptz(6)
-  billingCycle         String    @default("monthly") @map("billing_cycle") // monthly, yearly
-  selectedResponses    Int       @default(1000) @map("selected_responses") // выбранный пакет ответов
+  selectedResponses    Int       @default(1000) @map("selected_responses")
+  subscriptionEndsAt   DateTime? @map("subscription_ends_at") @db.Timestamptz(6)
+  subscriptionStartsAt DateTime? @map("subscription_starts_at") @db.Timestamptz(6)
+  subscriptionStatus   String    @default("trial") @map("subscription_status")
 
   @@index([email], map: "idx_users_email")
   @@index([role], map: "idx_users_role")
@@ -840,10 +839,12 @@ model memory_nodes {
   agent_id   String
   user_id    String
   embedding  Unsupported("vector")?
+  lead_id    Int?
 
   @@index([agent_id], map: "idx_memory_nodes_agent_id")
   @@index([node_type], map: "idx_memory_nodes_type")
   @@index([user_id], map: "idx_memory_nodes_user_id")
+  @@index([lead_id], map: "idx_memory_nodes_lead_id")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -1056,12 +1057,12 @@ model ScheduledChainStep {
 }
 
 model TestConversation {
-  id        String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String                  @map("user_id")
-  agentId   String                  @map("agent_id")
-  title     String                  @default("Новый разговор")
-  createdAt DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id        String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String                    @map("user_id")
+  agentId   String                    @map("agent_id")
+  title     String                    @default("Новый разговор")
+  createdAt DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   messages  TestConversationMessage[]
 
   @@index([userId], map: "idx_test_conversations_user_id")
@@ -1083,7 +1084,6 @@ model TestConversationMessage {
   @@map("test_conversation_messages")
 }
 
-// Пауза агента для конкретного лида (для действия stop_agents)
 model AgentPause {
   id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   agentId       String    @map("agent_id")

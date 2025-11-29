@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Bot, FileText, MessageSquare, Server, Activity, Clock, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 import adminService, { AdminDashboardStats } from '../src/services/api/admin.service';
+import { LoadingSpinner } from '../components/ui';
 
 // Stat Card Component with modern styling
 interface StatCardProps {
@@ -61,11 +62,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <LoadingSpinner fullPage size="lg" />;
   }
 
   if (error) {

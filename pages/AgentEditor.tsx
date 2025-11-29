@@ -1502,7 +1502,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                         </label>
                         <textarea
                           id="kommoTokenInput"
-                          className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300 resize-none"
+                          className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-300 resize-none leading-relaxed"
                           rows={3}
                           placeholder={t('agentEditor.integrations.pasteTokenHere')}
                         />
@@ -2176,7 +2176,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                       <textarea
                         value={triggerCondition}
                         onChange={(e) => setTriggerCondition(e.target.value)}
-                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 min-h-[80px]"
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 min-h-[80px] leading-relaxed"
                         placeholder={t('agentEditor.triggers.conditionPlaceholder')}
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('agentEditor.triggers.conditionHint')}</p>
@@ -2402,7 +2402,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     onChange={(e) => updateTriggerActionParams(action.id, { noteText: e.target.value })}
                                     placeholder={t('agentEditor.triggers.notePlaceholder')}
                                     rows={3}
-                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none leading-relaxed"
                                   />
                                 </div>
                               )}
@@ -2415,7 +2415,7 @@ export const AgentEditor: React.FC<AgentEditorProps> = ({ agent, onCancel, onSav
                                     onChange={(e) => updateTriggerActionParams(action.id, { messageText: e.target.value })}
                                     placeholder={t('agentEditor.triggers.messagePlaceholder')}
                                     rows={3}
-                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none"
+                                    className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 resize-none leading-relaxed"
                                   />
                                 </div>
                               )}

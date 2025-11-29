@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { TrainingRole, TrainingSource } from '../types';
 import * as trainingService from '../src/services/api/training.service';
 import { notificationsService } from '../src/services/api';
+import { LoadingSpinner } from '../components/ui';
 
 // Карта иконок для ролей
 const ROLE_ICONS: Record<string, LucideIcon> = {
@@ -314,11 +315,7 @@ export const TrainingRoles: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0078D4]"></div>
-      </div>
-    );
+    return <LoadingSpinner fullPage size="lg" />;
   }
 
   return (
@@ -738,7 +735,7 @@ export const TrainingRoles: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder={t('training.briefRoleDescription')}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-transparent text-sm resize-none"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0078D4] focus:border-transparent text-sm leading-relaxed resize-none"
                 />
               </div>
 
@@ -839,9 +836,7 @@ export const TrainingRoles: React.FC = () => {
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4">
               {loadingKnowledge ? (
-                <div className="flex items-center justify-center h-32">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0078D4]"></div>
-                </div>
+                <LoadingSpinner size="md" showText={false} />
               ) : (
                 <div className="bg-gray-50 dark:bg-gray-900/50 rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">

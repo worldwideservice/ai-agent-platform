@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, ChevronLeft, ChevronRight, Power, PowerOff, User, Filter, LayoutGrid, X, ChevronDown, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import adminService, { AdminAgent, AgentsResponse } from '../src/services/api/admin.service';
+import { LoadingSpinner } from '../components/ui';
 
 export const AdminAgents: React.FC = () => {
   const { t } = useTranslation();
@@ -356,9 +357,7 @@ export const AdminAgents: React.FC = () => {
 
         {/* Table Content */}
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0078D4]"></div>
-          </div>
+          <LoadingSpinner size="lg" />
         ) : !data?.agents.length ? (
           <div className="px-4 py-16 text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 mb-4">

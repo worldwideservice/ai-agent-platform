@@ -218,6 +218,9 @@
     "searchConversations": "Поиск по разговорам...",
     "noSearchResults": "Ничего не найдено",
     "tryDifferentSearch": "Попробуйте другой запрос",
+    "collapseSidebar": "Свернуть панель",
+    "expandSidebar": "Развернуть панель",
+    "dragToResize": "Перетащите для изменения размера",
     "attachFile": "Прикрепить файл",
     "voiceInput": "Голосовой ввод",
     "stopRecording": "Остановить запись",
@@ -230,21 +233,29 @@
       "subtitle": "Выберите агента и задайте вопрос или воспользуйтесь подсказками ниже"
     },
     "suggestions": {
-      "tellAbout": "Расскажи о продукте",
-      "tellAboutPrompt": "Расскажи подробнее о вашем продукте и его возможностях",
-      "helpWith": "Помоги составить",
-      "helpWithPrompt": "Помоги составить описание для клиента",
-      "findInfo": "Найди информацию",
-      "findInfoPrompt": "Найди информацию по интересующему вопросу",
-      "explainHow": "Объясни как работает",
-      "explainHowPrompt": "Объясни как работает ваш сервис"
+      "introduceYourself": "Представься",
+      "introduceYourselfPrompt": "Представься - кто ты, какую компанию представляешь и чем можешь помочь?",
+      "testMemory": "Запомни факт",
+      "testMemoryPrompt": "Меня зовут Алексей, мне 35 лет, я из Москвы. Запомни это обо мне.",
+      "askAboutServices": "Расскажи об услугах",
+      "askAboutServicesPrompt": "Какие услуги вы предоставляете? Расскажи подробнее о каждой.",
+      "handleObjection": "Обработай возражение",
+      "handleObjectionPrompt": "Это слишком дорого. Почему я должен выбрать именно вас?"
     },
     "sources": {
       "knowledgeBase": "База знаний",
-      "trainingRole": "Роль обучения",
+      "trainingRole": "Роль",
       "trigger": "Триггер",
-      "pipeline": "Этап воронки",
-      "articlesUsed": "Использовано статей: {{count}}"
+      "pipeline": "Воронка",
+      "articlesUsed": "Использовано статей: {{count}}",
+      "documents": "Документы",
+      "files": "Файлы",
+      "memory": "Память",
+      "graph": "Граф",
+      "detailsTitle": "Источники ответа",
+      "allSources": "Все источники",
+      "articles": "Статьи",
+      "agentConfig": "Конфигурация агента"
     }
   },
   "billing": {

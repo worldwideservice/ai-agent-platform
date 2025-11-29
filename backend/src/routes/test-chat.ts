@@ -20,4 +20,7 @@ router.post('/message', testChatController.sendTestMessage);
 // Информация об агенте
 router.get('/agent-info/:agentId', testChatController.getAgentInfo);
 
+// Подсказки для тестирования агента
+router.get('/prompts/:agentId', testChatController.getAgentPrompts);
+
 export default router;

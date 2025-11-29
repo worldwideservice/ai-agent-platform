@@ -8,11 +8,11 @@ import {
   LayoutGrid,
   X,
   ChevronDown,
-  Loader2,
   Filter,
   Check,
 } from "lucide-react";
 import { Agent } from "../types";
+import { LoadingSpinner } from '../components/ui';
 
 interface AgentsProps {
   agents: Agent[];
@@ -449,12 +449,7 @@ export const Agents: React.FC<AgentsProps> = ({
 
         {/* Content */}
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center text-center py-16">
-            <Loader2 size={48} className="text-blue-500 animate-spin mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-              {t("agents.loadingAgents")}
-            </h3>
-          </div>
+          <LoadingSpinner size="lg" />
         ) : filteredAgents.length > 0 ? (
           <>
             {/* Table */}

@@ -109,9 +109,10 @@ export async function login(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Находим пользователя по email
+    // Находим пользователя по email (includePassword for auth check)
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      includePassword: true,
     });
 
     if (!user) {
@@ -189,9 +190,10 @@ export async function changePassword(req: AuthRequest, res: Response): Promise<v
       return;
     }
 
-    // Получаем пользователя
+    // Получаем пользователя (includePassword for password check)
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      includePassword: true,
     });
 
     if (!user) {

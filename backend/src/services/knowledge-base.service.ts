@@ -25,6 +25,32 @@ interface KBSettings {
 }
 
 /**
+ * Интерфейс для метаданных элемента знаний (для трекинга источников)
+ */
+export interface KnowledgeItemMetadata {
+  id: string;
+  title: string;
+  category?: string;
+  sourceType: 'kb_article' | 'agent_document' | 'kb_article_file';
+  similarity: number;
+}
+
+/**
+ * Расширенный результат поиска знаний с метаданными
+ */
+export interface ExtendedKnowledgeResult {
+  articles: string[];
+  documents: string[];
+  files: string[];
+  totalResults: number;
+  metadata: {
+    articles: KnowledgeItemMetadata[];
+    documents: KnowledgeItemMetadata[];
+    files: KnowledgeItemMetadata[];
+  };
+}
+
+/**
  * Парсит настройки базы знаний из JSON строки
  */
 export function parseKBSettings(
@@ -154,25 +180,20 @@ export async function getExtendedKnowledge(
   kbSettingsJson: string | null,
   userMessage: string,
   limit: number = 5,
-): Promise<{
-  articles: string[];
-  documents: string[];
-  files: string[];
-  totalResults: number;
-}> {
+): Promise<ExtendedKnowledgeResult> {
   try {
     const kbSettings = parseKBSettings(kbSettingsJson);
 
-    const results: {
-      articles: string[];
-      documents: string[];
-      files: string[];
-      totalResults: number;
-    } = {
+    const results: ExtendedKnowledgeResult = {
       articles: [],
       documents: [],
       files: [],
       totalResults: 0,
+      metadata: {
+        articles: [],
+        documents: [],
+        files: [],
+      },
     };
 
     // Определяем какие источники искать
@@ -256,28 +277,71 @@ export async function getExtendedKnowledge(
         );
       }
 
-      results.articles = filteredArticles.slice(0, 3).map((article: any) => {
+      // Формируем текстовое представление и метаданные
+      const articlesToUse = filteredArticles.slice(0, 3);
+      results.articles = articlesToUse.map((article: any) => {
         return `# ${article.title}\n\n${article.content}`;
+      });
+
+      // Заполняем метаданные статей
+      results.metadata.articles = articlesToUse.map((article: any) => {
+        // Находим similarity score из результатов поиска
+        const searchResult = articleResults.find(
+          (r) => r.sourceId === article.id.toString()
+        );
+        // Получаем название категории
+        const categoryName = article.articleCategories?.[0]?.category?.name;
+
+        return {
+          id: article.id.toString(),
+          title: article.title,
+          category: categoryName,
+          sourceType: 'kb_article' as const,
+          similarity: searchResult?.similarity || 0,
+        };
       });
     }
 
     // Обрабатываем документы агента
     if (documentResults.length > 0) {
-      results.documents = documentResults.slice(0, 2).map((result) => {
+      const docsToUse = documentResults.slice(0, 2);
+      results.documents = docsToUse.map((result) => {
         const fileName = result.metadata?.fileName || "Документ";
         const title = result.metadata?.title || fileName;
         // Берем извлеченный текст из content (уже сохранен при анализе)
         return `# 📄 ${title}\n\n${result.content}`;
       });
+
+      // Заполняем метаданные документов
+      results.metadata.documents = docsToUse.map((result) => ({
+        id: result.sourceId,
+        title: result.metadata?.title || result.metadata?.fileName || "Документ",
+        sourceType: 'agent_document' as const,
+        similarity: result.similarity,
+      }));
     }
 
     // Обрабатываем файлы статей
     if (fileResults.length > 0) {
-      results.files = fileResults.slice(0, 2).map((result) => {
+      const filesToUse = fileResults.slice(0, 2);
+      results.files = filesToUse.map((result) => {
         const fileName = result.metadata?.fileName || "Файл";
         const articleTitle = result.metadata?.articleTitle || "";
         const title = articleTitle ? `${articleTitle} - ${fileName}` : fileName;
         return `# 📎 ${title}\n\n${result.content}`;
+      });
+
+      // Заполняем метаданные файлов
+      results.metadata.files = filesToUse.map((result) => {
+        const fileName = result.metadata?.fileName || "Файл";
+        const articleTitle = result.metadata?.articleTitle || "";
+        return {
+          id: result.sourceId,
+          title: articleTitle ? `${articleTitle} - ${fileName}` : fileName,
+          category: articleTitle || undefined,
+          sourceType: 'kb_article_file' as const,
+          similarity: result.similarity,
+        };
       });
     }
 
@@ -296,6 +360,11 @@ export async function getExtendedKnowledge(
       documents: [],
       files: [],
       totalResults: 0,
+      metadata: {
+        articles: [],
+        documents: [],
+        files: [],
+      },
     };
   }
 }

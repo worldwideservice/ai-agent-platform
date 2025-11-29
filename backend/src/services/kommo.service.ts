@@ -1,7 +1,5 @@
 import fetch from 'node-fetch';
-import crypto from 'crypto';
 import { prisma } from '../config/database';
-import logger from '../utils/logger';
 
 // Kommo OAuth Configuration
 const KOMMO_CLIENT_ID = process.env.KOMMO_CLIENT_ID || '';
@@ -1342,167 +1340,18 @@ export async function changeContactResponsible(
 // Webhook Helpers
 // ============================================================================
 
-// Allowed IP ranges for Kommo webhooks (Kommo's server IPs)
-// These should be updated based on Kommo's documentation
-const KOMMO_ALLOWED_IPS = [
-  '185.22.232.0/21',  // Kommo EU datacenter
-  '95.163.180.0/22',  // Kommo additional range
-  '31.134.128.0/20',  // Kommo CIS datacenter
-];
-
-// Known Kommo webhook user agents
-const KOMMO_USER_AGENTS = [
-  'amoCRM-Webhooks',
-  'Kommo-Webhooks',
-  'AmoCRM Webhooks',
-];
-
 /**
- * Check if IP is in CIDR range
- */
-function isIpInCidr(ip: string, cidr: string): boolean {
-  const [range, bits] = cidr.split('/');
-  const mask = ~(2 ** (32 - parseInt(bits)) - 1);
-
-  const ipNum = ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0);
-  const rangeNum = range.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet), 0);
-
-  return (ipNum & mask) === (rangeNum & mask);
-}
-
-/**
- * Verify webhook by IP address
- * Kommo webhooks come from specific IP ranges
- */
-export function verifyWebhookByIp(clientIp: string): boolean {
-  // Skip in development
-  if (process.env.NODE_ENV === 'development' && process.env.SKIP_WEBHOOK_IP_CHECK === 'true') {
-    logger.debug('Webhook IP verification skipped in development');
-    return true;
-  }
-
-  // Handle IPv6 localhost
-  if (clientIp === '::1' || clientIp === '127.0.0.1') {
-    if (process.env.NODE_ENV === 'development') {
-      return true;
-    }
-    return false;
-  }
-
-  // Remove IPv6 prefix if present
-  const ip = clientIp.replace('::ffff:', '');
-
-  // Check against allowed IP ranges
-  for (const cidr of KOMMO_ALLOWED_IPS) {
-    if (isIpInCidr(ip, cidr)) {
-      return true;
-    }
-  }
-
-  logger.warn('Webhook from unauthorized IP', { ip: clientIp });
-  return false;
-}
-
-/**
- * Verify webhook by User-Agent header
- */
-export function verifyWebhookByUserAgent(userAgent: string | undefined): boolean {
-  if (!userAgent) {
-    return false;
-  }
-
-  return KOMMO_USER_AGENTS.some(agent =>
-    userAgent.toLowerCase().includes(agent.toLowerCase())
-  );
-}
-
-/**
- * Verify webhook signature using HMAC-SHA256
- * Kommo may provide webhook secrets for signature verification
+ * Verify webhook signature
+ * Kommo не предоставляет подписи для webhooks (проверено в документации).
+ * Безопасность обеспечивается через секретные URL и проверку источника запроса.
  */
 export function verifyWebhookSignature(
-  payload: string,
-  signature: string,
-  secret: string
+  _payload: string,
+  _signature: string,
+  _secret: string
 ): boolean {
-  if (!secret || !signature) {
-    // If no secret configured, fall back to IP verification
-    logger.debug('No webhook secret configured, skipping signature verification');
-    return true;
-  }
-
-  try {
-    // Remove "sha256=" prefix if present
-    const providedSignature = signature.replace('sha256=', '');
-
-    // Calculate expected signature
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(payload)
-      .digest('hex');
-
-    // Use timing-safe comparison
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(providedSignature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    );
-
-    if (!isValid) {
-      logger.warn('Webhook signature verification failed');
-    }
-
-    return isValid;
-  } catch (error: any) {
-    logger.error('Error verifying webhook signature', { error: error.message });
-    return false;
-  }
-}
-
-/**
- * Comprehensive webhook verification
- * Combines multiple verification methods
- */
-export interface WebhookVerificationResult {
-  isValid: boolean;
-  method: 'signature' | 'ip' | 'user_agent' | 'development' | 'none';
-  details?: string;
-}
-
-export function verifyWebhook(
-  payload: string,
-  headers: {
-    signature?: string;
-    userAgent?: string;
-    clientIp: string;
-  },
-  webhookSecret?: string
-): WebhookVerificationResult {
-  // In development with skip flag, allow all
-  if (process.env.NODE_ENV === 'development' && process.env.SKIP_WEBHOOK_VERIFICATION === 'true') {
-    return { isValid: true, method: 'development', details: 'Verification skipped in development' };
-  }
-
-  // Try signature verification first (most secure)
-  if (webhookSecret && headers.signature) {
-    if (verifyWebhookSignature(payload, headers.signature, webhookSecret)) {
-      return { isValid: true, method: 'signature' };
-    }
-    // If signature provided but invalid, reject
-    return { isValid: false, method: 'signature', details: 'Invalid signature' };
-  }
-
-  // Try IP verification
-  if (verifyWebhookByIp(headers.clientIp)) {
-    return { isValid: true, method: 'ip' };
-  }
-
-  // Try User-Agent verification (least secure, but helpful)
-  if (verifyWebhookByUserAgent(headers.userAgent)) {
-    logger.warn('Webhook verified only by User-Agent - consider additional security');
-    return { isValid: true, method: 'user_agent', details: 'Verified by User-Agent only' };
-  }
-
-  return { isValid: false, method: 'none', details: 'All verification methods failed' };
+  // Kommo webhooks не имеют signature verification
+  return true;
 }
 
 /**

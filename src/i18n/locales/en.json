@@ -218,6 +218,9 @@
     "searchConversations": "Search conversations...",
     "noSearchResults": "No results found",
     "tryDifferentSearch": "Try a different search query",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "dragToResize": "Drag to resize",
     "attachFile": "Attach file",
     "voiceInput": "Voice input",
     "stopRecording": "Stop recording",
@@ -230,21 +233,29 @@
       "subtitle": "Select an agent and ask a question or use the suggestions below"
     },
     "suggestions": {
-      "tellAbout": "Tell me about the product",
-      "tellAboutPrompt": "Tell me more about your product and its features",
-      "helpWith": "Help me create",
-      "helpWithPrompt": "Help me create a description for the client",
-      "findInfo": "Find information",
-      "findInfoPrompt": "Find information about the topic I'm interested in",
-      "explainHow": "Explain how it works",
-      "explainHowPrompt": "Explain how your service works"
+      "introduceYourself": "Introduce yourself",
+      "introduceYourselfPrompt": "Introduce yourself - who are you, what company do you represent and how can you help?",
+      "testMemory": "Remember a fact",
+      "testMemoryPrompt": "My name is Alex, I'm 35 years old, from New York. Remember this about me.",
+      "askAboutServices": "Tell about services",
+      "askAboutServicesPrompt": "What services do you provide? Tell me more about each one.",
+      "handleObjection": "Handle objection",
+      "handleObjectionPrompt": "This is too expensive. Why should I choose you?"
     },
     "sources": {
       "knowledgeBase": "Knowledge Base",
-      "trainingRole": "Training Role",
+      "trainingRole": "Role",
       "trigger": "Trigger",
-      "pipeline": "Pipeline Stage",
-      "articlesUsed": "Articles used: {{count}}"
+      "pipeline": "Pipeline",
+      "articlesUsed": "Articles used: {{count}}",
+      "documents": "Documents",
+      "files": "Files",
+      "memory": "Memory",
+      "graph": "Graph",
+      "detailsTitle": "Response Sources",
+      "allSources": "All Sources",
+      "articles": "Articles",
+      "agentConfig": "Agent Configuration"
     }
   },
   "billing": {

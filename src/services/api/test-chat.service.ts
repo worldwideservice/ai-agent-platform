@@ -96,6 +96,7 @@ export interface SendMessageResponse {
   model: string;
   attachedDocuments?: AttachedDocument[];
   triggeredActions?: string[];
+  generatedTitle?: string;
 }
 
 /**
@@ -176,6 +177,24 @@ export async function getAgentInfo(agentId: string): Promise<AgentInfo> {
   return response.data;
 }
 
+/**
+ * Подсказка для тестирования агента
+ */
+export interface AgentPrompt {
+  icon: string;
+  text: string;
+  fullPrompt: string;
+  testType: string;
+}
+
+/**
+ * Получить подсказки для тестирования агента
+ */
+export async function getAgentPrompts(agentId: string): Promise<AgentPrompt[]> {
+  const response = await apiClient.get(`/test-chat/prompts/${agentId}`);
+  return response.data.prompts;
+}
+
 export const testChatService = {
   createConversation,
   getConversations,
@@ -184,4 +203,5 @@ export const testChatService = {
   updateConversation,
   sendMessage,
   getAgentInfo,
+  getAgentPrompts,
 };

@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Server, Cpu, HardDrive, Zap, Activity, RefreshCw, Clock, AlertCircle, CheckCircle, Link } from 'lucide-react';
 import adminService, { SystemInfo } from '../src/services/api/admin.service';
+import { LoadingSpinner, Button } from '../components/ui';
 
 export const AdminSystem: React.FC = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [integrations, setIntegrations] = useState<any>(null);
   const [activity, setActivity] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  const loadData = async () => {
+  const loadData = async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
     try {
       const [sysInfo, integ, act] = await Promise.all([
         adminService.getSystemInfo(),
@@ -23,6 +26,7 @@ export const AdminSystem: React.FC = () => {
       console.error('Failed to load system info:', err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -53,11 +57,7 @@ export const AdminSystem: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <LoadingSpinner fullPage size="lg" />;
   }
 
   return (
@@ -74,13 +74,15 @@ export const AdminSystem: React.FC = () => {
             />
             Авто-обновление (10сек)
           </label>
-          <button
-            onClick={loadData}
-            className="flex items-center gap-2 bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
+          <Button
+            onClick={() => loadData(true)}
+            loading={isRefreshing}
+            loadingText="Обновление..."
+            icon={<RefreshCw className="w-4 h-4" />}
+            size="lg"
           >
-            <RefreshCw className="w-4 h-4" />
             Обновить
-          </button>
+          </Button>
         </div>
       </div>
 

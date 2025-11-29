@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ChevronLeft, ChevronRight, Plus, Clock, Gift, Infinity, RefreshCw, Shield, UserMinus, Trash2, AlertTriangle } from 'lucide-react';
 import adminService, { AdminUser, UsersResponse } from '../src/services/api/admin.service';
+import { LoadingSpinner, Button } from '../components/ui';
 
 interface UserModalProps {
   user: AdminUser;
@@ -10,28 +11,30 @@ interface UserModalProps {
 }
 
 const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete }) => {
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [addDays, setAddDays] = useState(7);
   const [addResponses, setAddResponses] = useState(1000);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
+  const loading = loadingAction !== null;
+
   const handleAction = async (action: string, value?: any) => {
-    setLoading(true);
+    setLoadingAction(action);
     try {
       await onAction(action, value);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
   const handleDelete = async () => {
     if (deleteConfirmText !== 'DELETE') return;
-    setLoading(true);
+    setLoadingAction('delete');
     try {
       await onDelete();
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -108,13 +111,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                   <span className="text-sm text-gray-500">дней</span>
                 </div>
               </div>
-              <button
+              <Button
                 onClick={() => handleAction('extend_trial', addDays)}
                 disabled={loading}
-                className="px-3 py-1.5 bg-yellow-600 text-white text-sm rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+                variant="warning"
+                size="sm"
+                loading={loadingAction === 'extend_trial'}
               >
                 Продлить
-              </button>
+              </Button>
             </div>
 
             {/* Add Responses */}
@@ -132,13 +137,14 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                   <span className="text-sm text-gray-500">ответов</span>
                 </div>
               </div>
-              <button
+              <Button
                 onClick={() => handleAction('add_responses', addResponses)}
                 disabled={loading}
-                className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-4 py-2 rounded-md text-sm font-medium shadow-sm transition-colors disabled:opacity-50"
+                size="sm"
+                loading={loadingAction === 'add_responses'}
               >
                 Добавить
-              </button>
+              </Button>
             </div>
 
             {/* Set Unlimited */}
@@ -148,13 +154,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Безлимитный режим</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Снять все ограничения</p>
               </div>
-              <button
+              <Button
                 onClick={() => handleAction('set_unlimited')}
                 disabled={loading}
-                className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                variant="purple"
+                size="sm"
+                loading={loadingAction === 'set_unlimited'}
               >
                 Установить
-              </button>
+              </Button>
             </div>
 
             {/* Reset Usage */}
@@ -164,13 +172,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                 <p className="text-sm font-medium text-gray-900 dark:text-white">Сбросить использование</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Обнулить счётчик ответов</p>
               </div>
-              <button
+              <Button
                 onClick={() => handleAction('reset_usage')}
                 disabled={loading}
-                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+                variant="success"
+                size="sm"
+                loading={loadingAction === 'reset_usage'}
               >
                 Сбросить
-              </button>
+              </Button>
             </div>
 
             {/* Set Plan */}
@@ -206,13 +216,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Убрать права админа</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Сделать обычным пользователем</p>
                   </div>
-                  <button
+                  <Button
                     onClick={() => handleAction('remove_admin')}
                     disabled={loading}
-                    className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    variant="danger"
+                    size="sm"
+                    loading={loadingAction === 'remove_admin'}
                   >
                     Убрать
-                  </button>
+                  </Button>
                 </>
               ) : (
                 <>
@@ -221,13 +233,15 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                     <p className="text-sm font-medium text-gray-900 dark:text-white">Сделать админом</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Дать права администратора</p>
                   </div>
-                  <button
+                  <Button
                     onClick={() => handleAction('make_admin')}
                     disabled={loading}
-                    className="px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50"
+                    variant="danger"
+                    size="sm"
+                    loading={loadingAction === 'make_admin'}
                   >
                     Назначить
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -240,13 +254,14 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                   <p className="text-sm font-medium text-gray-900 dark:text-white">Удалить пользователя</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Удалить аккаунт и все данные</p>
                 </div>
-                <button
+                <Button
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={loading}
-                  className="px-3 py-1.5 bg-gray-500 text-white text-sm rounded-lg hover:bg-gray-600 disabled:opacity-50"
+                  variant="muted"
+                  size="sm"
                 >
                   Удалить
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-lg border border-red-300 dark:border-red-700">
@@ -272,19 +287,25 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
-                    className="flex-1 px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+                    variant="secondary"
+                    size="sm"
+                    className="flex-1"
                   >
                     Отмена
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleDelete}
                     disabled={loading || deleteConfirmText !== 'DELETE'}
-                    className="flex-1 px-3 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="danger"
+                    size="sm"
+                    loading={loadingAction === 'delete'}
+                    loadingText="Удаление..."
+                    className="flex-1"
                   >
-                    {loading ? 'Удаление...' : 'Подтвердить удаление'}
-                  </button>
+                    Подтвердить удаление
+                  </Button>
                 </div>
               </div>
             )}
@@ -292,12 +313,12 @@ const UserModal: React.FC<UserModalProps> = ({ user, onClose, onAction, onDelete
         </div>
 
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-          <button
+          <Button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600"
+            variant="secondary"
           >
             Закрыть
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -393,19 +414,19 @@ export const AdminUsers: React.FC = () => {
           <option value="max">Max</option>
           <option value="unlimited">Unlimited</option>
         </select>
-        <button
+        <Button
           onClick={handleSearch}
-          className="bg-[#0078D4] hover:bg-[#006cbd] text-white px-6 py-2.5 rounded-md text-sm font-medium shadow-sm transition-colors"
+          size="lg"
         >
           Поиск
-        </button>
+        </Button>
       </div>
 
       {/* Users Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <LoadingSpinner size="lg" />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -424,7 +445,11 @@ export const AdminUsers: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {data?.users.map((user) => (
-                  <tr key={user.id} className="text-sm hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                  <tr
+                    key={user.id}
+                    onClick={() => setSelectedUser(user)}
+                    className="text-sm hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer transition-colors"
+                  >
                     <td className="px-6 py-4 text-gray-900 dark:text-white">{user.email}</td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{user.name || '-'}</td>
                     <td className="px-6 py-4 text-gray-600 dark:text-gray-400">{user.company || '-'}</td>
@@ -451,12 +476,9 @@ export const AdminUsers: React.FC = () => {
                       {new Date(user.createdAt).toLocaleDateString('ru-RU')}
                     </td>
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => setSelectedUser(user)}
-                        className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 text-sm font-medium"
-                      >
+                      <span className="text-blue-600 dark:text-blue-400 text-sm font-medium">
                         Управление
-                      </button>
+                      </span>
                     </td>
                   </tr>
                 ))}

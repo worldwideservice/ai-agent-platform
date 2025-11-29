@@ -30,9 +30,9 @@ import {
     File,
     Image as ImageIcon,
     FileSpreadsheet,
-    Loader2,
     Undo2
 } from 'lucide-react';
+import { LoadingSpinner } from './ui';
 import { MOCK_PIPELINES, MOCK_CHANNELS, MOCK_KB_CATEGORIES } from '../services/crmData';
 import { Agent, TrainingRole } from '../types';
 import * as trainingService from '../src/services/api/training.service';
@@ -717,10 +717,10 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                             setTrainingRoleId(null);
                                             setRoleDropdownOpen(false);
                                         }}
-                                        className={`px-3 py-2.5 cursor-pointer flex items-center gap-2 ${!trainingRoleId ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-600'}`}
+                                        className={`px-3 py-2.5 cursor-pointer flex items-center gap-2 ${!trainingRoleId ? 'bg-gray-100 dark:bg-gray-600' : 'hover:bg-gray-50 dark:hover:bg-gray-600/50'}`}
                                     >
                                         <span className="text-sm text-gray-600 dark:text-gray-300">{t('agentEditor.basicSettings.noRole')}</span>
-                                        {!trainingRoleId && <CheckCircle size={14} className="text-blue-600 ml-auto" />}
+                                        {!trainingRoleId && <CheckCircle size={14} className="text-[#0078D4] ml-auto" />}
                                     </div>
 
                                     {loadingRoles ? (
@@ -738,10 +738,10 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                         setTrainingRoleId(role.id);
                                                         setRoleDropdownOpen(false);
                                                     }}
-                                                    className={`px-3 py-2.5 cursor-pointer ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-100 dark:hover:bg-gray-600'}`}
+                                                    className={`px-3 py-2.5 cursor-pointer ${isSelected ? 'bg-gray-100 dark:bg-gray-600' : 'hover:bg-gray-50 dark:hover:bg-gray-600/50'}`}
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${role.isBuiltIn ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'}`}>
+                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-600 text-gray-600 dark:text-gray-300">
                                                             <IconComp size={16} />
                                                         </div>
                                                         <div className="flex-1 min-w-0">
@@ -750,7 +750,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                 <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{role.description}</div>
                                                             )}
                                                         </div>
-                                                        {isSelected && <CheckCircle size={16} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+                                                        {isSelected && <CheckCircle size={16} className="text-[#0078D4] flex-shrink-0" />}
                                                     </div>
                                                 </div>
                                             );
@@ -895,7 +895,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                                                                                         }
                                                                                     }
                                                                                 }))}
-                                                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[100px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                                                className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[100px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none leading-relaxed"
                                                                                 placeholder={t('agentEditor.basicSettings.stageInstructionPlaceholder')}
                                                                             />
                                                                         </div>
@@ -1150,7 +1150,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         {/* Documents list */}
                         {documentsLoading ? (
                             <div className="flex items-center justify-center py-8">
-                                <Loader2 size={24} className="text-blue-500 animate-spin" />
+                                <LoadingSpinner size="md" />
                             </div>
                         ) : (agentDocuments.length > 0 || pendingUploads.length > 0) ? (
                             <div className="space-y-2">
@@ -1313,7 +1313,7 @@ export const AgentBasicSettings = forwardRef<AgentBasicSettingsRef, AgentBasicSe
                         <textarea
                             value={kbNoAnswerMessage}
                             onChange={(e) => setKbNoAnswerMessage(e.target.value)}
-                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
+                            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2.5 text-sm min-h-[60px] bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none leading-relaxed"
                         />
                         <p className="text-xs text-gray-400 mt-2">{t('agentEditor.basicSettings.noAnswerMessageHint')}</p>
                     </div>

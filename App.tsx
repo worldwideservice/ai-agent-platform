@@ -53,6 +53,7 @@ const App: React.FC = () => {
   // State для KB Categories - ВСЕГДА загружаем из API, не используем localStorage
   // Это предотвращает использование старых фейковых ID
   const [kbCategories, setKbCategories] = useState<{ id: string; name: string; parentId: string | null }[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string; parentId: string | null } | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(() => {
     const saved = localStorage.getItem('editingCategoryId');
@@ -73,6 +74,7 @@ const App: React.FC = () => {
     content: string;
     createdAt: string;
   }[]>([]);
+  const [isLoadingArticles, setIsLoadingArticles] = useState(true);
   const [editingArticle, setEditingArticle] = useState<typeof kbArticles[0] | null>(null);
   const [editingArticleId, setEditingArticleId] = useState<number | null>(() => {
     const saved = localStorage.getItem('editingArticleId');
@@ -110,6 +112,7 @@ const App: React.FC = () => {
 
   // Загрузка категорий из API
   const loadCategories = async () => {
+    setIsLoadingCategories(true);
     try {
       const categoriesData = await kbService.getAllCategories();
       // ВСЕГДА заменяем данные из API, даже если пустой массив
@@ -124,11 +127,14 @@ const App: React.FC = () => {
       console.error('Failed to load categories:', error);
       // При ошибке очищаем категории, чтобы не использовать фейковые ID
       setKbCategories([]);
+    } finally {
+      setIsLoadingCategories(false);
     }
   };
 
   // Загрузка статей из API (синхронизируется с backend)
   const loadArticles = async () => {
+    setIsLoadingArticles(true);
     try {
       const articlesData = await kbService.getAllArticles();
       // ВСЕГДА заменяем данные из API
@@ -152,6 +158,8 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error('Failed to load articles:', error);
       setKbArticles([]);
+    } finally {
+      setIsLoadingArticles(false);
     }
   };
 
@@ -223,22 +231,31 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
-  // Восстанавливаем editingAgent после загрузки агентов
+  // Восстанавливаем editingAgent после загрузки агентов - загружаем свежие данные с сервера
   useEffect(() => {
-    if (editingAgentId && agents.length > 0 && !editingAgent) {
-      const agent = agents.find(a => a.id === editingAgentId);
-      if (agent) {
-        setEditingAgent(agent);
-      } else {
-        // Агент не найден, очищаем ID и возвращаемся на список
-        localStorage.removeItem('editingAgentId');
-        setEditingAgentId(null);
-        if (currentPage === 'agent-editor') {
-          setCurrentPage('agents');
+    const restoreEditingAgent = async () => {
+      if (editingAgentId && !editingAgent) {
+        try {
+          // Загружаем свежие данные агента напрямую с сервера
+          const freshAgent = await agentService.getAgentById(editingAgentId);
+          console.log('✅ Loaded fresh agent data:', freshAgent.id, freshAgent.name);
+          setEditingAgent(freshAgent as unknown as Agent);
+        } catch (error) {
+          console.error('Failed to load agent:', editingAgentId, error);
+          // Агент не найден, очищаем ID и возвращаемся на список
+          localStorage.removeItem('editingAgentId');
+          setEditingAgentId(null);
+          if (currentPage === 'agent-editor') {
+            setCurrentPage('agents');
+          }
         }
       }
+    };
+
+    if (editingAgentId && !editingAgent && isAuthenticated) {
+      restoreEditingAgent();
     }
-  }, [agents, editingAgentId, editingAgent, currentPage]);
+  }, [editingAgentId, editingAgent, currentPage, isAuthenticated]);
 
   // Сохраняем editingAgentId в localStorage
   useEffect(() => {
@@ -839,13 +856,27 @@ const App: React.FC = () => {
         />;
       }
       case 'agent-create': return <AgentCreate onCancel={() => setCurrentPage('agents')} onCreate={() => setCurrentPage('agents')} onAddAgent={handleAddAgent} />;
-      case 'agent-editor': return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setEditingAgentId(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
+      case 'agent-editor': {
+        // ВАЖНО: Не рендерим AgentEditor пока agent не загружен!
+        // Иначе useState в AgentEditor инициализируется с дефолтными значениями
+        if (!editingAgent) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <span>Загрузка агента...</span>
+              </div>
+            </div>
+          );
+        }
+        return <AgentEditor agent={editingAgent} onCancel={() => { setEditingAgent(null); setEditingAgentId(null); setCurrentPage('agents'); }} onSave={handleSaveAgent} kbCategories={kbCategories} onNavigate={setCurrentPage} />;
+      }
       case 'chat': return <Chat agents={agents} />;
       case 'billing': return <Billing />;
       case 'settings': return <Settings showToast={showToast} />;
-      case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} />;
+      case 'kb-categories': return <KbCategories onCreate={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-category-create'); }} categories={kbCategories} articles={kbArticles} currentCategoryId={currentCategoryId} onEditCategory={handleEditCategory} onDeleteCategory={handleDeleteCategory} onCopyCategory={handleCopyCategory} onOpenCategory={handleOpenCategory} onCreateArticle={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} onEditArticle={handleEditArticle} loading={isLoadingCategories} />;
       case 'kb-category-create': return <KbCategoryCreate onCancel={() => { setEditingCategory(null); setEditingCategoryId(null); setCurrentPage('kb-categories'); }} category={editingCategory} onSave={handleSaveCategory} onAdd={handleAddCategory} categories={kbCategories} currentCategoryId={currentCategoryId} />;
-      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} categories={kbCategories} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} />;
+      case 'kb-articles': return <KbArticles onCreate={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-article-create'); }} articles={kbArticles} categories={kbCategories} onEditArticle={handleEditArticle} onDeleteArticle={handleDeleteArticle} onCopyArticle={handleCopyArticle} onToggleArticleStatus={handleToggleArticleStatus} loading={isLoadingArticles} />;
       case 'kb-article-create': return <KbArticleCreate onCancel={() => { setEditingArticle(null); setEditingArticleId(null); setCurrentPage('kb-articles'); }} onAddArticle={handleAddArticle} onCreate={() => setCurrentPage('kb-articles')} availableArticles={kbArticles} article={editingArticle} onSave={handleSaveArticle} categories={kbCategories} />;
       case 'training-roles': return <TrainingRoles />;
       case 'training-sources': return <TrainingSources />;
