@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Galaxy } from '../../components/ui/Galaxy';
 import { GrainOverlay } from '../../components/ui/GrainOverlay';
 import { CustomCursor } from '../../components/ui/CustomCursor';
 import { MagneticButton } from '../../components/ui/MagneticButton';
@@ -39,7 +38,6 @@ export const Login: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
-      <Galaxy starCount={150} speed={0.2} />
       <CustomCursor />
       <GrainOverlay opacity={0.05} />
 

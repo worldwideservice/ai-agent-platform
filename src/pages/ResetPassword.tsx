@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { Galaxy } from '../../components/ui/Galaxy';
 import { GrainOverlay } from '../../components/ui/GrainOverlay';
 import { CustomCursor } from '../../components/ui/CustomCursor';
 import { MagneticButton } from '../../components/ui/MagneticButton';
@@ -61,7 +60,6 @@ export const ResetPassword: React.FC = () => {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-black">
-      <Galaxy starCount={150} speed={0.2} />
       <CustomCursor />
       <GrainOverlay opacity={0.05} />
 
