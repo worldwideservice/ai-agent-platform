@@ -50,8 +50,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, isOpe
       onClick={() => onNavigate(page)}
       title={isSidebarCollapsed ? label : undefined}
       className={`w-full flex items-center gap-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-        currentPage === page 
-          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
+        currentPage === page
+          ? 'bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue dark:text-brand-blue-light'
           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
       } ${isSidebarCollapsed ? 'justify-center px-0' : 'px-3'}`}
     >
@@ -94,32 +94,44 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, isOpe
         }`}
       >
         {/* Header / Company Switcher */}
-        <div className={`p-4 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'gap-3'} border-b border-gray-100 dark:border-gray-700 h-16`}>
-          <div className="w-8 h-8 bg-black dark:bg-white dark:text-black text-white rounded flex items-center justify-center font-bold text-xs flex-shrink-0">
-            WS
-          </div>
-
-          {(!isSidebarCollapsed || isOpen) && (
-            <div className="flex-1 min-w-0 overflow-hidden">
-              <div className="text-sm font-semibold truncate text-gray-900 dark:text-white">World Wide Services</div>
+        <div className={`p-4 flex items-center justify-between border-b border-gray-100 dark:border-gray-700 h-16`}>
+          {(!isSidebarCollapsed || isOpen) ? (
+            <div className="flex-1 min-w-0 overflow-hidden pl-3">
+              <div className="text-lg font-bold">
+                <span className="text-brand-blue">const</span>
+                <span className="text-brand-orange">anta</span>
+              </div>
             </div>
+          ) : (
+            <button
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="text-lg font-bold mx-auto hover:opacity-80 transition-opacity"
+              title="Развернуть"
+            >
+              <span className="text-brand-blue">c</span>
+              <span className="text-brand-orange">.</span>
+            </button>
           )}
 
           {/* Close button on mobile */}
-          <button
-            onClick={onClose}
-            className="md:hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          >
-            <X size={20} />
-          </button>
+          {!isSidebarCollapsed && (
+            <button
+              onClick={onClose}
+              className="md:hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors ml-2"
+            >
+              <X size={20} />
+            </button>
+          )}
 
           {/* Collapse button on desktop */}
-          <button
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="hidden md:block text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-          >
-            {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
+          {!isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="hidden md:block text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors ml-2"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
         </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 custom-scrollbar">
@@ -213,9 +225,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, isOpe
       {/* Support Section */}
       <div className={`border-t border-gray-100 dark:border-gray-700 p-4 ${isSidebarCollapsed ? 'text-center' : ''}`}>
         <a
-          href="mailto:support@ton18.com"
+          href="mailto:support@constanta.com"
           title={isSidebarCollapsed ? t('sidebar.support', 'Поддержка') : undefined}
-          className={`flex items-center gap-3 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors ${
+          className={`flex items-center gap-3 text-gray-500 dark:text-gray-400 hover:text-brand-blue dark:hover:text-brand-blue-light transition-colors ${
             isSidebarCollapsed ? 'justify-center' : ''
           }`}
         >
@@ -223,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, isOpe
           {!isSidebarCollapsed && (
             <div className="min-w-0">
               <div className="text-xs text-gray-400 dark:text-gray-500">{t('sidebar.support', 'Поддержка')}</div>
-              <div className="text-sm font-medium truncate">support@ton18.com</div>
+              <div className="text-sm font-medium truncate">support@constanta.com</div>
             </div>
           )}
         </a>

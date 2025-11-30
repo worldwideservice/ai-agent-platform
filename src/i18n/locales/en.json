@@ -1126,7 +1126,7 @@
         },
         "multichannel": {
           "title": "Multi-channel",
-          "description": "Integration with Telegram, WhatsApp, Kommo and other channels"
+          "description": "Integration with Telegram, WhatsApp, Instagram and other channels"
         },
         "analytics": {
           "title": "Analytics",
@@ -1138,7 +1138,7 @@
       "title": "About Platform",
       "subtitle": "/ AI Agent Platform",
       "description1": "A platform for creating and managing AI agents that automate customer communication.",
-      "description2": "Our agents use state-of-the-art language models GPT-4o and Claude to understand context and provide relevant answers based on your knowledge base.",
+      "description2": "Our agents use state-of-the-art language models GPT-5.1 and Claude Opus 4.5 to understand context and provide relevant answers based on your knowledge base.",
       "stats": {
         "accuracy": "Response Accuracy",
         "uptime": "Always Available",

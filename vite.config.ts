@@ -15,13 +15,22 @@ export default defineConfig(({ mode }) => {
             secure: false,
           },
         },
+        // Fix HMR issues with iCloud Drive
+        watch: {
+          usePolling: true,
+          interval: 1000,
+        },
+        hmr: {
+          overlay: true,
+          timeout: 5000,
+        },
       },
       // Also handle preview mode
       preview: {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [react({ fastRefresh: false })],
       define: {
         // Only expose safe environment variables to client
         'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'http://localhost:3001'),

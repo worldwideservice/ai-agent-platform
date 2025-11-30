@@ -26,6 +26,15 @@ export default {
                     750: '#2d3748',
                     850: '#1a202c',
                     950: '#171923',
+                },
+                // Brand colors from landing page
+                brand: {
+                    blue: '#0066ff',
+                    'blue-dark': '#0052cc',
+                    'blue-light': '#3385ff',
+                    orange: '#e19136',
+                    'orange-dark': '#c77d2a',
+                    'orange-light': '#f0a550',
                 }
             }
         },

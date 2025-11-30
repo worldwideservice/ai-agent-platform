@@ -1,4 +1,4 @@
-import { Mail, MapPin } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useReveal } from '../../src/hooks/useReveal';
 import { useState, FormEvent } from 'react';
@@ -51,7 +51,7 @@ export function ContactSection() {
 
             <div className="space-y-4 md:space-y-8">
               <a
-                href="mailto:hello@ai-agent.io"
+                href="mailto:hello@constanta.com"
                 className={`group block transition-all duration-700 ${
                   isVisible ? 'translate-x-0 opacity-100' : '-translate-x-16 opacity-0'
                 }`}
@@ -62,22 +62,9 @@ export function ContactSection() {
                   <span className="font-mono text-xs text-white/60">Email</span>
                 </div>
                 <p className="text-base text-white transition-colors group-hover:text-white/70 md:text-2xl">
-                  hello@ai-agent.io
+                  hello@constanta.com
                 </p>
               </a>
-
-              <div
-                className={`transition-all duration-700 ${
-                  isVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
-                }`}
-                style={{ transitionDelay: '350ms' }}
-              >
-                <div className="mb-1 flex items-center gap-2">
-                  <MapPin className="h-3 w-3 text-white/60" />
-                  <span className="font-mono text-xs text-white/60">{t('landing.contact.location')}</span>
-                </div>
-                <p className="text-base text-white md:text-2xl">{t('landing.contact.locationValue')}</p>
-              </div>
 
               <div
                 className={`flex gap-2 pt-2 transition-all duration-700 md:pt-4 ${

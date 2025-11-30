@@ -27,7 +27,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   const { t } = useTranslation();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const { showToast } = useToast();
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -613,7 +613,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
         >
           <Menu size={20} className="text-gray-600 dark:text-gray-400" />
         </button>
-        <div className="text-xl font-bold text-gray-900 dark:text-white">GPT Агент</div>
+        <div className="text-xl font-bold text-gray-900 dark:text-white">
+          {user?.company || 'Компания'}
+        </div>
       </div>
       
       <div className="flex items-center gap-4">
@@ -630,7 +632,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
             }}
             onFocus={() => setIsSearchOpen(true)}
             placeholder={t('common.search')}
-            className="pl-10 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64 transition-shadow bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+            className="pl-10 pr-4 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent w-64 transition-shadow bg-white dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
           />
           {searchQuery && (
             <button
@@ -650,7 +652,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
             <div className="absolute top-full mt-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 max-h-[70vh] overflow-y-auto">
               {isSearching ? (
                 <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <div className="w-5 h-5 border-2 border-brand-blue border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   {t('common.loading')}
                 </div>
               ) : !hasSearchResults ? (
@@ -848,7 +850,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               <div className="overflow-y-auto custom-scrollbar p-2">
                 {isLoadingNotifications ? (
                   <div className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm">
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    <div className="w-5 h-5 border-2 border-brand-blue border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     {t('common.loading')}
                   </div>
                 ) : notifications.length === 0 ? (
@@ -950,7 +952,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               setIsNotificationsOpen(false);
               setIsLanguageOpen(false);
             }}
-            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-gray-200 dark:hover:ring-gray-600 transition-all overflow-hidden bg-black text-white"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-brand-blue/30 dark:hover:ring-brand-blue/50 transition-all overflow-hidden bg-gradient-to-br from-brand-blue to-brand-orange text-white"
           >
             {avatarUrl ? (
               <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -1183,7 +1185,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               <button
                 onClick={handlePasswordChange}
                 disabled={isChangingPassword}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-dark disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {isChangingPassword ? t('common.saving') : t('common.save')}
               </button>
@@ -1276,7 +1278,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
               <button
                 onClick={handleProfileSave}
                 disabled={isSavingProfile}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-dark disabled:bg-blue-400 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {isSavingProfile ? t('common.saving') : t('common.save')}
               </button>

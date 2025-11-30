@@ -118,11 +118,11 @@ export const Register: React.FC = () => {
 
       {/* Logo */}
       <nav className="fixed left-0 right-0 top-0 z-50 flex items-center justify-between px-6 py-6 md:px-12">
-        <Link to="/" className="flex items-center gap-2 transition-transform hover:scale-105">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 backdrop-blur-md transition-all duration-300 hover:scale-110 hover:bg-white/25">
-            <span className="font-sans text-xl font-bold text-white">A</span>
-          </div>
-          <span className="font-sans text-xl font-semibold tracking-tight text-white">AI Agent</span>
+        <Link to="/" className="transition-transform hover:scale-105">
+          <span className="font-sans text-2xl font-bold tracking-tight">
+            <span className="text-brand-blue">const</span>
+            <span className="text-brand-orange">anta</span>
+          </span>
         </Link>
       </nav>
 
@@ -138,7 +138,10 @@ export const Register: React.FC = () => {
               <h1 className="mb-2 font-sans text-3xl font-light tracking-tight text-white md:text-4xl">
                 {t('auth.registerTitle')}
               </h1>
-              <p className="font-mono text-sm text-white/60">AI Agent Platform</p>
+              <p className="font-mono text-sm text-white/60">
+                <span className="text-brand-blue">const</span>
+                <span className="text-brand-orange">anta</span>
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">

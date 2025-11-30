@@ -241,12 +241,12 @@ export function Landing() {
       >
         <button
           onClick={() => scrollToSection(0)}
-          className="flex items-center gap-2 transition-transform hover:scale-105"
+          className="transition-transform hover:scale-105"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/15 backdrop-blur-md transition-all duration-300 hover:scale-110 hover:bg-white/25">
-            <span className="font-sans text-xl font-bold text-white">A</span>
-          </div>
-          <span className="font-sans text-xl font-semibold tracking-tight text-white">AI Agent</span>
+          <span className="font-sans text-2xl font-bold tracking-tight">
+            <span className="text-brand-blue">const</span>
+            <span className="text-brand-orange">anta</span>
+          </span>
         </button>
 
         <div className="hidden items-center gap-8 md:flex">
@@ -273,7 +273,7 @@ export function Landing() {
             onClick={toggleLanguage}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/10 font-mono text-xs font-medium text-white backdrop-blur-md transition-all hover:bg-white/20"
           >
-            {currentLang === 'ru' ? 'EN' : 'RU'}
+            {currentLang.toUpperCase()}
           </button>
           <div className="h-6 w-px shrink-0 bg-white/20" />
           <MagneticButton variant="secondary" onClick={handleGetStarted}>

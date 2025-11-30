@@ -203,3 +203,95 @@ textarea.resize {
     linear-gradient(135deg, transparent calc(100% - 8px), #4B5563 calc(100% - 8px)),
     linear-gradient(135deg, transparent calc(100% - 4px), #6B7280 calc(100% - 4px));
 }
+
+/* Brand gradient backgrounds - inspired by landing page */
+.brand-gradient {
+  background: linear-gradient(135deg,
+    rgba(0, 102, 255, 0.03) 0%,
+    rgba(225, 145, 54, 0.03) 50%,
+    rgba(0, 102, 255, 0.02) 100%
+  );
+}
+
+.dark .brand-gradient {
+  background: linear-gradient(135deg,
+    rgba(0, 102, 255, 0.08) 0%,
+    rgba(225, 145, 54, 0.06) 50%,
+    rgba(0, 102, 255, 0.04) 100%
+  );
+}
+
+/* Sidebar gradient - subtle vertical gradient */
+.sidebar-gradient {
+  background: linear-gradient(180deg,
+    rgba(0, 102, 255, 0.02) 0%,
+    rgba(255, 255, 255, 1) 15%,
+    rgba(255, 255, 255, 1) 85%,
+    rgba(225, 145, 54, 0.03) 100%
+  );
+}
+
+.dark .sidebar-gradient {
+  background: linear-gradient(180deg,
+    rgba(0, 102, 255, 0.12) 0%,
+    rgba(31, 41, 55, 1) 15%,
+    rgba(31, 41, 55, 1) 85%,
+    rgba(225, 145, 54, 0.08) 100%
+  );
+}
+
+/* Header gradient - horizontal subtle gradient */
+.header-gradient {
+  background: linear-gradient(90deg,
+    rgba(0, 102, 255, 0.02) 0%,
+    rgba(255, 255, 255, 1) 20%,
+    rgba(255, 255, 255, 1) 80%,
+    rgba(225, 145, 54, 0.02) 100%
+  );
+}
+
+.dark .header-gradient {
+  background: linear-gradient(90deg,
+    rgba(0, 102, 255, 0.1) 0%,
+    rgba(31, 41, 55, 1) 20%,
+    rgba(31, 41, 55, 1) 80%,
+    rgba(225, 145, 54, 0.06) 100%
+  );
+}
+
+/* Main content area gradient */
+.content-gradient {
+  background: linear-gradient(145deg,
+    rgba(0, 102, 255, 0.015) 0%,
+    rgba(249, 250, 251, 1) 30%,
+    rgba(249, 250, 251, 1) 70%,
+    rgba(225, 145, 54, 0.015) 100%
+  );
+}
+
+.dark .content-gradient {
+  background: linear-gradient(145deg,
+    rgba(0, 102, 255, 0.06) 0%,
+    rgba(17, 24, 39, 1) 30%,
+    rgba(17, 24, 39, 1) 70%,
+    rgba(225, 145, 54, 0.04) 100%
+  );
+}
+
+/* Brand button styles */
+.btn-brand-primary {
+  @apply bg-brand-blue hover:bg-brand-blue-dark text-white font-medium px-4 py-2 rounded-lg transition-colors;
+}
+
+.btn-brand-secondary {
+  @apply bg-brand-orange hover:bg-brand-orange-dark text-white font-medium px-4 py-2 rounded-lg transition-colors;
+}
+
+.btn-brand-outline {
+  @apply border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white font-medium px-4 py-2 rounded-lg transition-colors;
+}
+
+/* Focus ring brand styles */
+.focus-brand {
+  @apply focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2;
+}

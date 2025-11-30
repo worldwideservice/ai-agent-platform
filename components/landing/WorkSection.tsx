@@ -10,7 +10,7 @@ export function WorkSection() {
       number: '01',
       title: t('landing.work.items.agents.title'),
       category: t('landing.work.items.agents.category'),
-      year: 'GPT-4o / Claude',
+      year: 'GPT-5.1 / Opus 4.5',
       direction: 'left',
     },
     {
