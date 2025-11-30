@@ -502,7 +502,14 @@
     "errorPasswordMismatch": "Passwords do not match",
     "errorUserExists": "User with this email already exists",
     "errorInvalidCredentials": "Invalid email or password",
-    "errorGeneric": "An error occurred. Please check your data and try again."
+    "errorUserNotFound": "User with this email not found",
+    "errorGeneric": "An error occurred. Please check your data and try again.",
+    "forgotPassword": "Forgot password?",
+    "forgotPasswordTitle": "Password Recovery",
+    "forgotPasswordSubtitle": "Enter your email and we'll send you instructions",
+    "forgotPasswordSuccess": "Recovery instructions sent to your email",
+    "sendInstructions": "Send Instructions",
+    "backToLogin": "Back to login"
   },
   "toast": {
     "success": "Success",
@@ -1065,5 +1072,94 @@
     "upgradePlan": "Upgrade plan",
     "sendMediaTitle": "Send media files",
     "updateCrmTitle": "Update CRM fields"
+  },
+  "landing": {
+    "nav": {
+      "home": "Home",
+      "capabilities": "Capabilities",
+      "features": "Features",
+      "about": "About",
+      "contacts": "Contacts"
+    },
+    "buttons": {
+      "register": "Sign Up",
+      "login": "Sign In",
+      "getStarted": "Get Started Free",
+      "learnMore": "Learn More",
+      "contactUs": "Contact Us"
+    },
+    "hero": {
+      "badge": "AI-powered Platform",
+      "title": "Sales\nAutomation with AI",
+      "description": "Create intelligent AI agents that communicate with customers 24/7, qualify leads and guide them through the sales funnel.",
+      "scrollHint": "Scroll to navigate"
+    },
+    "work": {
+      "title": "Capabilities",
+      "subtitle": "/ What the platform can do",
+      "items": {
+        "agents": {
+          "title": "AI Agents",
+          "category": "Intelligent Assistants"
+        },
+        "knowledge": {
+          "title": "Knowledge Base",
+          "category": "Structured Information"
+        },
+        "crm": {
+          "title": "CRM Integrations",
+          "category": "Kommo / amoCRM"
+        }
+      }
+    },
+    "services": {
+      "title": "Features",
+      "subtitle": "/ What we offer",
+      "items": {
+        "automation": {
+          "title": "Sales Automation",
+          "description": "AI agents respond to customers 24/7 and guide them through the sales funnel"
+        },
+        "search": {
+          "title": "Intelligent Search",
+          "description": "RAG search across knowledge base with semantic query understanding"
+        },
+        "multichannel": {
+          "title": "Multi-channel",
+          "description": "Integration with Telegram, WhatsApp, Kommo and other channels"
+        },
+        "analytics": {
+          "title": "Analytics",
+          "description": "Detailed reports on agent performance and conversions"
+        }
+      }
+    },
+    "about": {
+      "title": "About Platform",
+      "subtitle": "/ AI Agent Platform",
+      "description1": "A platform for creating and managing AI agents that automate customer communication.",
+      "description2": "Our agents use state-of-the-art language models GPT-4o and Claude to understand context and provide relevant answers based on your knowledge base.",
+      "stats": {
+        "accuracy": "Response Accuracy",
+        "uptime": "Always Available",
+        "response": "Response Time"
+      }
+    },
+    "contact": {
+      "title": "Get in\nTouch",
+      "subtitle": "/ Contacts",
+      "location": "Location",
+      "locationValue": "Moscow, Russia",
+      "form": {
+        "name": "Name",
+        "namePlaceholder": "Your name",
+        "email": "Email",
+        "message": "Message",
+        "messagePlaceholder": "Tell us about your project...",
+        "submit": "Send Message",
+        "submitting": "Sending...",
+        "success": "Message sent successfully!"
+      }
+    }
   }
 }

@@ -1,17 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Shader, ChromaFlow, Swirl } from 'shaders/react';
-import { useAuth } from '../contexts/AuthContext';
 import { CustomCursor } from '../../components/landing/CustomCursor';
 import { GrainOverlay } from '../../components/landing/GrainOverlay';
+import { authService } from '../services/api';
 
-export const Auth: React.FC = () => {
+export const ForgotPassword: React.FC = () => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { login } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -22,13 +19,6 @@ export const Auth: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(''), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -36,13 +26,13 @@ export const Auth: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login({ email, password });
-      setSuccess(t('auth.loginSuccess'));
-      navigate('/app');
+      await authService.forgotPassword(email);
+      setSuccess(t('auth.forgotPasswordSuccess'));
+      setEmail('');
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message;
-      if (errorMessage?.includes('Invalid email or password')) {
-        setError(t('auth.errorInvalidCredentials'));
+      if (errorMessage?.includes('not found')) {
+        setError(t('auth.errorUserNotFound'));
       } else {
         setError(errorMessage || t('auth.errorGeneric'));
       }
@@ -101,7 +91,7 @@ export const Auth: React.FC = () => {
         </Link>
       </nav>
 
-      {/* Login Form */}
+      {/* Forgot Password Form */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-20">
         <div
           className={`w-full max-w-md transition-all duration-700 ${
@@ -110,10 +100,15 @@ export const Auth: React.FC = () => {
         >
           <div className="rounded-2xl border border-white/20 bg-white/10 p-8 backdrop-blur-xl md:p-10">
             <div className="mb-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/10">
+                <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+              </div>
               <h1 className="mb-2 font-sans text-3xl font-light tracking-tight text-white md:text-4xl">
-                {t('auth.loginTitle')}
+                {t('auth.forgotPasswordTitle')}
               </h1>
-              <p className="font-mono text-sm text-white/60">AI Agent Platform</p>
+              <p className="font-mono text-sm text-white/60">{t('auth.forgotPasswordSubtitle')}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -127,27 +122,6 @@ export const Auth: React.FC = () => {
                   required
                   className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
-              </div>
-
-              <div>
-                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.password')}</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
-                />
-              </div>
-
-              <div className="flex justify-end">
-                <Link
-                  to="/forgot-password"
-                  className="font-mono text-xs text-white/60 transition-colors hover:text-white"
-                >
-                  {t('auth.forgotPassword')}
-                </Link>
               </div>
 
               {success && (
@@ -167,17 +141,20 @@ export const Auth: React.FC = () => {
                 disabled={isLoading}
                 className="w-full rounded-lg bg-white px-6 py-3 font-sans text-base font-medium text-gray-900 transition-all hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isLoading ? t('auth.loading') : t('auth.loginButton')}
+                {isLoading ? t('auth.loading') : t('auth.sendInstructions')}
               </button>
             </form>
 
             <div className="mt-8 text-center">
-              <p className="font-mono text-sm text-white/60">
-                {t('auth.noAccount')}{' '}
-                <Link to="/register" className="text-white underline transition-colors hover:text-white/80">
-                  {t('auth.registerLink')}
-                </Link>
-              </p>
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-2 font-mono text-sm text-white/60 transition-colors hover:text-white"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                {t('auth.backToLogin')}
+              </Link>
             </div>
           </div>
         </div>
@@ -186,4 +163,4 @@ export const Auth: React.FC = () => {
   );
 };
 
-export default Auth;
+export default ForgotPassword;

@@ -30,21 +30,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // При загрузке приложения проверяем, есть ли сохраненный пользователь
+  // При загрузке приложения НЕ восстанавливаем сессию - требуем ввод логина/пароля
   useEffect(() => {
     const initAuth = async () => {
-      const token = authService.getToken();
-      const savedUser = authService.getUser();
-
-      console.log('🔄 Initializing auth:', { hasToken: !!token, hasUser: !!savedUser });
-
-      if (token && savedUser) {
-        // Используем сохраненного пользователя из localStorage
-        // Валидность токена проверим при первом API запросе
-        setUser(savedUser);
-        console.log('✅ User loaded from localStorage:', savedUser);
-      }
-
+      // Очищаем сохраненные данные при загрузке
+      authService.logout();
+      console.log('🔄 Auth initialized - login required');
       setIsLoading(false);
     };
 
@@ -69,14 +60,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const register = async (data: RegisterRequest) => {
-    setIsLoading(true);
-    try {
-      // Регистрируем пользователя, но НЕ логиним его автоматически
-      await authService.register(data);
-      // Пользователь должен войти вручную после регистрации
-    } finally {
-      setIsLoading(false);
-    }
+    // НЕ устанавливаем isLoading на уровне контекста!
+    // Это вызовет размонтирование компонента Register через PublicRoute
+    // Регистрируем пользователя, но НЕ логиним его автоматически
+    await authService.register(data);
+    // Пользователь должен войти вручную после регистрации
   };
 
   const logout = () => {

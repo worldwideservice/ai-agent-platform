@@ -481,8 +481,8 @@
     "en": "English"
   },
   "auth": {
-    "loginTitle": "Войдите в свой аккаунт",
-    "registerTitle": "Создайте новый аккаунт",
+    "loginTitle": "Войдите в аккаунт",
+    "registerTitle": "Создание аккаунта",
     "organizationName": "Название организации",
     "organizationPlaceholder": "ООО Ваша Компания",
     "email": "Email",
@@ -496,13 +496,20 @@
     "registerLink": "Зарегистрироваться",
     "loginLink": "Войти",
     "loginSuccess": "Вход выполнен успешно!",
-    "registerSuccess": "Регистрация успешна! Теперь войдите в систему.",
+    "registerSuccess": "Регистрация успешна! Перенаправляем...",
     "errorOrgRequired": "Введите название организации",
     "errorPasswordMin": "Пароль должен содержать минимум 6 символов",
     "errorPasswordMismatch": "Пароли не совпадают",
     "errorUserExists": "Пользователь с таким email уже существует",
+    "errorUserNotFound": "Пользователь с таким email не найден",
     "errorInvalidCredentials": "Неверный email или пароль",
-    "errorGeneric": "Произошла ошибка. Проверьте данные и попробуйте снова."
+    "errorGeneric": "Произошла ошибка. Проверьте данные и попробуйте снова.",
+    "forgotPassword": "Забыли пароль?",
+    "forgotPasswordTitle": "Восстановление пароля",
+    "forgotPasswordSubtitle": "Введите email и мы отправим инструкции",
+    "forgotPasswordSuccess": "Инструкции по восстановлению отправлены на вашу почту",
+    "sendInstructions": "Отправить инструкции",
+    "backToLogin": "Вернуться к входу"
   },
   "toast": {
     "success": "Успешно",
@@ -1065,5 +1072,94 @@
     "upgradePlan": "Улучшить план",
     "sendMediaTitle": "Отправка медиафайлов",
     "updateCrmTitle": "Обновление полей CRM"
+  },
+  "landing": {
+    "nav": {
+      "home": "Главная",
+      "capabilities": "Возможности",
+      "features": "Функции",
+      "about": "О нас",
+      "contacts": "Контакты"
+    },
+    "buttons": {
+      "register": "Регистрация",
+      "login": "Войти",
+      "getStarted": "Начать бесплатно",
+      "learnMore": "Узнать больше",
+      "contactUs": "Связаться с нами"
+    },
+    "hero": {
+      "badge": "AI-powered Platform",
+      "title": "Автоматизация\nпродаж с AI",
+      "description": "Создавайте интеллектуальных AI-агентов, которые общаются с клиентами 24/7, квалифицируют лиды и ведут их по воронке продаж.",
+      "scrollHint": "Скролл для навигации"
+    },
+    "work": {
+      "title": "Возможности",
+      "subtitle": "/ Что умеет платформа",
+      "items": {
+        "agents": {
+          "title": "AI Агенты",
+          "category": "Интеллектуальные помощники"
+        },
+        "knowledge": {
+          "title": "База знаний",
+          "category": "Структурированная информация"
+        },
+        "crm": {
+          "title": "CRM Интеграции",
+          "category": "Kommo / amoCRM"
+        }
+      }
+    },
+    "services": {
+      "title": "Функции",
+      "subtitle": "/ Что мы предлагаем",
+      "items": {
+        "automation": {
+          "title": "Автоматизация продаж",
+          "description": "AI агенты отвечают клиентам 24/7 и ведут их по воронке продаж"
+        },
+        "search": {
+          "title": "Интеллектуальный поиск",
+          "description": "RAG поиск по базе знаний с семантическим пониманием запросов"
+        },
+        "multichannel": {
+          "title": "Мультиканальность",
+          "description": "Интеграция с Telegram, WhatsApp, Kommo и другими каналами"
+        },
+        "analytics": {
+          "title": "Аналитика",
+          "description": "Детальные отчеты по работе агентов и конверсиям"
+        }
+      }
+    },
+    "about": {
+      "title": "О платформе",
+      "subtitle": "/ AI Agent Platform",
+      "description1": "Платформа для создания и управления AI-агентами, которые автоматизируют коммуникацию с клиентами.",
+      "description2": "Наши агенты используют современные языковые модели GPT-4o и Claude для понимания контекста и предоставления релевантных ответов на основе вашей базы знаний.",
+      "stats": {
+        "accuracy": "Точность ответов",
+        "uptime": "Работа без перерывов",
+        "response": "Время отклика"
+      }
+    },
+    "contact": {
+      "title": "Свяжитесь\nс нами",
+      "subtitle": "/ Контакты",
+      "location": "Локация",
+      "locationValue": "Москва, Россия",
+      "form": {
+        "name": "Имя",
+        "namePlaceholder": "Ваше имя",
+        "email": "Email",
+        "message": "Сообщение",
+        "messagePlaceholder": "Расскажите о вашем проекте...",
+        "submit": "Отправить",
+        "submitting": "Отправка...",
+        "success": "Сообщение отправлено!"
+      }
+    }
   }
 }

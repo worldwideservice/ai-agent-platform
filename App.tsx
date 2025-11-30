@@ -24,7 +24,6 @@ import { ConfirmationModal } from './components/ConfirmationModal';
 import { ToastContainer, Toast } from './components/Toast';
 import { useAuth } from './src/contexts/AuthContext';
 import { useToast } from './src/contexts/ToastContext';
-import { Auth } from './src/pages/Auth';
 import { agentService, billingService, notificationsService, kbService } from './src/services/api';
 
 const INITIAL_AGENTS: Agent[] = [];
@@ -34,7 +33,7 @@ const INITIAL_KB_CATEGORIES: { id: string; name: string; parentId: string | null
 const App: React.FC = () => {
   // === 1. Все хуки должны быть в начале компонента ===
   const { t } = useTranslation();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { showToast, toasts, removeToast } = useToast();
 
   // State для агентов
@@ -891,28 +890,7 @@ const App: React.FC = () => {
     }
   };
 
-  // === 5. Условные return (после всех хуков) ===
-  // Показываем загрузку пока проверяем аутентификацию
-  if (authLoading) {
-    return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#fff',
-      }}>
-        <div style={{ color: '#64748b', fontSize: '18px' }}>Загрузка...</div>
-      </div>
-    );
-  }
-
-  // Если пользователь не авторизован, показываем страницу Auth
-  if (!isAuthenticated) {
-    return <Auth />;
-  }
-
-  // === 6. Основной return (пользователь авторизован) ===
+  // === 5. Основной return (пользователь уже авторизован через роутинг) ===
   return (
     <div className="flex h-screen bg-[#F9FAFB] dark:bg-gray-900 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
       <Sidebar

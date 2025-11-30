@@ -6,12 +6,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { CustomCursor } from '../../components/landing/CustomCursor';
 import { GrainOverlay } from '../../components/landing/GrainOverlay';
 
-export const Auth: React.FC = () => {
+export const Register: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { register } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,25 +26,48 @@ export const Auth: React.FC = () => {
 
   useEffect(() => {
     if (success) {
-      const timer = setTimeout(() => setSuccess(''), 3000);
+      const timer = setTimeout(() => {
+        setSuccess('');
+        navigate('/login');
+      }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [success]);
+  }, [success, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🔐 Register form submitted');
     setError('');
     setSuccess('');
+
+    if (!organizationName.trim()) {
+      setError(t('auth.errorOrgRequired'));
+      return;
+    }
+
+    if (password.length < 6) {
+      setError(t('auth.errorPasswordMin'));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError(t('auth.errorPasswordMismatch'));
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await login({ email, password });
-      setSuccess(t('auth.loginSuccess'));
-      navigate('/app');
+      await register({ email, password, name: organizationName.trim() });
+      setSuccess(t('auth.registerSuccess'));
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+      setOrganizationName('');
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || err.message;
-      if (errorMessage?.includes('Invalid email or password')) {
-        setError(t('auth.errorInvalidCredentials'));
+      if (errorMessage?.includes('already exists')) {
+        setError(t('auth.errorUserExists'));
       } else {
         setError(errorMessage || t('auth.errorGeneric'));
       }
@@ -101,7 +126,7 @@ export const Auth: React.FC = () => {
         </Link>
       </nav>
 
-      {/* Login Form */}
+      {/* Register Form */}
       <div className="relative z-10 flex min-h-screen items-center justify-center px-4 py-20">
         <div
           className={`w-full max-w-md transition-all duration-700 ${
@@ -111,14 +136,26 @@ export const Auth: React.FC = () => {
           <div className="rounded-2xl border border-white/20 bg-white/10 p-8 backdrop-blur-xl md:p-10">
             <div className="mb-8 text-center">
               <h1 className="mb-2 font-sans text-3xl font-light tracking-tight text-white md:text-4xl">
-                {t('auth.loginTitle')}
+                {t('auth.registerTitle')}
               </h1>
               <p className="font-mono text-sm text-white/60">AI Agent Platform</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.email')}</label>
+                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.organizationName')} *</label>
+                <input
+                  type="text"
+                  value={organizationName}
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                  placeholder={t('auth.organizationPlaceholder')}
+                  required
+                  className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.email')} *</label>
                 <input
                   type="email"
                   value={email}
@@ -130,24 +167,29 @@ export const Auth: React.FC = () => {
               </div>
 
               <div>
-                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.password')}</label>
+                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.password')} *</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
+                  minLength={6}
                   className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
               </div>
 
-              <div className="flex justify-end">
-                <Link
-                  to="/forgot-password"
-                  className="font-mono text-xs text-white/60 transition-colors hover:text-white"
-                >
-                  {t('auth.forgotPassword')}
-                </Link>
+              <div>
+                <label className="mb-2 block font-mono text-xs text-white/60">{t('auth.confirmPassword')} *</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  minLength={6}
+                  className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
+                />
               </div>
 
               {success && (
@@ -167,15 +209,15 @@ export const Auth: React.FC = () => {
                 disabled={isLoading}
                 className="w-full rounded-lg bg-white px-6 py-3 font-sans text-base font-medium text-gray-900 transition-all hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isLoading ? t('auth.loading') : t('auth.loginButton')}
+                {isLoading ? t('auth.loading') : t('auth.registerButton')}
               </button>
             </form>
 
             <div className="mt-8 text-center">
               <p className="font-mono text-sm text-white/60">
-                {t('auth.noAccount')}{' '}
-                <Link to="/register" className="text-white underline transition-colors hover:text-white/80">
-                  {t('auth.registerLink')}
+                {t('auth.hasAccount')}{' '}
+                <Link to="/login" className="text-white underline transition-colors hover:text-white/80">
+                  {t('auth.loginLink')}
                 </Link>
               </p>
             </div>
@@ -186,4 +228,4 @@ export const Auth: React.FC = () => {
   );
 };
 
-export default Auth;
+export default Register;
