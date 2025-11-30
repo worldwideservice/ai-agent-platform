@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, Bell, X, User, Sun, Moon, Monitor, LogOut, AlertCircle, Camera, Key, Eye, EyeOff, Settings, Trash2, Globe, Clock, CheckCircle, Info, AlertTriangle, Bot, FileText, BookOpen, GraduationCap, Users } from 'lucide-react';
+import { Search, Bell, X, User, Sun, Moon, Monitor, LogOut, AlertCircle, Camera, Key, Eye, EyeOff, Settings, Trash2, Globe, Clock, CheckCircle, Info, AlertTriangle, Bot, FileText, BookOpen, GraduationCap, Users, Menu } from 'lucide-react';
 import { authService } from '../src/services/api/auth.service';
 import { profileService } from '../src/services/api/profile.service';
 import { notificationsService, Notification } from '../src/services/api/notifications.service';
@@ -21,7 +21,11 @@ interface SearchResults {
   roles: TrainingRole[];
 }
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onOpenMobileMenu?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onOpenMobileMenu }) => {
   const { t } = useTranslation();
   const { logout } = useAuth();
   const { showToast } = useToast();
@@ -600,8 +604,17 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-6 flex-shrink-0 z-40 relative transition-colors">
-      <div className="text-xl font-bold text-gray-900 dark:text-white">GPT Агент</div>
+    <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 md:px-6 flex-shrink-0 z-40 relative transition-colors">
+      <div className="flex items-center gap-3">
+        {/* Mobile menu button */}
+        <button
+          onClick={onOpenMobileMenu}
+          className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        >
+          <Menu size={20} className="text-gray-600 dark:text-gray-400" />
+        </button>
+        <div className="text-xl font-bold text-gray-900 dark:text-white">GPT Агент</div>
+      </div>
       
       <div className="flex items-center gap-4">
         {/* Global Search */}

@@ -235,7 +235,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={onClose}
         />
       )}
@@ -243,8 +243,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* Sidebar */}
       <div
         ref={sidebarRef}
-        className={`fixed lg:relative inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col transform ${
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed md:relative inset-y-0 left-0 z-50 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col transform ${
+          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
         style={{
           width: `${width}px`,
@@ -255,7 +255,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <div
           onMouseDown={handleMouseDown}
           onDoubleClick={handleDoubleClick}
-          className="hidden lg:flex absolute -right-1 top-0 bottom-0 w-3 z-[60] cursor-col-resize items-center justify-center select-none group/handle"
+          className="hidden md:flex absolute -right-1 top-0 bottom-0 w-3 z-[60] cursor-col-resize items-center justify-center select-none group/handle"
         >
           {/* Visible line - subtle gray, more visible on hover/drag */}
           <div className={`w-[3px] h-full rounded-full transition-all duration-150
@@ -267,7 +267,7 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </div>
 
         {/* Mobile header */}
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 lg:hidden">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 md:hidden">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900 dark:text-white">
               {t('chat.conversations')}

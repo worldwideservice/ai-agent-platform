@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Bot,
-  Menu,
+  PanelLeft,
   Send,
   MessageSquare,
   Lightbulb,
@@ -578,7 +578,7 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex">
+    <div className="h-[calc(100vh-140px)] flex overflow-hidden">
       {/* Sidebar */}
       <ChatSidebar
         conversations={conversations}
@@ -594,15 +594,16 @@ export const Chat: React.FC<ChatProps> = ({ agents }) => {
       />
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 w-full lg:w-auto">
         {/* Header */}
         <div className="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              title={t("chat.conversations")}
             >
-              <Menu size={20} className="text-gray-600 dark:text-gray-400" />
+              <PanelLeft size={20} className="text-gray-600 dark:text-gray-400" />
             </button>
 
             {/* Title with test mode indicator */}

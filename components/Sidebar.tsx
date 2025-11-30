@@ -17,7 +17,8 @@ import {
   Shield,
   Server,
   UserCog,
-  Mail
+  Mail,
+  X
 } from 'lucide-react';
 import { Page } from '../types';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -25,9 +26,11 @@ import { useAuth } from '../src/contexts/AuthContext';
 interface SidebarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, isOpen = false, onClose }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
@@ -73,30 +76,51 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
   };
 
   return (
-    <aside 
-      className={`${
-        isSidebarCollapsed ? 'w-20' : 'w-64'
-      } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full flex-shrink-0 transition-all duration-300 ease-in-out`}
-    >
-      {/* Header / Company Switcher */}
-      <div className={`p-4 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} border-b border-gray-100 dark:border-gray-700 h-16`}>
-        <div className="w-8 h-8 bg-black dark:bg-white dark:text-black text-white rounded flex items-center justify-center font-bold text-xs flex-shrink-0">
-          WS
-        </div>
-        
-        {!isSidebarCollapsed && (
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="text-sm font-semibold truncate text-gray-900 dark:text-white">World Wide Services</div>
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        className={`${
+          isSidebarCollapsed ? 'md:w-20' : 'md:w-64'
+        } w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-full flex-shrink-0 transition-all duration-300 ease-in-out
+        fixed md:relative inset-y-0 left-0 z-50 transform ${
+          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        {/* Header / Company Switcher */}
+        <div className={`p-4 flex items-center ${isSidebarCollapsed ? 'md:justify-center' : 'gap-3'} border-b border-gray-100 dark:border-gray-700 h-16`}>
+          <div className="w-8 h-8 bg-black dark:bg-white dark:text-black text-white rounded flex items-center justify-center font-bold text-xs flex-shrink-0">
+            WS
           </div>
-        )}
-        
-        <button 
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-        >
-          {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
-      </div>
+
+          {(!isSidebarCollapsed || isOpen) && (
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <div className="text-sm font-semibold truncate text-gray-900 dark:text-white">World Wide Services</div>
+            </div>
+          )}
+
+          {/* Close button on mobile */}
+          <button
+            onClick={onClose}
+            className="md:hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          >
+            <X size={20} />
+          </button>
+
+          {/* Collapse button on desktop */}
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="hidden md:block text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+          >
+            {isSidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+        </div>
 
       <nav className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-2 custom-scrollbar">
         {/* Main Section */}
@@ -204,6 +228,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => 
           )}
         </a>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

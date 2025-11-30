@@ -88,6 +88,9 @@ const App: React.FC = () => {
     onConfirm: () => void;
   }>({ isOpen: false, title: '', onConfirm: () => { } });
 
+  // State для мобильного меню
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
   // === 2. Вспомогательные функции ===
   const showConfirmation = (title: string, onConfirm: () => void) => {
     setConfirmationModal({ isOpen: true, title, onConfirm });
@@ -912,9 +915,17 @@ const App: React.FC = () => {
   // === 6. Основной return (пользователь авторизован) ===
   return (
     <div className="flex h-screen bg-[#F9FAFB] dark:bg-gray-900 overflow-hidden text-slate-900 dark:text-slate-100 transition-colors">
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+      <Sidebar
+        currentPage={currentPage}
+        onNavigate={(page) => {
+          handleNavigate(page);
+          setIsMobileSidebarOpen(false);
+        }}
+        isOpen={isMobileSidebarOpen}
+        onClose={() => setIsMobileSidebarOpen(false)}
+      />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header />
+        <Header onOpenMobileMenu={() => setIsMobileSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
           {(() => {
             try {
